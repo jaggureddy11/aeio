@@ -1,51 +1,76 @@
-import { useState } from "react";
-import reactLogo from "./assets/react.svg";
-import { invoke } from "@tauri-apps/api/core";
-import "./App.css";
+import React, { useState } from 'react';
+import logo from './assets/logo.png';
+import { ChatView } from './components/chat';
+import { MemoryPanel } from './components/memory';
+import { SettingsPanel } from './components/settings';
+import { useSettingsStore } from './stores/settingsStore';
+import { MessageSquare, Brain, Settings } from 'lucide-react';
+import './App.css';
 
-function App() {
-  const [greetMsg, setGreetMsg] = useState("");
-  const [name, setName] = useState("");
+type ActiveTab = 'chat' | 'memory' | 'settings';
 
-  async function greet() {
-    // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-    setGreetMsg(await invoke("greet", { name }));
-  }
+export const App: React.FC = () => {
+  const [activeTab, setActiveTab] = useState<ActiveTab>('chat');
+  const { activeProvider, ollamaModel } = useSettingsStore();
 
   return (
-    <main className="container">
-      <h1>Welcome to Tauri + React</h1>
+    <div className="app-container">
+      {/* Draggable Utility Header */}
+      <header className="app-header" data-tauri-drag-region>
+        <div className="brand-section">
+          <img src={logo} alt="Aeio logo" className="brand-logo-img" />
+          <span className="brand-title">aeio</span>
+          <span className="status-badge">
+            <span className="status-dot"></span>
+            {activeProvider === 'ollama' ? ollamaModel : activeProvider}
+          </span>
+        </div>
 
-      <div className="row">
-        <a href="https://vite.dev" target="_blank">
-          <img src="/vite.svg" className="logo vite" alt="Vite logo" />
-        </a>
-        <a href="https://tauri.app" target="_blank">
-          <img src="/tauri.svg" className="logo tauri" alt="Tauri logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <p>Click on the Tauri, Vite, and React logos to learn more.</p>
+        <nav className="header-nav">
+          <button
+            className={`nav-tab ${activeTab === 'chat' ? 'active' : ''}`}
+            onClick={() => setActiveTab('chat')}
+            title="Chat view"
+          >
+            <MessageSquare size={13} />
+            <span>Chat</span>
+          </button>
+          <button
+            className={`nav-tab ${activeTab === 'memory' ? 'active' : ''}`}
+            onClick={() => setActiveTab('memory')}
+            title="Memory store"
+          >
+            <Brain size={13} />
+            <span>Memory</span>
+          </button>
+          <button
+            className={`nav-tab ${activeTab === 'settings' ? 'active' : ''}`}
+            onClick={() => setActiveTab('settings')}
+            title="Settings"
+          >
+            <Settings size={13} />
+            <span>Settings</span>
+          </button>
+        </nav>
+      </header>
 
-      <form
-        className="row"
-        onSubmit={(e) => {
-          e.preventDefault();
-          greet();
-        }}
-      >
-        <input
-          id="greet-input"
-          onChange={(e) => setName(e.currentTarget.value)}
-          placeholder="Enter a name..."
-        />
-        <button type="submit">Greet</button>
-      </form>
-      <p>{greetMsg}</p>
-    </main>
+      {/* Main Panel Content */}
+      <main className="app-content">
+        {activeTab === 'chat' && <ChatView />}
+        {activeTab === 'memory' && <MemoryPanel />}
+        {activeTab === 'settings' && <SettingsPanel />}
+      </main>
+
+      {/* Utility Footer */}
+      <footer className="app-footer">
+        <span>Local-first AI assistant</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <span>Toggle:</span>
+          <kbd className="hotkey-badge">⌘ ⇧ Space</kbd>
+        </div>
+      </footer>
+    </div>
   );
-}
+};
 
 export default App;
