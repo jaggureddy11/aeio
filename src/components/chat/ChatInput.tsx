@@ -35,21 +35,27 @@ export const ChatInput: React.FC<Props> = ({ onSend, isLoading }) => {
       <textarea
         ref={textareaRef}
         className="chat-textarea"
-        placeholder="Ask Aeio anything... (Enter to send, Shift+Enter for newline)"
+        placeholder="Ask anything or run tools... (Shift+Enter for newline)"
         value={input}
         onChange={(e) => setInput(e.target.value)}
         onKeyDown={handleKeyDown}
         rows={1}
         disabled={isLoading}
       />
-      <button
-        className="send-button"
-        onClick={handleSend}
-        disabled={!input.trim() || isLoading}
-        title="Send message"
-      >
-        {isLoading ? <Loader2 size={15} className="spinner" /> : <ArrowUp size={15} />}
-      </button>
+      <div className="chat-input-actions">
+        <button
+          className={`send-button ${input.trim() ? 'has-text' : ''}`}
+          onClick={handleSend}
+          disabled={!input.trim() || isLoading}
+          title="Send message (Enter)"
+        >
+          {isLoading ? (
+            <Loader2 size={13} className="spinner" />
+          ) : (
+            <ArrowUp size={13} strokeWidth={2.5} />
+          )}
+        </button>
+      </div>
     </div>
   );
 };

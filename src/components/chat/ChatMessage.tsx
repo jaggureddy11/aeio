@@ -28,10 +28,12 @@ export const ChatMessageItem: React.FC<Props> = ({ message }) => {
       <div className="message-avatar">
         {isUser ? (
           <div className="avatar-user">
-            <User size={13} />
+            <User size={12} />
           </div>
         ) : (
-          <img src={logo} alt="Aeio" className="avatar-ai" />
+          <div className="avatar-ai-frame">
+            <img src={logo} alt="Aeio" className="avatar-ai" />
+          </div>
         )}
       </div>
 

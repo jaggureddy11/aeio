@@ -19,26 +19,28 @@ export const App: React.FC = () => {
       {/* Draggable Utility Header */}
       <header className="app-header" data-tauri-drag-region>
         <div className="brand-section">
-          <img src={logo} alt="Aeio logo" className="brand-logo-img" />
+          <div className="brand-logo-frame">
+            <img src={logo} alt="Aeio logo" className="brand-logo-img" />
+          </div>
           <span className="brand-title">aeio</span>
+          <div className="header-divider" />
           <WorkspaceSwitcher />
-          <span className="status-badge">
+          <div className="status-badge" title="Active model status">
             <span className="status-dot"></span>
-            {activeProvider === 'ollama' ? ollamaModel : activeProvider}
-          </span>
+            <span className="status-label">{activeProvider === 'ollama' ? ollamaModel : activeProvider}</span>
+          </div>
           {ambientProactive && (
             <span className="ambient-active-badge" title="Ambient pattern noticing is enabled (Tier 5 opt-in)">
               <span className="ambient-pulse-dot" />
-              ✨ Ambient Active
+              ambient
             </span>
           )}
           {activeWindowAwareness && (
             <span className="host-aware-badge" title="Active window awareness enabled (Tier 2 opt-in)">
-              🖥️ Window Aware
+              window aware
             </span>
           )}
         </div>
-
 
         <nav className="header-nav">
           <button
@@ -46,7 +48,7 @@ export const App: React.FC = () => {
             onClick={() => setActiveTab('chat')}
             title="Chat view"
           >
-            <MessageSquare size={13} />
+            <MessageSquare size={12} />
             <span>Chat</span>
           </button>
           <button
@@ -54,7 +56,7 @@ export const App: React.FC = () => {
             onClick={() => setActiveTab('memory')}
             title="Memory store"
           >
-            <Brain size={13} />
+            <Brain size={12} />
             <span>Memory</span>
           </button>
           <button
@@ -62,7 +64,7 @@ export const App: React.FC = () => {
             onClick={() => setActiveTab('settings')}
             title="Settings"
           >
-            <Settings size={13} />
+            <Settings size={12} />
             <span>Settings</span>
           </button>
         </nav>
@@ -75,12 +77,24 @@ export const App: React.FC = () => {
         {activeTab === 'settings' && <SettingsPanel />}
       </main>
 
-      {/* Utility Footer */}
+      {/* Precision Utility Footer */}
       <footer className="app-footer">
-        <span>Local-first AI assistant</span>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span>Toggle:</span>
-          <kbd className="hotkey-badge">⌘ ⇧ Space</kbd>
+        <div className="footer-left">
+          <span className="footer-tag">local-first</span>
+          <span className="footer-dot">·</span>
+          <span className="footer-model">{activeProvider === 'ollama' ? 'offline' : 'cloud'}</span>
+        </div>
+        <div className="footer-shortcuts">
+          <span className="shortcut-item">
+            <kbd className="hotkey-badge">⌘</kbd>
+            <kbd className="hotkey-badge">⇧</kbd>
+            <kbd className="hotkey-badge">Space</kbd>
+            <span className="shortcut-label">toggle</span>
+          </span>
+          <span className="shortcut-item">
+            <kbd className="hotkey-badge">Esc</kbd>
+            <span className="shortcut-label">hide</span>
+          </span>
         </div>
       </footer>
     </div>

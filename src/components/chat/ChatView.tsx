@@ -4,7 +4,18 @@ import { useWorkspaceStore } from '../../stores/workspaceStore';
 import { ChatMessageItem } from './ChatMessage';
 import { ChatInput } from './ChatInput';
 import logo from '../../assets/logo.png';
-import { Trash2, AlertTriangle, RotateCw, X, Sparkles } from 'lucide-react';
+import {
+  Trash2,
+  AlertTriangle,
+  RotateCw,
+  X,
+  Sparkles,
+  Terminal,
+  Brain,
+  Layers,
+  Compass,
+  ArrowUpRight,
+} from 'lucide-react';
 
 export const ChatView: React.FC = () => {
   const {
@@ -42,29 +53,82 @@ export const ChatView: React.FC = () => {
       <div className="messages-area">
         {messages.length === 0 ? (
           <div className="chat-empty-state">
-            <img src={logo} alt="Aeio logo" className="empty-logo" />
-            <h3>Aeio Assistant</h3>
-            <p className="empty-subtitle">
-              Your local-first assistant with transparent memory, workspace scoping, and native OS tools.
+            <div className="empty-brand-badge">
+              <img src={logo} alt="Aeio logo" className="empty-logo-mark" />
+              <span className="empty-brand-tag">aeio</span>
+            </div>
+            <h2 className="empty-headline">How can I assist you?</h2>
+            <p className="empty-description">
+              Local-first assistant with transparent memory, workspace scoping, and native OS tools.
             </p>
-            <div className="starter-chips">
+
+            <div className="quick-action-grid">
               <button
-                className="starter-chip"
-                onClick={() => sendMessage('What can you do?')}
-              >
-                What can you do?
-              </button>
-              <button
-                className="starter-chip"
-                onClick={() => sendMessage('Tell me about your memory system')}
-              >
-                Tell me about your memory system
-              </button>
-              <button
-                className="starter-chip"
+                type="button"
+                className="quick-action-card"
                 onClick={() => sendMessage('What is the frontmost window or my current directory?')}
               >
-                Inspect my environment
+                <div className="action-icon-frame">
+                  <Terminal size={14} />
+                </div>
+                <div className="action-text-content">
+                  <div className="action-title">
+                    <span>Inspect environment</span>
+                    <ArrowUpRight size={12} className="action-arrow" />
+                  </div>
+                  <span className="action-desc">Check frontmost app, cwd & system state</span>
+                </div>
+              </button>
+
+              <button
+                type="button"
+                className="quick-action-card"
+                onClick={() => sendMessage('What memories do you have saved about me or this workspace?')}
+              >
+                <div className="action-icon-frame">
+                  <Brain size={14} />
+                </div>
+                <div className="action-text-content">
+                  <div className="action-title">
+                    <span>Recall memories</span>
+                    <ArrowUpRight size={12} className="action-arrow" />
+                  </div>
+                  <span className="action-desc">Query saved facts, preferences & context</span>
+                </div>
+              </button>
+
+              <button
+                type="button"
+                className="quick-action-card"
+                onClick={() => sendMessage('What native tools and models are available?')}
+              >
+                <div className="action-icon-frame">
+                  <Layers size={14} />
+                </div>
+                <div className="action-text-content">
+                  <div className="action-title">
+                    <span>Native capabilities</span>
+                    <ArrowUpRight size={12} className="action-arrow" />
+                  </div>
+                  <span className="action-desc">Review local tools and approval model</span>
+                </div>
+              </button>
+
+              <button
+                type="button"
+                className="quick-action-card"
+                onClick={() => sendMessage('Summarize this workspace and how scoping works')}
+              >
+                <div className="action-icon-frame">
+                  <Compass size={14} />
+                </div>
+                <div className="action-text-content">
+                  <div className="action-title">
+                    <span>Workspace scope</span>
+                    <ArrowUpRight size={12} className="action-arrow" />
+                  </div>
+                  <span className="action-desc">Explore isolation across projects</span>
+                </div>
               </button>
             </div>
           </div>
