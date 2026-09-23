@@ -17,9 +17,51 @@ impl MemoryDb {
         }
 
         let db_path = dir.join("aeio_memories.db");
-        let conn = Connection::open(&db_path)
-            .map_err(|e| format!("Failed to open SQLite database at {:?}: {}", db_path, e))?;
 
+        let conn = match Self::open_and_validate(&db_path) {
+            Ok(c) => c,
+            Err(e) => {
+                eprintln!(
+                    "[Aeio MemoryDb] Warning: Database at {:?} failed check ({}). Quarantining and recreating clean database...",
+                    db_path, e
+                );
+                if db_path.exists() {
+                    let quarantine_name = format!(
+                        "aeio_memories.db.corrupted.{}",
+                        Utc::now().timestamp_millis()
+                    );
+                    let quarantine_path = dir.join(quarantine_name);
+                    let _ = std::fs::rename(&db_path, &quarantine_path);
+                }
+                Self::open_and_validate(&db_path).map_err(|err| {
+                    format!("Failed to create clean SQLite database after quarantine: {}", err)
+                })?
+            }
+        };
+
+        Ok(Self {
+            conn: Mutex::new(conn),
+        })
+    }
+
+    fn open_and_validate(db_path: &Path) -> Result<Connection, String> {
+        let conn = Connection::open(db_path)
+            .map_err(|e| format!("Failed to open SQLite connection: {}", e))?;
+
+        // Integrity verification
+        let check_res: Result<String, _> = conn.query_row("PRAGMA quick_check", [], |row| row.get(0));
+        match check_res {
+            Ok(ref status) if status == "ok" => {}
+            Ok(other) => return Err(format!("SQLite quick_check reported corruption: {}", other)),
+            Err(e) => return Err(format!("SQLite integrity query failed: {}", e)),
+        }
+
+        Self::setup_schema(&conn).map_err(|e| format!("Failed to initialize schema: {}", e))?;
+
+        Ok(conn)
+    }
+
+    fn setup_schema(conn: &Connection) -> Result<(), rusqlite::Error> {
         // Initialize schema
         conn.execute_batch(
             r#"
@@ -61,8 +103,7 @@ impl MemoryDb {
             );
             CREATE INDEX IF NOT EXISTS idx_chat_messages_timestamp ON chat_messages(timestamp);
             "#,
-        )
-        .map_err(|e| format!("Failed to initialize database schema: {}", e))?;
+        )?;
 
         // Safe migrations for preexisting databases
         let _ = conn.execute("ALTER TABLE memories ADD COLUMN workspace_id TEXT", []);
@@ -70,8 +111,14 @@ impl MemoryDb {
         let _ = conn.execute("ALTER TABLE chat_messages ADD COLUMN provider_info_json TEXT", []);
 
         // Safe indices after columns are guaranteed to exist
-        let _ = conn.execute("CREATE INDEX IF NOT EXISTS idx_memories_workspace ON memories(workspace_id)", []);
-        let _ = conn.execute("CREATE INDEX IF NOT EXISTS idx_chat_messages_workspace ON chat_messages(workspace_id)", []);
+        let _ = conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_memories_workspace ON memories(workspace_id)",
+            [],
+        );
+        let _ = conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_chat_messages_workspace ON chat_messages(workspace_id)",
+            [],
+        );
 
         // Seed default workspace if none exists
         let now = Utc::now().timestamp_millis();
@@ -79,16 +126,20 @@ impl MemoryDb {
         let _ = conn.execute(
             r#"
             INSERT OR IGNORE INTO workspaces (id, name, icon, description, is_active, is_archived, created_at, updated_at)
-            VALUES ('default', 'General', '🌐', 'Default workspace for general conversations and notes', 1, 0, ?1, ?2)
+            VALUES ('default', 'General', 'layers', 'Default workspace for general conversations and notes', 1, 0, ?1, ?2)
             "#,
             params![now, now],
         );
-        let _ = conn.execute("UPDATE memories SET workspace_id = 'default' WHERE workspace_id IS NULL", []);
-        let _ = conn.execute("UPDATE chat_messages SET workspace_id = 'default' WHERE workspace_id IS NULL", []);
+        let _ = conn.execute(
+            "UPDATE memories SET workspace_id = 'default' WHERE workspace_id IS NULL",
+            [],
+        );
+        let _ = conn.execute(
+            "UPDATE chat_messages SET workspace_id = 'default' WHERE workspace_id IS NULL",
+            [],
+        );
 
-        Ok(Self {
-            conn: Mutex::new(conn),
-        })
+        Ok(())
     }
 
 
@@ -135,7 +186,7 @@ impl MemoryDb {
         let conn = self.conn.lock().map_err(|e| e.to_string())?;
         let id = Uuid::new_v4().to_string();
         let now = Utc::now().timestamp_millis();
-        let default_icon = icon.unwrap_or("📁");
+        let default_icon = icon.unwrap_or("folder");
 
         conn.execute(
             r#"
@@ -638,10 +689,10 @@ mod tests {
 
         // 2. Create custom workspace
         let ws = db
-            .create_workspace("Research", Some("🔬"), Some("Deep research workspace"))
+            .create_workspace("Research", Some("cpu"), Some("Deep research workspace"))
             .expect("Failed to create workspace");
         assert_eq!(ws.name, "Research");
-        assert_eq!(ws.icon, Some("🔬".to_string()));
+        assert_eq!(ws.icon, Some("cpu".to_string()));
 
         // 3. Add memory to custom workspace
         let mem = db
@@ -687,6 +738,41 @@ mod tests {
             .expect("Failed to load chat messages");
         assert_eq!(loaded.len(), 1);
         assert_eq!(loaded[0].id, "msg-123");
+
+        // Clean up test directory
+        let _ = fs::remove_dir_all(test_dir);
+    }
+
+    #[test]
+    fn test_corrupted_database_recovery() {
+        let test_dir = std::env::temp_dir().join(format!("aeio_corrupt_test_{}", Uuid::new_v4()));
+        let _ = fs::create_dir_all(&test_dir);
+        let db_file = test_dir.join("aeio_memories.db");
+
+        // Write corrupt garbage data into database file
+        fs::write(&db_file, b"NOT_A_VALID_SQLITE_FILE_CORRUPTED_HEADER_DATA_1234567890")
+            .expect("Failed to write corrupt test file");
+
+        // MemoryDb::init must detect corruption, quarantine it, and recover cleanly
+        let db = MemoryDb::init(&test_dir).expect("MemoryDb failed to recover from corrupted file");
+
+        // Assert that the general workspace was seeded and functional
+        let active = db.get_active_workspace().expect("Failed to get active workspace after recovery");
+        assert_eq!(active.id, "default");
+        assert_eq!(active.name, "General");
+
+        // Assert that a quarantined file was preserved
+        let entries: Vec<_> = fs::read_dir(&test_dir)
+            .expect("Failed to read dir")
+            .filter_map(|e| e.ok())
+            .map(|e| e.file_name().to_string_lossy().to_string())
+            .collect();
+
+        assert!(
+            entries.iter().any(|name| name.starts_with("aeio_memories.db.corrupted.")),
+            "Expected quarantined corrupted file in test dir, found: {:?}",
+            entries
+        );
 
         // Clean up test directory
         let _ = fs::remove_dir_all(test_dir);

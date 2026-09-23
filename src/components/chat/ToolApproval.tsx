@@ -31,8 +31,10 @@ export const ToolApprovalCard: React.FC<Props> = ({
   onApprove,
   onDeny,
 }) => {
+  const hasExitError =
+    execution.result?.exit_code !== undefined && execution.result.exit_code !== 0;
   const [alwaysAllow, setAlwaysAllow] = useState(false);
-  const [isOutputExpanded, setIsOutputExpanded] = useState(false);
+  const [isOutputExpanded, setIsOutputExpanded] = useState(hasExitError);
 
   const getToolIcon = () => {
     switch (execution.toolName) {
@@ -216,14 +218,21 @@ export const ToolApprovalCard: React.FC<Props> = ({
       {execution.status === 'completed' && (
         <div className="tool-completed-section">
           <div className="receipt-header">
-            <span className="success-tag">
-              <Check size={11} />
-              <span>
-                Executed successfully
-                {execution.result?.exit_code !== undefined &&
-                  ` (exit ${execution.result.exit_code})`}
+            {execution.result?.exit_code !== undefined && execution.result.exit_code !== 0 ? (
+              <span className="error-tag exit-error">
+                <AlertTriangle size={11} />
+                <span>Command returned exit code {execution.result.exit_code}</span>
               </span>
-            </span>
+            ) : (
+              <span className="success-tag">
+                <Check size={11} />
+                <span>
+                  Executed successfully
+                  {execution.result?.exit_code !== undefined &&
+                    ` (exit ${execution.result.exit_code})`}
+                </span>
+              </span>
+            )}
             <button
               className="output-toggle-btn"
               onClick={() => setIsOutputExpanded(!isOutputExpanded)}
@@ -272,9 +281,14 @@ export const ToolApprovalCard: React.FC<Props> = ({
       )}
 
       {execution.status === 'error' && (
-        <div className="tool-status-pill error">
-          <AlertTriangle size={12} />
-          <span>Error: {execution.error || 'Execution failed'}</span>
+        <div className="tool-error-section">
+          <div className="tool-status-pill error">
+            <AlertTriangle size={12} />
+            <span>Execution failed: {execution.error || 'System call error'}</span>
+          </div>
+          <p className="tool-error-hint">
+            The requested tool operation could not be performed on your device. Check path spelling, disk permissions, or network connectivity.
+          </p>
         </div>
       )}
     </div>

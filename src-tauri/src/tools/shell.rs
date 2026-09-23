@@ -115,4 +115,13 @@ mod tests {
         assert!(output.stdout.contains("aeio_test_ok"));
         assert!(!output.is_destructive);
     }
+
+    #[test]
+    fn test_shell_command_failure_captures_stderr_and_exit_code() {
+        let res = run_shell_command("ls /definitely_missing_dir_12345", None);
+        assert!(res.is_ok());
+        let output = res.unwrap();
+        assert_ne!(output.exit_code, 0);
+        assert!(!output.stderr.is_empty());
+    }
 }

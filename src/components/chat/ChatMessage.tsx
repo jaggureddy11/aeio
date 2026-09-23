@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { ChatMessage as MessageType, useChatStore } from '../../stores/chatStore';
 import logo from '../../assets/logo.png';
-import { User, Brain, Check, Plus, X, ChevronDown, ChevronUp } from 'lucide-react';
+import { User, Brain, Check, Plus, X, ChevronDown, ChevronUp, Lock, Monitor } from 'lucide-react';
 import { ToolApprovalCard } from './ToolApproval';
 
 interface Props {
@@ -79,7 +79,8 @@ export const ChatMessageItem: React.FC<Props> = ({ message }) => {
               </span>
               {message.providerInfo.isPrivacyProtected && (
                 <span className="privacy-tag" title="Processed strictly on-device without outbound leakage">
-                  🔒 Zero-leak
+                  <Lock size={9} className="tag-micro-icon" />
+                  <span>Zero-leak</span>
                 </span>
               )}
               {message.activeWindowContext && (
@@ -87,7 +88,8 @@ export const ChatMessageItem: React.FC<Props> = ({ message }) => {
                   className="window-context-tag"
                   title={`Frontmost app when queried: ${message.activeWindowContext.app_name} (${message.activeWindowContext.title})`}
                 >
-                  🖥️ {message.activeWindowContext.app_name}
+                  <Monitor size={9} className="tag-micro-icon" />
+                  <span>{message.activeWindowContext.app_name}</span>
                 </span>
               )}
             </div>
@@ -95,7 +97,7 @@ export const ChatMessageItem: React.FC<Props> = ({ message }) => {
 
           <div className="markdown-content">
             <ReactMarkdown>{message.content}</ReactMarkdown>
-            {message.isStreaming && <span className="streaming-cursor">▋</span>}
+            {message.isStreaming && <span className="streaming-cursor" aria-hidden="true" />}
           </div>
         </div>
 

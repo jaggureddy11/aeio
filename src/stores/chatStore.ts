@@ -95,6 +95,7 @@ export interface ChatState {
   clearMessages: () => void;
   sendMessage: (userContent: string) => Promise<void>;
   retryLastMessage: () => Promise<void>;
+  switchToLocalAndRetry: () => Promise<void>;
   confirmMemoryProposal: (messageId: string, index: number) => Promise<void>;
   dismissMemoryProposal: (messageId: string, index: number) => void;
   approveToolExecution: (
@@ -271,9 +272,17 @@ export const useChatStore = create<ChatState>((set, get) => ({
         message.providerInfo,
         message.activeWindowContext
       );
-    } catch (err) {
+    } catch (err: unknown) {
+      const errStr = err instanceof Error ? err.message : String(err);
       console.error('Failed to commit proposed memory:', err);
+      set({ error: `Memory persistence failure: ${errStr}` });
     }
+  },
+
+  switchToLocalAndRetry: async () => {
+    useSettingsStore.getState().setActiveProvider('ollama');
+    set({ error: null });
+    await get().retryLastMessage();
   },
 
   dismissMemoryProposal: (messageId: string, index: number) => {
@@ -738,14 +747,29 @@ export const useChatStore = create<ChatState>((set, get) => ({
         errorMsg.includes('ECONNREFUSED') ||
         errorMsg.includes('11434')
       ) {
-        actionableError =
-          'Ollama is offline or unreachable on localhost:11434. Make sure Ollama is running (`ollama serve`).';
+        if (providerInfo.providerId === 'ollama') {
+          actionableError =
+            'Ollama is offline or unreachable on localhost:11434. Make sure Ollama is running (`ollama serve`).';
+        } else {
+          actionableError = `Network connection offline while connecting to ${providerInfo.providerId.toUpperCase()}. You can switch to local Ollama.`;
+        }
       }
 
       if (!rawStreamed) {
         get().updateMessageContent(
           assistantId,
-          `⚠️ **Connection Issue**: ${actionableError}`,
+          `**Connection Issue**: ${actionableError}`,
+          false,
+          recalled,
+          undefined,
+          undefined,
+          providerInfo,
+          activeWinInfo
+        );
+      } else {
+        get().updateMessageContent(
+          assistantId,
+          `${rawStreamed}\n\n*[Response interrupted: ${actionableError}]*`,
           false,
           recalled,
           undefined,

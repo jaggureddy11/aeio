@@ -2,8 +2,61 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useWorkspaceStore } from '../../stores/workspaceStore';
 import { useChatStore } from '../../stores/chatStore';
 import { useMemoryStore } from '../../stores/memoryStore';
+import {
+  Layers,
+  Folder,
+  Terminal,
+  Code,
+  Cpu,
+  Box,
+  Hash,
+  Database,
+  Compass,
+  Activity,
+  Archive,
+  ChevronDown,
+  ChevronRight,
+  Plus,
+} from 'lucide-react';
 
-const ICONS = ['🌐', '💼', '🚀', '🔬', '📚', '🎨', '💡', '🏠', '⚡', '🛠️'];
+export const WORKSPACE_ICONS = [
+  { id: 'layers', icon: Layers },
+  { id: 'folder', icon: Folder },
+  { id: 'terminal', icon: Terminal },
+  { id: 'code', icon: Code },
+  { id: 'cpu', icon: Cpu },
+  { id: 'box', icon: Box },
+  { id: 'hash', icon: Hash },
+  { id: 'database', icon: Database },
+  { id: 'compass', icon: Compass },
+  { id: 'activity', icon: Activity },
+];
+
+export const renderWorkspaceIcon = (iconKey?: string | null, size = 12) => {
+  switch (iconKey) {
+    case 'folder':
+      return <Folder size={size} />;
+    case 'terminal':
+      return <Terminal size={size} />;
+    case 'code':
+      return <Code size={size} />;
+    case 'cpu':
+      return <Cpu size={size} />;
+    case 'box':
+      return <Box size={size} />;
+    case 'hash':
+      return <Hash size={size} />;
+    case 'database':
+      return <Database size={size} />;
+    case 'compass':
+      return <Compass size={size} />;
+    case 'activity':
+      return <Activity size={size} />;
+    case 'layers':
+    default:
+      return <Layers size={size} />;
+  }
+};
 
 export const WorkspaceSwitcher: React.FC = () => {
   const {
@@ -22,7 +75,7 @@ export const WorkspaceSwitcher: React.FC = () => {
   const [showArchived, setShowArchived] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [newName, setNewName] = useState('');
-  const [newIcon, setNewIcon] = useState('💼');
+  const [newIcon, setNewIcon] = useState('layers');
   const [newDesc, setNewDesc] = useState('');
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -95,23 +148,16 @@ export const WorkspaceSwitcher: React.FC = () => {
         type="button"
         className="workspace-badge-btn"
         onClick={() => setIsOpen(!isOpen)}
-        title="Switch or manage project workspaces"
+        title="Switch workspace"
       >
-        <span className="workspace-badge-icon">{activeWorkspace?.icon || '🌐'}</span>
+        <span className="workspace-badge-icon">
+          {renderWorkspaceIcon(activeWorkspace?.icon, 11)}
+        </span>
         <span className="workspace-badge-name">{activeWorkspace?.name || 'General'}</span>
-        <svg
+        <ChevronDown
+          size={11}
           className={`workspace-chevron ${isOpen ? 'open' : ''}`}
-          width="12"
-          height="12"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2.5"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <polyline points="6 9 12 15 18 9" />
-        </svg>
+        />
       </button>
 
       {isOpen && (
@@ -124,7 +170,8 @@ export const WorkspaceSwitcher: React.FC = () => {
                 className="workspace-add-btn"
                 onClick={() => setIsCreating(true)}
               >
-                + New
+                <Plus size={10} />
+                <span>New</span>
               </button>
             )}
           </div>
@@ -136,7 +183,7 @@ export const WorkspaceSwitcher: React.FC = () => {
                 <input
                   type="text"
                   autoFocus
-                  placeholder="e.g. Aeio v2, Client Alpha"
+                  placeholder="e.g. Engine, Client Alpha"
                   value={newName}
                   onChange={(e) => setNewName(e.target.value)}
                   className="workspace-input"
@@ -146,16 +193,20 @@ export const WorkspaceSwitcher: React.FC = () => {
               <div className="workspace-create-field">
                 <label>Icon</label>
                 <div className="workspace-icon-picker">
-                  {ICONS.map((icon) => (
-                    <button
-                      key={icon}
-                      type="button"
-                      className={`workspace-icon-btn ${newIcon === icon ? 'selected' : ''}`}
-                      onClick={() => setNewIcon(icon)}
-                    >
-                      {icon}
-                    </button>
-                  ))}
+                  {WORKSPACE_ICONS.map((item) => {
+                    const IconComp = item.icon;
+                    return (
+                      <button
+                        key={item.id}
+                        type="button"
+                        className={`workspace-icon-btn ${newIcon === item.id ? 'selected' : ''}`}
+                        onClick={() => setNewIcon(item.id)}
+                        title={item.id}
+                      >
+                        <IconComp size={12} />
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 
@@ -197,7 +248,7 @@ export const WorkspaceSwitcher: React.FC = () => {
                     className={`workspace-list-item ${isActive ? 'active' : ''}`}
                     onClick={() => handleSelectWorkspace(ws.id)}
                   >
-                    <span className="ws-item-icon">{ws.icon || '📁'}</span>
+                    <span className="ws-item-icon">{renderWorkspaceIcon(ws.icon, 12)}</span>
                     <div className="ws-item-info">
                       <div className="ws-item-name">{ws.name}</div>
                       {ws.description && (
@@ -214,7 +265,7 @@ export const WorkspaceSwitcher: React.FC = () => {
                           title="Archive workspace"
                           onClick={(e) => handleArchive(e, ws.id)}
                         >
-                          📦
+                          <Archive size={11} />
                         </button>
                       )}
                     </div>
@@ -229,14 +280,18 @@ export const WorkspaceSwitcher: React.FC = () => {
                     className="ws-archived-toggle"
                     onClick={() => setShowArchived(!showArchived)}
                   >
-                    <span>{showArchived ? '▾' : '▸'} Archived ({archivedList.length})</span>
+                    <ChevronRight
+                      size={11}
+                      className={`archive-chevron ${showArchived ? 'open' : ''}`}
+                    />
+                    <span>Archived ({archivedList.length})</span>
                   </button>
 
                   {showArchived && (
                     <div className="ws-archived-list">
                       {archivedList.map((ws) => (
                         <div key={ws.id} className="workspace-list-item archived">
-                          <span className="ws-item-icon">{ws.icon || '📁'}</span>
+                          <span className="ws-item-icon">{renderWorkspaceIcon(ws.icon, 12)}</span>
                           <div className="ws-item-info">
                             <div className="ws-item-name">{ws.name}</div>
                           </div>
@@ -264,3 +319,4 @@ export const WorkspaceSwitcher: React.FC = () => {
     </div>
   );
 };
+

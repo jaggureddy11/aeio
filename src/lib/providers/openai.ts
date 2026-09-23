@@ -28,23 +28,58 @@ export class OpenAIProvider implements LLMProvider {
       });
     }
 
-    const response = await fetch(OPENAI_ENDPOINT, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${options.apiKey}`,
-      },
-      body: JSON.stringify({
-        model,
-        messages: payloadMessages,
-        stream: !!options.onChunk,
-        temperature: options.temperature ?? 0.7,
-      }),
-    });
+    let response: Response;
+    try {
+      response = await fetch(OPENAI_ENDPOINT, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${options.apiKey}`,
+        },
+        body: JSON.stringify({
+          model,
+          messages: payloadMessages,
+          stream: !!options.onChunk,
+          temperature: options.temperature ?? 0.7,
+        }),
+      });
+    } catch (netErr: unknown) {
+      const msg = netErr instanceof Error ? netErr.message : String(netErr);
+      if (
+        (typeof navigator !== 'undefined' && !navigator.onLine) ||
+        msg.includes('Failed to fetch') ||
+        msg.includes('NetworkError') ||
+        msg.includes('ENOTFOUND')
+      ) {
+        throw new Error(
+          'Network offline or OpenAI API unreachable. You can switch to your local Ollama model to continue offline.'
+        );
+      }
+      throw netErr;
+    }
 
     if (!response.ok) {
       const errText = await response.text();
-      throw new Error(`OpenAI API error (${response.status}): ${errText || response.statusText}`);
+      let parsedMessage = '';
+      try {
+        const parsed = JSON.parse(errText);
+        parsedMessage = parsed.error?.message || parsed.message || '';
+      } catch {}
+
+      if (response.status === 401 || response.status === 403) {
+        throw new Error(
+          `Invalid or expired OpenAI API key (HTTP ${response.status}). Please verify your key or quota in Settings.`
+        );
+      }
+      if (response.status === 429) {
+        throw new Error(
+          `OpenAI rate limit or quota exceeded (HTTP 429). Please check your account usage at platform.openai.com.`
+        );
+      }
+
+      throw new Error(
+        `OpenAI API error (${response.status}): ${parsedMessage || errText || response.statusText}`
+      );
     }
 
     if (options.onChunk && response.body) {

@@ -87,9 +87,13 @@ export class OllamaProvider implements LLMProvider {
       }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
-      if (msg.includes('Failed to fetch') || msg.includes('ECONNREFUSED')) {
+      if (
+        msg.includes('Failed to fetch') ||
+        msg.includes('ECONNREFUSED') ||
+        msg.includes('NetworkError')
+      ) {
         throw new Error(
-          'Cannot reach Ollama at http://localhost:11434. Make sure Ollama is installed and running locally.'
+          'Ollama is offline or unreachable on http://localhost:11434. Start the daemon with `ollama serve` or download Ollama from https://ollama.com.'
         );
       }
       throw err;

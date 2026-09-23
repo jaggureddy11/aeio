@@ -2,13 +2,17 @@ import { create } from 'zustand';
 
 export type LLMProviderType = 'ollama' | 'claude' | 'openai';
 
+export type ActiveTab = 'chat' | 'memory' | 'settings';
+
 export interface SettingsState {
+  activeTab: ActiveTab;
   activeProvider: LLMProviderType;
   ollamaModel: string;
   claudeApiKey: string;
   openaiApiKey: string;
   activeWindowAwareness: boolean;
   ambientProactive: boolean;
+  setActiveTab: (tab: ActiveTab) => void;
   setActiveProvider: (provider: LLMProviderType) => void;
   setOllamaModel: (model: string) => void;
   setClaudeApiKey: (key: string) => void;
@@ -27,12 +31,14 @@ const getStoredBool = (key: string, defaultVal: boolean): boolean => {
 };
 
 export const useSettingsStore = create<SettingsState>((set) => ({
+  activeTab: 'chat',
   activeProvider: 'ollama',
   ollamaModel: 'llama3.2',
   claudeApiKey: '',
   openaiApiKey: '',
   activeWindowAwareness: getStoredBool('aeio_active_window_awareness', false),
   ambientProactive: getStoredBool('aeio_ambient_proactive', false),
+  setActiveTab: (activeTab) => set({ activeTab }),
   setActiveProvider: (activeProvider) => set({ activeProvider }),
   setOllamaModel: (ollamaModel) => set({ ollamaModel }),
   setClaudeApiKey: (claudeApiKey) => set({ claudeApiKey }),

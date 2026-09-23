@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import logo from './assets/logo.png';
 import { ChatView } from './components/chat';
 import { MemoryPanel } from './components/memory';
@@ -8,11 +8,15 @@ import { useSettingsStore } from './stores/settingsStore';
 import { MessageSquare, Brain, Settings } from 'lucide-react';
 import './App.css';
 
-type ActiveTab = 'chat' | 'memory' | 'settings';
-
 export const App: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<ActiveTab>('chat');
-  const { activeProvider, ollamaModel, ambientProactive, activeWindowAwareness } = useSettingsStore();
+  const {
+    activeTab,
+    setActiveTab,
+    activeProvider,
+    ollamaModel,
+    ambientProactive,
+    activeWindowAwareness,
+  } = useSettingsStore();
 
   return (
     <div className="app-container">

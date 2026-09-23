@@ -92,3 +92,29 @@ pub fn search_files(dir_str: &str, query: &str) -> Result<Vec<FileMatch>, String
     walk_dir(dir, &query_lower, &mut matches, 0);
     Ok(matches)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_read_file_nonexistent() {
+        let res = read_file("/tmp/aeio_definitely_nonexistent_file_12345.txt");
+        assert!(res.is_err());
+        assert!(res.unwrap_err().contains("File does not exist"));
+    }
+
+    #[test]
+    fn test_read_file_directory_rejected() {
+        let res = read_file("/tmp");
+        assert!(res.is_err());
+        assert!(res.unwrap_err().contains("Path is a directory"));
+    }
+
+    #[test]
+    fn test_search_files_nonexistent_dir() {
+        let res = search_files("/tmp/aeio_nonexistent_dir_98765", "test");
+        assert!(res.is_err());
+        assert!(res.unwrap_err().contains("Directory does not exist"));
+    }
+}

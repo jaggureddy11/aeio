@@ -22,6 +22,7 @@ export interface MemoryState {
   createMemory: (content: string, category: MemoryCategory, workspaceId?: string) => Promise<void>;
   editMemory: (id: string, content: string, category: MemoryCategory, workspaceId?: string) => Promise<void>;
   removeMemory: (id: string) => Promise<void>;
+  clearError: () => void;
   setActiveCategory: (cat: MemoryCategory | 'all') => void;
   setSearchQuery: (query: string) => void;
   setCrossWorkspaceSearch: (enabled: boolean) => void;
@@ -100,6 +101,8 @@ export const useMemoryStore = create<MemoryState>((set, get) => ({
       set({ isLoading: false });
     }
   },
+
+  clearError: () => set({ error: null }),
 
   setActiveCategory: (activeCategory) => {
     set({ activeCategory });

@@ -3,7 +3,7 @@ import { useMemoryStore } from '../../stores/memoryStore';
 import { useWorkspaceStore } from '../../stores/workspaceStore';
 import { MemoryItem } from './MemoryItem';
 import { MemoryCategory, exportMemories } from '../../lib/ipc';
-import { Brain, Plus, Search, X, Download, Globe } from 'lucide-react';
+import { Brain, Plus, Search, X, Download, Globe, AlertTriangle } from 'lucide-react';
 
 const CATEGORIES: Array<{ id: MemoryCategory | 'all'; label: string }> = [
   { id: 'all', label: 'All' },
@@ -17,6 +17,8 @@ export const MemoryPanel: React.FC = () => {
   const {
     memories,
     isLoading,
+    error,
+    clearError,
     activeCategory,
     searchQuery,
     crossWorkspaceSearch,
@@ -156,6 +158,24 @@ export const MemoryPanel: React.FC = () => {
         </div>
       </div>
 
+      {/* Surfaced SQLite / Disk Storage Error (Phase A: Resilience) */}
+      {error && (
+        <div className="memory-error-banner animate-fadeIn">
+          <AlertTriangle size={14} className="memory-error-icon" />
+          <div className="memory-error-info">
+            <span className="memory-error-title">Storage Warning: </span>
+            <span className="memory-error-text">{error}</span>
+          </div>
+          <button
+            type="button"
+            className="memory-error-dismiss-btn"
+            onClick={clearError}
+            title="Dismiss error"
+          >
+            <X size={12} />
+          </button>
+        </div>
+      )}
 
       {/* Category Filter Pills */}
       <div className="category-pills">
@@ -235,7 +255,8 @@ export const MemoryPanel: React.FC = () => {
                 className="starter-chip"
                 onClick={() => setIsAdding(true)}
               >
-                + Add your first memory
+                <Plus size={11} />
+                <span>Add your first memory</span>
               </button>
             )}
           </div>

@@ -1,6 +1,8 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useChatStore } from '../../stores/chatStore';
 import { useWorkspaceStore } from '../../stores/workspaceStore';
+import { useSettingsStore } from '../../stores/settingsStore';
+import { openTarget } from '../../lib/ipc';
 import { ChatMessageItem } from './ChatMessage';
 import { ChatInput } from './ChatInput';
 import logo from '../../assets/logo.png';
@@ -10,11 +12,16 @@ import {
   RotateCw,
   X,
   Sparkles,
-  Terminal,
   Brain,
   Layers,
-  Compass,
   ArrowUpRight,
+  FileSearch,
+  Clipboard,
+  AppWindow,
+  ExternalLink,
+  Settings as SettingsIcon,
+  Terminal,
+  Check,
 } from 'lucide-react';
 
 export const ChatView: React.FC = () => {
@@ -28,9 +35,13 @@ export const ChatView: React.FC = () => {
     setError,
     sendMessage,
     retryLastMessage,
+    switchToLocalAndRetry,
     clearMessages,
     initChatHistory,
   } = useChatStore();
+
+  const { activeProvider, setActiveTab } = useSettingsStore();
+  const [copiedOllamaCmd, setCopiedOllamaCmd] = useState(false);
 
   const activeWorkspace = useWorkspaceStore((s) => s.activeWorkspace);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -57,40 +68,57 @@ export const ChatView: React.FC = () => {
               <img src={logo} alt="Aeio logo" className="empty-logo-mark" />
               <span className="empty-brand-tag">aeio</span>
             </div>
-            <h2 className="empty-headline">How can I assist you?</h2>
+            <h2 className="empty-headline">An assistant embedded in your computer that knows you and acts for you.</h2>
             <p className="empty-description">
-              Local-first assistant with transparent memory, workspace scoping, and native OS tools.
+              Local-first on your desktop. Persistent second-brain memory across conversations. Real OS actions executed on your machine with your permission.
             </p>
 
             <div className="quick-action-grid">
               <button
                 type="button"
                 className="quick-action-card"
-                onClick={() => sendMessage('What is the frontmost window or my current directory?')}
+                onClick={() => sendMessage('Find recent files or documents I saved on my machine')}
               >
                 <div className="action-icon-frame">
-                  <Terminal size={14} />
+                  <FileSearch size={14} />
                 </div>
                 <div className="action-text-content">
                   <div className="action-title">
-                    <span>Inspect environment</span>
+                    <span>Find files on machine</span>
                     <ArrowUpRight size={12} className="action-arrow" />
                   </div>
-                  <span className="action-desc">Check frontmost app, cwd & system state</span>
+                  <span className="action-desc">Search documents, PDFs, or folders</span>
                 </div>
               </button>
 
               <button
                 type="button"
                 className="quick-action-card"
-                onClick={() => sendMessage('What memories do you have saved about me or this workspace?')}
+                onClick={() => sendMessage('Read my clipboard and summarize what is on it')}
+              >
+                <div className="action-icon-frame">
+                  <Clipboard size={14} />
+                </div>
+                <div className="action-text-content">
+                  <div className="action-title">
+                    <span>Summarize clipboard</span>
+                    <ArrowUpRight size={12} className="action-arrow" />
+                  </div>
+                  <span className="action-desc">Inspect and analyze copied clipboard text</span>
+                </div>
+              </button>
+
+              <button
+                type="button"
+                className="quick-action-card"
+                onClick={() => sendMessage('What memories do you have saved about me, my projects, or preferences?')}
               >
                 <div className="action-icon-frame">
                   <Brain size={14} />
                 </div>
                 <div className="action-text-content">
                   <div className="action-title">
-                    <span>Recall memories</span>
+                    <span>Inspect second brain</span>
                     <ArrowUpRight size={12} className="action-arrow" />
                   </div>
                   <span className="action-desc">Query saved facts, preferences & context</span>
@@ -100,34 +128,17 @@ export const ChatView: React.FC = () => {
               <button
                 type="button"
                 className="quick-action-card"
-                onClick={() => sendMessage('What native tools and models are available?')}
+                onClick={() => sendMessage('What is my frontmost active application and window title?')}
               >
                 <div className="action-icon-frame">
-                  <Layers size={14} />
+                  <AppWindow size={14} />
                 </div>
                 <div className="action-text-content">
                   <div className="action-title">
-                    <span>Native capabilities</span>
+                    <span>Inspect active workflow</span>
                     <ArrowUpRight size={12} className="action-arrow" />
                   </div>
-                  <span className="action-desc">Review local tools and approval model</span>
-                </div>
-              </button>
-
-              <button
-                type="button"
-                className="quick-action-card"
-                onClick={() => sendMessage('Summarize this workspace and how scoping works')}
-              >
-                <div className="action-icon-frame">
-                  <Compass size={14} />
-                </div>
-                <div className="action-text-content">
-                  <div className="action-title">
-                    <span>Workspace scope</span>
-                    <ArrowUpRight size={12} className="action-arrow" />
-                  </div>
-                  <span className="action-desc">Explore isolation across projects</span>
+                  <span className="action-desc">Read frontmost app and window context</span>
                 </div>
               </button>
             </div>
@@ -136,7 +147,7 @@ export const ChatView: React.FC = () => {
           <div className="messages-list">
             <div className="messages-header-actions">
               <div className="current-workspace-pill">
-                <span>{activeWorkspace?.icon || '🌐'}</span>
+                <Layers size={11} className="ws-pill-icon" />
                 <span>{activeWorkspace?.name || 'General'}</span>
               </div>
               <button
@@ -155,22 +166,111 @@ export const ChatView: React.FC = () => {
           </div>
         )}
 
-        {/* Actionable Error Banner (Tier 3: Graceful Degradation) */}
+        {/* Actionable Error Banner (Tier 3: Graceful Degradation & Resilience) */}
         {error && (
           <div className="chat-error-banner animate-fadeIn">
             <div className="chat-error-icon">
               <AlertTriangle size={15} />
             </div>
             <div className="chat-error-body">
-              <div className="chat-error-title">Provider Connection Issue</div>
+              <div className="chat-error-title">
+                {error.includes('Ollama is offline')
+                  ? 'Local Model Offline'
+                  : error.toLowerCase().includes('api key')
+                  ? 'Authentication Required'
+                  : error.toLowerCase().includes('network') || error.toLowerCase().includes('offline')
+                  ? 'Network Connection Offline'
+                  : 'Connection Issue'}
+              </div>
               <div className="chat-error-msg">{error}</div>
+
+              {/* Actionable Resolution Links & Buttons */}
+              <div className="chat-error-remediation-row">
+                {/* 1. Ollama Offline: terminal cmd & download link */}
+                {(error.includes('Ollama is offline') || error.includes('11434')) && (
+                  <>
+                    <button
+                      type="button"
+                      className="error-action-link-btn"
+                      onClick={() => {
+                        navigator.clipboard.writeText('ollama serve');
+                        setCopiedOllamaCmd(true);
+                        setTimeout(() => setCopiedOllamaCmd(false), 2000);
+                      }}
+                      title="Copy start command"
+                    >
+                      <Terminal size={11} />
+                      <span>{copiedOllamaCmd ? 'Copied `ollama serve`' : 'Copy `ollama serve`'}</span>
+                      {copiedOllamaCmd && <Check size={11} />}
+                    </button>
+
+                    <button
+                      type="button"
+                      className="error-action-link-btn"
+                      onClick={() => openTarget('https://ollama.com')}
+                      title="Open Ollama installation page"
+                    >
+                      <ExternalLink size={11} />
+                      <span>Install / Docs</span>
+                    </button>
+                  </>
+                )}
+
+                {/* 2. Invalid or missing API key: button to open Settings */}
+                {(error.toLowerCase().includes('api key') || error.includes('401') || error.includes('403')) && (
+                  <button
+                    type="button"
+                    className="error-action-link-btn primary"
+                    onClick={() => {
+                      setError(null);
+                      setActiveTab('settings');
+                    }}
+                  >
+                    <SettingsIcon size={11} />
+                    <span>Configure Key in Settings</span>
+                  </button>
+                )}
+
+                {/* 3. Cloud Provider Network Offline: 1-click fallback to Local Ollama */}
+                {activeProvider !== 'ollama' &&
+                  (error.toLowerCase().includes('network') ||
+                    error.toLowerCase().includes('offline') ||
+                    error.toLowerCase().includes('failed to fetch')) && (
+                    <button
+                      type="button"
+                      className="error-action-link-btn primary"
+                      onClick={() => switchToLocalAndRetry()}
+                      disabled={isLoading}
+                    >
+                      <Brain size={11} />
+                      <span>Switch to Local Ollama & Retry</span>
+                    </button>
+                  )}
+
+                {/* 4. Memory Persistence Issue */}
+                {error.toLowerCase().includes('memory') && (
+                  <button
+                    type="button"
+                    className="error-action-link-btn"
+                    onClick={() => {
+                      setError(null);
+                      setActiveTab('memory');
+                    }}
+                  >
+                    <Brain size={11} />
+                    <span>Open Memory Panel</span>
+                  </button>
+                )}
+              </div>
             </div>
+
             <div className="chat-error-actions">
               <button
                 type="button"
                 className="chat-error-retry-btn"
                 onClick={() => retryLastMessage()}
                 disabled={isLoading}
+                title="Retry last prompt"
               >
                 <RotateCw size={12} className={isLoading ? 'spinning' : ''} />
                 <span>Retry</span>
@@ -179,7 +279,7 @@ export const ChatView: React.FC = () => {
                 type="button"
                 className="chat-error-dismiss-btn"
                 onClick={() => setError(null)}
-                title="Dismiss error"
+                title="Dismiss error banner"
               >
                 <X size={13} />
               </button>

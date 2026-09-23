@@ -37,20 +37,55 @@ export class ClaudeProvider implements LLMProvider {
       body.system = options.systemPrompt;
     }
 
-    const response = await fetch(ANTHROPIC_ENDPOINT, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': options.apiKey,
-        'anthropic-version': '2023-06-01',
-        'anthropic-dangerous-direct-browser-access': 'true',
-      },
-      body: JSON.stringify(body),
-    });
+    let response: Response;
+    try {
+      response = await fetch(ANTHROPIC_ENDPOINT, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': options.apiKey,
+          'anthropic-version': '2023-06-01',
+          'anthropic-dangerous-direct-browser-access': 'true',
+        },
+        body: JSON.stringify(body),
+      });
+    } catch (netErr: unknown) {
+      const msg = netErr instanceof Error ? netErr.message : String(netErr);
+      if (
+        (typeof navigator !== 'undefined' && !navigator.onLine) ||
+        msg.includes('Failed to fetch') ||
+        msg.includes('NetworkError') ||
+        msg.includes('ENOTFOUND')
+      ) {
+        throw new Error(
+          'Network offline or Anthropic Claude API unreachable. You can switch to your local Ollama model to continue offline.'
+        );
+      }
+      throw netErr;
+    }
 
     if (!response.ok) {
       const errText = await response.text();
-      throw new Error(`Claude API error (${response.status}): ${errText || response.statusText}`);
+      let parsedMessage = '';
+      try {
+        const parsed = JSON.parse(errText);
+        parsedMessage = parsed.error?.message || parsed.message || '';
+      } catch {}
+
+      if (response.status === 401 || response.status === 403) {
+        throw new Error(
+          `Invalid or expired Anthropic Claude API key (HTTP ${response.status}). Please verify or update your key in Settings.`
+        );
+      }
+      if (response.status === 429) {
+        throw new Error(
+          `Anthropic Claude rate limit or quota exceeded (HTTP 429). Please check your Anthropic plan.`
+        );
+      }
+
+      throw new Error(
+        `Anthropic Claude API error (${response.status}): ${parsedMessage || errText || response.statusText}`
+      );
     }
 
     if (options.onChunk && response.body) {

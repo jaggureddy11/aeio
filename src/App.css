@@ -1,5 +1,5 @@
 :root {
-  /* Restrained Emerald Accent (Precision highlights, no radioactive fills) */
+  /* Composite.com Precision Accents */
   --aeio-primary: #10b981;
   --aeio-primary-hover: #34d399;
   --aeio-primary-active: #059669;
@@ -7,37 +7,42 @@
   --aeio-primary-subtle: rgba(16, 185, 129, 0.08);
   --aeio-primary-border: rgba(16, 185, 129, 0.2);
 
-  /* Deep Obsidian Minimalist Surfaces (Linear / Raycast tier) */
-  --aeio-bg-base: #0b0d10;
-  --aeio-bg-surface: #101318;
-  --aeio-bg-card: #141820;
-  --aeio-bg-card-hover: #191f2a;
-  --aeio-bg-input: #12151c;
-  --aeio-bg-glass: rgba(14, 17, 22, 0.88);
+  /* Composite Signature Terracotta / Orange Highlight */
+  --composite-orange: #f05623;
+  --composite-orange-subtle: rgba(240, 86, 35, 0.1);
+  --composite-orange-border: rgba(240, 86, 35, 0.25);
 
-  /* Hairline Borders & Dividers */
-  --aeio-border: rgba(255, 255, 255, 0.07);
+  /* Composite Dark Matte Surfaces */
+  --aeio-bg-base: #090a0c;
+  --aeio-bg-surface: #0f1115;
+  --aeio-bg-card: #14171d;
+  --aeio-bg-card-hover: #191c24;
+  --aeio-bg-input: #121419;
+  --aeio-bg-glass: rgba(15, 17, 21, 0.92);
+
+  /* Hairline Precision Borders */
+  --aeio-border: rgba(255, 255, 255, 0.08);
   --aeio-border-subtle: rgba(255, 255, 255, 0.04);
-  --aeio-border-hover: rgba(255, 255, 255, 0.13);
-  --aeio-border-focus: rgba(255, 255, 255, 0.2);
+  --aeio-border-hover: rgba(255, 255, 255, 0.16);
+  --aeio-border-focus: rgba(255, 255, 255, 0.25);
 
-  /* Neutral Modern Typography */
-  --aeio-text-primary: #f1f5f9;
-  --aeio-text-secondary: #94a3b8;
-  --aeio-text-muted: #64748b;
-  --aeio-text-faint: #475569;
-  --aeio-text-inverse: #0b0d10;
+  /* Composite Typography: Warm Off-White & Technical Grays */
+  --aeio-text-primary: #faf8f5;
+  --aeio-text-secondary: #a1a1aa;
+  --aeio-text-muted: #71717a;
+  --aeio-text-faint: #3f3f46;
+  --aeio-text-inverse: #090a0c;
 
-  /* Subtle Hardware Shadows */
-  --aeio-shadow-window: 0 32px 64px -16px rgba(0, 0, 0, 0.75), 0 0 0 1px rgba(255, 255, 255, 0.07);
-  --aeio-shadow-menu: 0 16px 36px -8px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(255, 255, 255, 0.09);
-  --aeio-shadow-card: 0 2px 8px rgba(0, 0, 0, 0.3);
+  /* Architectural Shadows */
+  --aeio-shadow-window: 0 28px 56px -12px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255, 255, 255, 0.08);
+  --aeio-shadow-menu: 0 16px 36px -8px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(255, 255, 255, 0.1);
+  --aeio-shadow-card: 0 2px 6px rgba(0, 0, 0, 0.25);
 
-  /* Transitions */
-  --aeio-transition: 140ms cubic-bezier(0.16, 1, 0.3, 1);
+  /* Micro Transitions */
+  --aeio-transition: 130ms cubic-bezier(0.16, 1, 0.3, 1);
 
-  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Inter", -apple-system, sans-serif;
-  letter-spacing: -0.011em;
+  font-family: "Roobert", "Inter", -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
+  letter-spacing: -0.015em;
   color: var(--aeio-text-primary);
   background-color: transparent;
   user-select: none;
@@ -659,12 +664,19 @@ html, body, #root {
 
 .streaming-cursor {
   display: inline-block;
-  margin-left: 2px;
-  color: var(--aeio-primary);
-  animation: blink 1s step-start infinite;
+  width: 6px;
+  height: 13px;
+  margin-left: 3px;
+  vertical-align: -1px;
+  background-color: var(--composite-orange);
+  border-radius: 1px;
+  animation: blink 0.9s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
 
 @keyframes blink {
+  0%, 100% {
+    opacity: 1;
+  }
   50% {
     opacity: 0;
   }
@@ -2220,28 +2232,32 @@ html, body, #root {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--aeio-bg-surface);
   border: 1px solid var(--aeio-border);
-  color: var(--aeio-text-primary);
+  color: var(--aeio-text-secondary);
   padding: 3px 8px;
-  border-radius: 6px;
-  font-size: 11.5px;
+  border-radius: 4px;
+  font-size: 11px;
   font-weight: 500;
+  letter-spacing: -0.01em;
   cursor: pointer;
   transition: all var(--aeio-transition);
 }
 
 .workspace-badge-btn:hover {
-  background: rgba(255, 255, 255, 0.08);
-  border-color: rgba(255, 255, 255, 0.2);
+  background: var(--aeio-bg-card-hover);
+  border-color: var(--aeio-border-hover);
+  color: var(--aeio-text-primary);
 }
 
 .workspace-badge-icon {
-  font-size: 12px;
+  display: inline-flex;
+  align-items: center;
+  color: var(--composite-orange);
 }
 
 .workspace-badge-name {
-  max-width: 100px;
+  max-width: 110px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -2260,14 +2276,13 @@ html, body, #root {
   position: absolute;
   top: calc(100% + 6px);
   left: 0;
-  width: 250px;
-  background: var(--aeio-bg-card);
+  width: 260px;
+  background: var(--aeio-bg-surface);
   border: 1px solid var(--aeio-border);
-  border-radius: 8px;
-  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.6), 0 8px 10px -6px rgba(0, 0, 0, 0.6);
+  border-radius: 6px;
+  box-shadow: 0 16px 36px -4px rgba(0, 0, 0, 0.75), 0 0 0 1px rgba(255, 255, 255, 0.04);
   z-index: 1000;
   padding: 8px;
-  backdrop-filter: blur(16px);
 }
 
 .workspace-dropdown-header {
@@ -2279,32 +2294,37 @@ html, body, #root {
 }
 
 .workspace-dropdown-title {
-  font-size: 11px;
+  font-size: 9.5px;
   font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.08em;
   color: var(--aeio-text-muted);
 }
 
 .workspace-add-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
   background: transparent;
-  border: none;
-  color: var(--aeio-primary);
-  font-size: 11px;
-  font-weight: 600;
+  border: 1px solid var(--aeio-border);
+  color: var(--composite-orange);
+  font-size: 10px;
+  font-weight: 500;
   cursor: pointer;
-  padding: 2px 4px;
-  border-radius: 4px;
+  padding: 2px 6px;
+  border-radius: 3px;
+  transition: all var(--aeio-transition);
 }
 
 .workspace-add-btn:hover {
-  background: var(--aeio-primary-subtle);
+  background: rgba(240, 86, 35, 0.1);
+  border-color: rgba(240, 86, 35, 0.3);
 }
 
 .workspace-list {
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 2px;
   margin-top: 6px;
   max-height: 220px;
   overflow-y: auto;
@@ -2315,22 +2335,33 @@ html, body, #root {
   align-items: center;
   gap: 8px;
   padding: 6px 8px;
-  border-radius: 6px;
+  border-radius: 4px;
+  border: 1px solid transparent;
   cursor: pointer;
   transition: all var(--aeio-transition);
 }
 
 .workspace-list-item:hover {
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--aeio-bg-card-hover);
+  border-color: var(--aeio-border-subtle);
 }
 
 .workspace-list-item.active {
-  background: rgba(16, 185, 129, 0.12);
-  border: 1px solid rgba(16, 185, 129, 0.25);
+  background: rgba(240, 86, 35, 0.08);
+  border-color: rgba(240, 86, 35, 0.25);
 }
 
 .ws-item-icon {
-  font-size: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  color: var(--aeio-text-secondary);
+}
+
+.workspace-list-item.active .ws-item-icon {
+  color: var(--composite-orange);
 }
 
 .ws-item-info {
@@ -2339,7 +2370,7 @@ html, body, #root {
 }
 
 .ws-item-name {
-  font-size: 12px;
+  font-size: 11.5px;
   font-weight: 500;
   color: var(--aeio-text-primary);
   white-space: nowrap;
@@ -2356,7 +2387,7 @@ html, body, #root {
 }
 
 .workspace-list-item.active .ws-item-name {
-  color: #34d399;
+  color: #faf8f5;
 }
 
 .ws-item-actions {
@@ -2366,11 +2397,14 @@ html, body, #root {
 }
 
 .ws-active-tag {
-  font-size: 9.5px;
-  color: #10b981;
-  background: rgba(16, 185, 129, 0.15);
-  padding: 1px 4px;
-  border-radius: 4px;
+  font-size: 9px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--composite-orange);
+  background: rgba(240, 86, 35, 0.12);
+  padding: 1px 5px;
+  border-radius: 2px;
 }
 
 .ws-archive-btn {
@@ -2380,12 +2414,14 @@ html, body, #root {
   opacity: 0.4;
   cursor: pointer;
   padding: 2px;
-  border-radius: 4px;
-  transition: opacity var(--aeio-transition);
+  border-radius: 3px;
+  color: var(--aeio-text-muted);
+  transition: opacity var(--aeio-transition), color var(--aeio-transition);
 }
 
 .ws-archive-btn:hover {
   opacity: 1;
+  color: var(--aeio-text-primary);
 }
 
 .workspace-archived-section {
@@ -2395,10 +2431,14 @@ html, body, #root {
 }
 
 .ws-archived-toggle {
+  display: flex;
+  align-items: center;
+  gap: 4px;
   background: transparent;
   border: none;
   color: var(--aeio-text-muted);
-  font-size: 10.5px;
+  font-size: 10px;
+  font-weight: 500;
   cursor: pointer;
   padding: 4px 6px;
   width: 100%;
@@ -2408,27 +2448,29 @@ html, body, #root {
 .ws-archived-list {
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 2px;
   margin-top: 4px;
 }
 
 .workspace-list-item.archived {
-  opacity: 0.6;
+  opacity: 0.55;
 }
 
 .ws-restore-btn {
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--aeio-bg-card);
   border: 1px solid var(--aeio-border);
   color: var(--aeio-text-secondary);
-  font-size: 10px;
+  font-size: 9.5px;
   padding: 2px 6px;
-  border-radius: 4px;
+  border-radius: 3px;
   cursor: pointer;
+  transition: all var(--aeio-transition);
 }
 
 .ws-restore-btn:hover {
-  background: rgba(255, 255, 255, 0.12);
-  color: #ffffff;
+  background: var(--aeio-bg-card-hover);
+  color: var(--aeio-text-primary);
+  border-color: var(--aeio-border-hover);
 }
 
 /* Workspace Creation Form */
@@ -2446,47 +2488,57 @@ html, body, #root {
 }
 
 .workspace-create-field label {
-  font-size: 10px;
-  font-weight: 500;
+  font-size: 9.5px;
+  font-weight: 600;
   color: var(--aeio-text-muted);
   text-transform: uppercase;
+  letter-spacing: 0.05em;
 }
 
 .workspace-input {
-  background: #090c0f;
+  background: var(--aeio-bg-base);
   border: 1px solid var(--aeio-border);
-  border-radius: 5px;
+  border-radius: 4px;
   padding: 5px 8px;
-  font-size: 11.5px;
+  font-size: 11px;
   color: var(--aeio-text-primary);
   font-family: inherit;
 }
 
 .workspace-input:focus {
   outline: none;
-  border-color: var(--aeio-border-focus);
+  border-color: var(--composite-orange);
 }
 
 .workspace-icon-picker {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
   gap: 4px;
-  flex-wrap: wrap;
 }
 
 .workspace-icon-btn {
-  background: #090c0f;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 28px;
+  background: var(--aeio-bg-base);
   border: 1px solid var(--aeio-border);
   border-radius: 4px;
-  font-size: 13px;
-  padding: 2px 6px;
+  color: var(--aeio-text-muted);
   cursor: pointer;
   transition: all var(--aeio-transition);
 }
 
-.workspace-icon-btn:hover,
+.workspace-icon-btn:hover {
+  border-color: var(--aeio-border-hover);
+  background: var(--aeio-bg-card-hover);
+  color: var(--aeio-text-primary);
+}
+
 .workspace-icon-btn.selected {
-  border-color: rgba(255, 255, 255, 0.2);
-  background: rgba(255, 255, 255, 0.08);
+  border-color: var(--composite-orange);
+  background: rgba(240, 86, 35, 0.12);
+  color: var(--composite-orange);
 }
 
 .workspace-create-actions {
@@ -2500,31 +2552,36 @@ html, body, #root {
   background: transparent;
   border: 1px solid var(--aeio-border);
   color: var(--aeio-text-muted);
-  font-size: 11px;
+  font-size: 10.5px;
   padding: 4px 8px;
-  border-radius: 4px;
+  border-radius: 3px;
   cursor: pointer;
 }
 
+.workspace-btn-cancel:hover {
+  color: var(--aeio-text-primary);
+  border-color: var(--aeio-border-hover);
+}
+
 .workspace-btn-submit {
-  background: #f1f5f9;
-  border: 1px solid #f1f5f9;
-  color: #0b0d10;
-  font-size: 11px;
+  background: var(--composite-orange);
+  border: 1px solid var(--composite-orange);
+  color: #ffffff;
+  font-size: 10.5px;
   font-weight: 500;
   padding: 4px 10px;
-  border-radius: 4px;
+  border-radius: 3px;
   cursor: pointer;
   transition: all var(--aeio-transition);
 }
 
 .workspace-btn-submit:hover:not(:disabled) {
-  background: #ffffff;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+  background: #db4b1e;
+  border-color: #db4b1e;
 }
 
 .workspace-btn-submit:disabled {
-  opacity: 0.5;
+  opacity: 0.4;
   cursor: not-allowed;
 }
 
@@ -2965,6 +3022,115 @@ html, body, #root {
 .switch-toggle input:checked + .slider-round:before {
   transform: translateX(16px);
   background-color: #ffffff;
+}
+
+/* Phase A: Error Handling & Resilience Component Styles */
+.chat-error-remediation-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.error-action-link-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 8px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 4px;
+  color: var(--aeio-text-primary);
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--aeio-transition);
+}
+
+.error-action-link-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.22);
+}
+
+.error-action-link-btn.primary {
+  background: rgba(240, 86, 35, 0.12);
+  border-color: rgba(240, 86, 35, 0.35);
+  color: #ff8a65;
+}
+
+.error-action-link-btn.primary:hover {
+  background: rgba(240, 86, 35, 0.22);
+  border-color: rgba(240, 86, 35, 0.55);
+}
+
+.memory-error-banner {
+  margin: 8px 12px 12px 12px;
+  padding: 8px 12px;
+  background: rgba(239, 68, 68, 0.07);
+  border: 1px solid rgba(239, 68, 68, 0.22);
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.memory-error-icon {
+  color: #f87171;
+  flex-shrink: 0;
+}
+
+.memory-error-info {
+  flex: 1;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.memory-error-title {
+  font-weight: 600;
+  color: #fca5a5;
+  margin-right: 4px;
+}
+
+.memory-error-text {
+  color: #fecaca;
+}
+
+.memory-error-dismiss-btn {
+  background: transparent;
+  border: none;
+  color: var(--aeio-text-muted);
+  cursor: pointer;
+  padding: 2px;
+  display: flex;
+  align-items: center;
+}
+
+.memory-error-dismiss-btn:hover {
+  color: #ffffff;
+}
+
+.error-tag.exit-error {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: #f87171;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.tool-error-section {
+  padding: 8px 10px;
+  background: rgba(239, 68, 68, 0.06);
+  border-radius: 4px;
+  border: 1px solid rgba(239, 68, 68, 0.2);
+}
+
+.tool-error-hint {
+  font-size: 10.5px;
+  color: var(--aeio-text-muted);
+  margin-top: 5px;
+  line-height: 1.35;
 }
 
 
