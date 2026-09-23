@@ -3,6 +3,7 @@ import ReactMarkdown from 'react-markdown';
 import { ChatMessage as MessageType, useChatStore } from '../../stores/chatStore';
 import logo from '../../assets/logo.png';
 import { User, Brain, Check, Plus, X, ChevronDown, ChevronUp } from 'lucide-react';
+import { ToolApprovalCard } from './ToolApproval';
 
 interface Props {
   message: MessageType;
@@ -10,11 +11,17 @@ interface Props {
 
 export const ChatMessageItem: React.FC<Props> = ({ message }) => {
   const isUser = message.role === 'user';
-  const { confirmMemoryProposal, dismissMemoryProposal } = useChatStore();
+  const {
+    confirmMemoryProposal,
+    dismissMemoryProposal,
+    approveToolExecution,
+    denyToolExecution,
+  } = useChatStore();
   const [showRecalled, setShowRecalled] = useState(false);
 
   const hasRecalled = !isUser && message.recalledMemories && message.recalledMemories.length > 0;
   const hasProposed = !isUser && message.proposedMemories && message.proposedMemories.length > 0;
+  const hasTools = !isUser && message.toolExecutions && message.toolExecutions.length > 0;
 
   return (
     <div className={`message-row ${isUser ? 'user-row' : 'assistant-row'}`}>
@@ -64,6 +71,22 @@ export const ChatMessageItem: React.FC<Props> = ({ message }) => {
             {message.isStreaming && <span className="streaming-cursor">▋</span>}
           </div>
         </div>
+
+        {/* Tool Execution Cards (Tier 2: Tool Execution with Gatekeeper) */}
+        {hasTools && (
+          <div className="tool-executions-container">
+            {message.toolExecutions!.map((exec, idx) => (
+              <ToolApprovalCard
+                key={exec.id || idx}
+                execution={exec}
+                messageId={message.id}
+                index={idx}
+                onApprove={approveToolExecution}
+                onDeny={denyToolExecution}
+              />
+            ))}
+          </div>
+        )}
 
         {/* Proposed Memories (Tier 1: Auto-capture with approval) */}
         {hasProposed && (

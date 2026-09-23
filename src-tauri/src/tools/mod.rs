@@ -1,9 +1,7 @@
-// Tool execution module skeleton
+pub mod clipboard;
+pub mod filesystem;
+pub mod shell;
 
-pub struct ToolManager;
-
-impl ToolManager {
-    pub fn new() -> Self {
-        Self
-    }
-}
+pub use clipboard::*;
+pub use filesystem::*;
+pub use shell::*;

@@ -1,11 +1,13 @@
 use tauri::State;
 use crate::memory::{Memory, MemoryManager, SearchResult};
+use crate::tools::{self, FileMatch, ShellOutput};
 
 #[tauri::command]
 pub fn ping() -> &'static str {
     "pong"
 }
 
+// Memory Commands
 #[tauri::command]
 pub fn add_memory(
     state: State<MemoryManager>,
@@ -45,4 +47,35 @@ pub fn search_memories(
     limit: Option<usize>,
 ) -> Result<Vec<SearchResult>, String> {
     state.db().search_memories(&query, limit.unwrap_or(10))
+}
+
+// Tool Commands
+#[tauri::command]
+pub fn read_file(path: String) -> Result<String, String> {
+    tools::read_file(&path)
+}
+
+#[tauri::command]
+pub fn search_files(dir: String, query: String) -> Result<Vec<FileMatch>, String> {
+    tools::search_files(&dir, &query)
+}
+
+#[tauri::command]
+pub fn read_clipboard() -> Result<String, String> {
+    tools::read_clipboard()
+}
+
+#[tauri::command]
+pub fn write_clipboard(text: String) -> Result<(), String> {
+    tools::write_clipboard(&text)
+}
+
+#[tauri::command]
+pub fn check_destructive_command(command: String) -> bool {
+    tools::is_destructive_command(&command)
+}
+
+#[tauri::command]
+pub fn run_shell_command(command: String, cwd: Option<String>) -> Result<ShellOutput, String> {
+    tools::run_shell_command(&command, cwd.as_deref())
 }
