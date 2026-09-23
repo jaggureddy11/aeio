@@ -12,7 +12,7 @@ type ActiveTab = 'chat' | 'memory' | 'settings';
 
 export const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<ActiveTab>('chat');
-  const { activeProvider, ollamaModel } = useSettingsStore();
+  const { activeProvider, ollamaModel, ambientProactive, activeWindowAwareness } = useSettingsStore();
 
   return (
     <div className="app-container">
@@ -26,6 +26,17 @@ export const App: React.FC = () => {
             <span className="status-dot"></span>
             {activeProvider === 'ollama' ? ollamaModel : activeProvider}
           </span>
+          {ambientProactive && (
+            <span className="ambient-active-badge" title="Ambient pattern noticing is enabled (Tier 5 opt-in)">
+              <span className="ambient-pulse-dot" />
+              ✨ Ambient Active
+            </span>
+          )}
+          {activeWindowAwareness && (
+            <span className="host-aware-badge" title="Active window awareness enabled (Tier 2 opt-in)">
+              🖥️ Window Aware
+            </span>
+          )}
         </div>
 
 

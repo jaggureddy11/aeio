@@ -71,6 +71,7 @@ pub fn run() {
             commands::set_active_workspace,
             commands::get_active_workspace,
             commands::open_target,
+            commands::get_active_window,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

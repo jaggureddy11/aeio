@@ -13,6 +13,8 @@ import {
   runShellCommand,
   checkDestructiveCommand,
   openTarget,
+  getActiveWindow,
+  ActiveWindowInfo,
   saveChatMessage,
   loadChatMessages,
   clearChatHistory,
@@ -47,6 +49,14 @@ export interface ProviderBadgeInfo {
   isPrivacyProtected?: boolean;
 }
 
+export interface ProactiveNudge {
+  id: string;
+  type: 'repeat_pattern' | 'relevant_memory' | 'workspace_suggestion';
+  title: string;
+  suggestion: string;
+  actionPrompt?: string;
+}
+
 export interface ChatMessage {
   id: string;
   role: 'user' | 'assistant' | 'system';
@@ -58,6 +68,7 @@ export interface ChatMessage {
   toolExecutions?: ToolExecution[];
   providerInfo?: ProviderBadgeInfo;
   workspaceId?: string;
+  activeWindowContext?: ActiveWindowInfo;
 }
 
 export interface ChatState {
@@ -66,6 +77,8 @@ export interface ChatState {
   error: string | null;
   lastFailedPrompt: string | null;
   alwaysAllowedCommands: string[];
+  activeNudge: ProactiveNudge | null;
+  dismissedNudgeIds: string[];
   initChatHistory: (workspaceId?: string) => Promise<void>;
   addMessage: (message: Omit<ChatMessage, 'id' | 'timestamp'>) => string;
   updateMessageContent: (
@@ -75,7 +88,8 @@ export interface ChatState {
     recalled?: RecalledMemory[],
     proposed?: ProposedMemory[],
     tools?: ToolExecution[],
-    providerInfo?: ProviderBadgeInfo
+    providerInfo?: ProviderBadgeInfo,
+    activeWindowContext?: ActiveWindowInfo
   ) => void;
   setError: (error: string | null) => void;
   clearMessages: () => void;
@@ -89,6 +103,9 @@ export interface ChatState {
     alwaysAllow?: boolean
   ) => Promise<void>;
   denyToolExecution: (messageId: string, index: number) => void;
+  dismissNudge: (id: string) => void;
+  applyNudge: (nudge: ProactiveNudge) => Promise<void>;
+  checkForAmbientNudge: () => Promise<void>;
 }
 
 const REMEMBER_REGEX =
@@ -120,6 +137,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
   error: null,
   lastFailedPrompt: null,
   alwaysAllowedCommands: [],
+  activeNudge: null,
+  dismissedNudgeIds: [],
 
   initChatHistory: async (workspaceId?: string) => {
     try {
@@ -144,59 +163,66 @@ export const useChatStore = create<ChatState>((set, get) => ({
           providerInfo: s.provider_info_json
             ? JSON.parse(s.provider_info_json)
             : undefined,
-          workspaceId: s.workspace_id || wsId,
+          workspaceId: s.workspace_id || undefined,
         }));
-        set({ messages: parsed, error: null });
-      } else {
-        set({ messages: [], error: null });
+        set({ messages: parsed });
       }
     } catch (err) {
       console.warn('Failed to load chat history from SQLite:', err);
     }
   },
 
-  addMessage: (msg) => {
-    const id = crypto.randomUUID();
+  addMessage: (message) => {
     const activeWs = useWorkspaceStore.getState().activeWorkspace;
-    const newMsg: ChatMessage = {
-      ...msg,
+    const wsId = message.workspaceId || activeWs?.id || 'default';
+
+    const id = crypto.randomUUID();
+    const newMessage: ChatMessage = {
+      ...message,
       id,
       timestamp: Date.now(),
-      workspaceId: msg.workspaceId || activeWs?.id || 'default',
+      workspaceId: wsId,
     };
-    set((state) => ({ messages: [...state.messages, newMsg] }));
-    if (newMsg.role === 'user') {
-      persistChatMessage(newMsg);
+    set((state) => ({ messages: [...state.messages, newMessage] }));
+
+    // Persist complete user or assistant message to SQLite
+    if (!message.isStreaming) {
+      persistChatMessage(newMessage);
     }
+
     return id;
   },
-
 
   updateMessageContent: (
     id,
     content,
-    isStreaming = false,
+    isStreaming,
     recalled,
     proposed,
     tools,
-    providerInfo
+    providerInfo,
+    activeWindowContext
   ) => {
     set((state) => {
       const updatedMessages = state.messages.map((m) => {
-        if (m.id !== id) return m;
-        const updated: ChatMessage = {
-          ...m,
-          content,
-          isStreaming,
-          ...(recalled !== undefined ? { recalledMemories: recalled } : {}),
-          ...(proposed !== undefined ? { proposedMemories: proposed } : {}),
-          ...(tools !== undefined ? { toolExecutions: tools } : {}),
-          ...(providerInfo !== undefined ? { providerInfo } : {}),
-        };
-        if (!isStreaming) {
-          persistChatMessage(updated);
+        if (m.id === id) {
+          const updated: ChatMessage = {
+            ...m,
+            content,
+            isStreaming: isStreaming !== undefined ? isStreaming : m.isStreaming,
+            recalledMemories: recalled !== undefined ? recalled : m.recalledMemories,
+            proposedMemories: proposed !== undefined ? proposed : m.proposedMemories,
+            toolExecutions: tools !== undefined ? tools : m.toolExecutions,
+            providerInfo: providerInfo !== undefined ? providerInfo : m.providerInfo,
+            activeWindowContext:
+              activeWindowContext !== undefined ? activeWindowContext : m.activeWindowContext,
+          };
+          if (!isStreaming) {
+            persistChatMessage(updated);
+          }
+          return updated;
         }
-        return updated;
+        return m;
       });
       return { messages: updatedMessages };
     });
@@ -204,73 +230,90 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
   setError: (error) => set({ error }),
 
-  clearMessages: () => {
+  clearMessages: async () => {
     const activeWs = useWorkspaceStore.getState().activeWorkspace;
-    set({ messages: [], error: null, lastFailedPrompt: null });
-    clearChatHistory(activeWs?.id).catch((err) =>
-      console.warn('Failed to clear chat history in SQLite:', err)
-    );
-  },
-
-  retryLastMessage: async () => {
-    const prompt = get().lastFailedPrompt;
-    if (!prompt) return;
-    set({ error: null });
-    await get().sendMessage(prompt);
+    const wsId = activeWs?.id || 'default';
+    set({ messages: [], activeNudge: null });
+    try {
+      await clearChatHistory(wsId);
+    } catch (err) {
+      console.warn('Failed to clear chat history in SQLite:', err);
+    }
   },
 
   confirmMemoryProposal: async (messageId: string, index: number) => {
-    const msg = get().messages.find((m) => m.id === messageId);
-    if (!msg || !msg.proposedMemories || !msg.proposedMemories[index]) return;
+    const message = get().messages.find((m) => m.id === messageId);
+    if (!message || !message.proposedMemories) return;
 
-    const proposal = msg.proposedMemories[index];
+    const proposal = message.proposedMemories[index];
+    if (!proposal || proposal.isSaved) return;
+
+    const activeWs = useWorkspaceStore.getState().activeWorkspace;
+    const wsId = activeWs?.id || 'default';
+
     try {
-      const activeWs = useWorkspaceStore.getState().activeWorkspace;
-      await addMemory(proposal.content, proposal.category, activeWs?.id);
-      set((state) => {
-        const updatedMessages = state.messages.map((m) => {
-          if (m.id !== messageId || !m.proposedMemories) return m;
-          const updated = [...m.proposedMemories];
-          updated[index] = { ...updated[index], isSaved: true };
-          const res = { ...m, proposedMemories: updated };
-          persistChatMessage(res);
-          return res;
-        });
-        return { messages: updatedMessages };
-      });
-    } catch (err: unknown) {
-      set({ error: err instanceof Error ? err.message : String(err) });
+      await addMemory(
+        proposal.content,
+        proposal.category,
+        wsId
+      );
+
+      const updatedProposals = [...message.proposedMemories];
+      updatedProposals[index] = { ...proposal, isSaved: true };
+
+      get().updateMessageContent(
+        messageId,
+        message.content,
+        message.isStreaming,
+        message.recalledMemories,
+        updatedProposals,
+        message.toolExecutions,
+        message.providerInfo,
+        message.activeWindowContext
+      );
+    } catch (err) {
+      console.error('Failed to commit proposed memory:', err);
     }
   },
 
   dismissMemoryProposal: (messageId: string, index: number) => {
-    set((state) => {
-      const updatedMessages = state.messages.map((m) => {
-        if (m.id !== messageId || !m.proposedMemories) return m;
-        const updated = m.proposedMemories.filter((_, i) => i !== index);
-        const res = { ...m, proposedMemories: updated };
-        persistChatMessage(res);
-        return res;
-      });
-      return { messages: updatedMessages };
-    });
+    const message = get().messages.find((m) => m.id === messageId);
+    if (!message || !message.proposedMemories) return;
+
+    const updatedProposals = message.proposedMemories.filter((_, i) => i !== index);
+
+    get().updateMessageContent(
+      messageId,
+      message.content,
+      message.isStreaming,
+      message.recalledMemories,
+      updatedProposals,
+      message.toolExecutions,
+      message.providerInfo,
+      message.activeWindowContext
+    );
   },
 
   approveToolExecution: async (messageId: string, index: number, alwaysAllow = false) => {
-    const msg = get().messages.find((m) => m.id === messageId);
-    if (!msg || !msg.toolExecutions || !msg.toolExecutions[index]) return;
+    const message = get().messages.find((m) => m.id === messageId);
+    if (!message || !message.toolExecutions) return;
 
-    const execution = msg.toolExecutions[index];
+    const execution = message.toolExecutions[index];
+    if (!execution || execution.status !== 'pending_approval') return;
 
-    // Transition to running state
-    set((state) => ({
-      messages: state.messages.map((m) => {
-        if (m.id !== messageId || !m.toolExecutions) return m;
-        const updated = [...m.toolExecutions];
-        updated[index] = { ...updated[index], status: 'running' };
-        return { ...m, toolExecutions: updated };
-      }),
-    }));
+    // Set state to running
+    const runningTools = [...message.toolExecutions];
+    runningTools[index] = { ...execution, status: 'running' };
+    get().updateMessageContent(
+      messageId,
+      message.content,
+      message.isStreaming,
+      message.recalledMemories,
+      message.proposedMemories,
+      runningTools,
+      message.providerInfo,
+      message.activeWindowContext
+    );
 
     try {
       let result: any = null;
@@ -313,73 +356,166 @@ export const useChatStore = create<ChatState>((set, get) => ({
       }
 
       // If user enabled always allow and it's NOT destructive, add to session cache
-      if (
-        alwaysAllow &&
-        !execution.isDestructive &&
-        execution.toolName === 'run_shell'
-      ) {
+      if (alwaysAllow && !execution.isDestructive) {
+        const cmdKey = execution.args.command;
+        const scopedKey = `${execution.toolName}:${cmdKey || execution.args.path || execution.args.target || 'default'}`;
         set((state) => ({
-          alwaysAllowedCommands: [
-            ...state.alwaysAllowedCommands,
-            execution.args.command,
-          ],
+          alwaysAllowedCommands: Array.from(
+            new Set([...state.alwaysAllowedCommands, scopedKey, ...(cmdKey ? [cmdKey] : [])])
+          ),
         }));
       }
 
-      set((state) => {
-        const updatedMessages = state.messages.map((m) => {
-          if (m.id !== messageId || !m.toolExecutions) return m;
-          const updated = [...m.toolExecutions];
-          updated[index] = {
-            ...updated[index],
-            status: 'completed',
-            result,
-          };
-          const res = { ...m, toolExecutions: updated };
-          persistChatMessage(res);
-          return res;
-        });
-        return { messages: updatedMessages };
-      });
+      // Update execution status to completed
+      const completedTools = [...get().messages.find((m) => m.id === messageId)!.toolExecutions!];
+      completedTools[index] = {
+        ...execution,
+        status: 'completed',
+        result,
+      };
+
+      get().updateMessageContent(
+        messageId,
+        message.content,
+        message.isStreaming,
+        message.recalledMemories,
+        message.proposedMemories,
+        completedTools,
+        message.providerInfo,
+        message.activeWindowContext
+      );
     } catch (err: unknown) {
       const errorStr = err instanceof Error ? err.message : String(err);
-      set((state) => {
-        const updatedMessages = state.messages.map((m) => {
-          if (m.id !== messageId || !m.toolExecutions) return m;
-          const updated = [...m.toolExecutions];
-          updated[index] = {
-            ...updated[index],
-            status: 'error',
-            error: errorStr,
-          };
-          const res = { ...m, toolExecutions: updated };
-          persistChatMessage(res);
-          return res;
-        });
-        return { messages: updatedMessages };
-      });
+      const errorTools = [...get().messages.find((m) => m.id === messageId)!.toolExecutions!];
+      errorTools[index] = {
+        ...execution,
+        status: 'error',
+        error: errorStr,
+      };
+
+      get().updateMessageContent(
+        messageId,
+        message.content,
+        message.isStreaming,
+        message.recalledMemories,
+        message.proposedMemories,
+        errorTools,
+        message.providerInfo,
+        message.activeWindowContext
+      );
     }
   },
 
   denyToolExecution: (messageId: string, index: number) => {
-    set((state) => {
-      const updatedMessages = state.messages.map((m) => {
-        if (m.id !== messageId || !m.toolExecutions) return m;
-        const updated = [...m.toolExecutions];
-        updated[index] = { ...updated[index], status: 'denied' };
-        const res = { ...m, toolExecutions: updated };
-        persistChatMessage(res);
-        return res;
-      });
-      return { messages: updatedMessages };
-    });
+    const message = get().messages.find((m) => m.id === messageId);
+    if (!message || !message.toolExecutions) return;
+
+    const deniedTools = [...message.toolExecutions];
+    deniedTools[index] = { ...deniedTools[index], status: 'denied' };
+
+    get().updateMessageContent(
+      messageId,
+      message.content,
+      message.isStreaming,
+      message.recalledMemories,
+      message.proposedMemories,
+      deniedTools,
+      message.providerInfo,
+      message.activeWindowContext
+    );
+  },
+
+  dismissNudge: (id: string) => {
+    set((state) => ({
+      activeNudge: null,
+      dismissedNudgeIds: [...state.dismissedNudgeIds, id],
+    }));
+  },
+
+  applyNudge: async (nudge: ProactiveNudge) => {
+    get().dismissNudge(nudge.id);
+    if (nudge.actionPrompt) {
+      await get().sendMessage(nudge.actionPrompt);
+    }
+  },
+
+  checkForAmbientNudge: async () => {
+    const isAmbientOn = useSettingsStore.getState().ambientProactive;
+    if (!isAmbientOn) {
+      if (get().activeNudge) {
+        set({ activeNudge: null });
+      }
+      return;
+    }
+
+    const msgs = get().messages;
+    const dismissed = get().dismissedNudgeIds;
+    const activeWs = useWorkspaceStore.getState().activeWorkspace;
+    const wsId = activeWs?.id || 'default';
+
+    // 1. Check for repeated questions or topics in recent messages
+    const userMsgs = msgs.filter((m) => m.role === 'user');
+    if (userMsgs.length >= 2) {
+      const last = userMsgs[userMsgs.length - 1].content.trim().toLowerCase();
+      const prev = userMsgs[userMsgs.length - 2].content.trim().toLowerCase();
+
+      const lastWords = new Set(last.split(/\s+/));
+      const commonWords = prev.split(/\s+/).filter((w) => w.length > 3 && lastWords.has(w));
+
+      if (commonWords.length >= 2) {
+        const nudgeId = `repeat_${wsId}_${commonWords.slice(0, 3).join('_')}`;
+        if (!dismissed.includes(nudgeId)) {
+          set({
+            activeNudge: {
+              id: nudgeId,
+              type: 'repeat_pattern',
+              title: 'Iterative Pattern Noticed',
+              suggestion: `You've queried about "${commonWords.join(' ')}". Save summary as permanent workspace note?`,
+              actionPrompt: `Summarize our conversation about ${commonWords.join(' ')} into a concise project note and remember it.`,
+            },
+          });
+          return;
+        }
+      }
+    }
+
+    // 2. Check for relevant workspace memories that could assist
+    if (userMsgs.length > 0) {
+      const latestMsg = userMsgs[userMsgs.length - 1].content;
+      try {
+        const mems = await searchMemories(latestMsg, wsId, false, 3);
+        const topMem = mems.find((m) => m.score >= 0.8);
+        if (topMem) {
+          const nudgeId = `mem_${topMem.memory.id}`;
+          if (!dismissed.includes(nudgeId)) {
+            set({
+              activeNudge: {
+                id: nudgeId,
+                type: 'relevant_memory',
+                title: 'Relevant Memory Found',
+                suggestion: `Recall from your notes: "${topMem.memory.content}". Would you like to use this context?`,
+                actionPrompt: `Use our saved memory: "${topMem.memory.content}" to expand on this.`,
+              },
+            });
+            return;
+          }
+        }
+      } catch {}
+    }
+  },
+
+  retryLastMessage: async () => {
+    const prompt = get().lastFailedPrompt;
+    if (!prompt) return;
+    set({ error: null });
+    await get().sendMessage(prompt);
   },
 
   sendMessage: async (userContent: string) => {
     const trimmed = userContent.trim();
     if (!trimmed || get().isLoading) return;
 
-    set({ error: null, lastFailedPrompt: trimmed });
+    set({ error: null, lastFailedPrompt: trimmed, activeNudge: null });
 
     const activeWs = useWorkspaceStore.getState().activeWorkspace;
     const wsId = activeWs?.id || 'default';
@@ -423,13 +559,29 @@ export const useChatStore = create<ChatState>((set, get) => ({
       isPrivacyProtected: isLocal || recalled.length > 0,
     };
 
+    // 4. Active Window Awareness (Tier 2 Opt-in)
+    let activeWinInfo: ActiveWindowInfo | undefined = undefined;
+    if (settings.activeWindowAwareness) {
+      try {
+        const info = await getActiveWindow();
+        if (info && (info.app_name || info.title)) {
+          activeWinInfo = info;
+        }
+      } catch (err) {
+        console.warn('Failed to retrieve active window context:', err);
+      }
+    }
 
-    // 4. Build system prompt with memories and tool specifications
+    // 5. Build system prompt with memories, active window context, and tool specifications
     let systemPrompt =
       'You are Aeio, an intelligent, helpful, and concise local-first desktop AI assistant.';
 
     if (activeWs) {
       systemPrompt += `\nCurrent Workspace: "${activeWs.name}". Keep context focused on this workspace.`;
+    }
+
+    if (activeWinInfo) {
+      systemPrompt += `\n\nActive Window Context (Opt-in enabled): The user currently has application "${activeWinInfo.app_name}" focused (Window title: "${activeWinInfo.title}").`;
     }
 
     if (recalled.length > 0) {
@@ -451,13 +603,13 @@ export const useChatStore = create<ChatState>((set, get) => ({
       '\n- Write clipboard: <tool_call name="write_clipboard" args=\'{"text":"..."}\'></tool_call>' +
       '\nAlways explain what you are doing in plain text alongside the tool call.';
 
-    // 5. Prepare conversation messages for provider
+    // 6. Prepare conversation messages for provider
     const conversation: ProviderMessage[] = get().messages.map((m) => ({
       role: m.role,
       content: m.content,
     }));
 
-    // 6. Add assistant placeholder
+    // 7. Add assistant placeholder
     const assistantId = get().addMessage({
       role: 'assistant',
       content: '',
@@ -465,6 +617,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       recalledMemories: recalled,
       providerInfo,
       workspaceId: wsId,
+      activeWindowContext: activeWinInfo,
     });
 
     set({ isLoading: true });
@@ -476,81 +629,67 @@ export const useChatStore = create<ChatState>((set, get) => ({
         systemPrompt,
         onChunk: (chunk) => {
           rawStreamed += chunk;
-          // Clean partially-streamed XML tags for seamless user experience
           const cleanDisplay = rawStreamed
-            .replace(/<remember[\s\S]*?(?:<\/remember>|$)/gi, '')
-            .replace(/<tool_call[\s\S]*?(?:<\/tool_call>|$)/gi, '')
+            .replace(REMEMBER_REGEX, '')
+            .replace(TOOL_CALL_REGEX, '')
             .trim();
           get().updateMessageContent(
             assistantId,
-            cleanDisplay,
+            cleanDisplay || '...',
             true,
             recalled,
             undefined,
             undefined,
-            providerInfo
+            providerInfo,
+            activeWinInfo
           );
         },
       });
 
-      // 7. Parse any proposed memories from the full response
+      // 8. Parse completed response for memory proposals
       const proposed: ProposedMemory[] = [];
-      let memMatch: RegExpExecArray | null;
-      while ((memMatch = REMEMBER_REGEX.exec(rawStreamed)) !== null) {
-        const cat = memMatch[1].toLowerCase() as MemoryCategory;
-        const memoryContent = memMatch[2].trim();
-        if (memoryContent) {
-          proposed.push({
-            category: cat,
-            content: memoryContent,
-            isSaved: false,
-          });
+      let remMatch;
+      const remRegex = new RegExp(REMEMBER_REGEX.source, 'gi');
+      while ((remMatch = remRegex.exec(rawStreamed)) !== null) {
+        const cat = remMatch[1].toLowerCase() as MemoryCategory;
+        const text = remMatch[2].trim();
+        if (text) {
+          proposed.push({ category: cat, content: text, isSaved: false });
         }
       }
 
-      // 8. Parse tool calls from the full response
+      // 9. Parse completed response for tool execution requests
       const tools: ToolExecution[] = [];
-      let toolMatch: RegExpExecArray | null;
-      while ((toolMatch = TOOL_CALL_REGEX.exec(rawStreamed)) !== null) {
-        const toolName = toolMatch[1].trim();
-        const rawArgsAttr = toolMatch[2] || toolMatch[3] || '';
-        const rawArgsBody = toolMatch[4] || '';
-        const argsStr = (rawArgsAttr || rawArgsBody || '{}').trim();
-
-        let parsedArgs: Record<string, any> = {};
+      let toolMatch;
+      const tRegex = new RegExp(TOOL_CALL_REGEX.source, 'gi');
+      while ((toolMatch = tRegex.exec(rawStreamed)) !== null) {
+        const name = toolMatch[1].trim();
+        const argsStr = toolMatch[2] || toolMatch[3] || toolMatch[4] || '{}';
+        let args: Record<string, any> = {};
         try {
-          parsedArgs = JSON.parse(argsStr);
+          args = JSON.parse(argsStr.trim());
         } catch {
-          // If args string is a plain string, map based on tool name
-          if (toolName === 'run_shell') parsedArgs = { command: argsStr };
-          else if (toolName === 'read_file') parsedArgs = { path: argsStr };
-          else if (toolName === 'write_clipboard') parsedArgs = { text: argsStr };
-          else if (toolName === 'open_target') parsedArgs = { target: argsStr };
+          args = { raw: argsStr.trim() };
         }
 
-        // Determine if command is destructive
         let isDestructive = false;
-        if (toolName === 'run_shell' && parsedArgs.command) {
+        if (name === 'run_shell' && args.command) {
           try {
-            isDestructive = await checkDestructiveCommand(parsedArgs.command);
+            isDestructive = await checkDestructiveCommand(args.command);
           } catch {
-            const lower = parsedArgs.command.toLowerCase();
-            isDestructive = ['rm ', 'del ', 'format ', 'dd ', 'rmdir'].some((p) =>
-              lower.includes(p)
-            );
+            isDestructive = false;
           }
         }
 
         tools.push({
           id: crypto.randomUUID(),
-          toolName,
-          args: parsedArgs,
+          toolName: name,
+          args,
           status: 'pending_approval',
           isDestructive,
         });
       }
 
-      // Final clean text without raw XML tags
       const finalText = rawStreamed
         .replace(REMEMBER_REGEX, '')
         .replace(TOOL_CALL_REGEX, '')
@@ -563,32 +702,36 @@ export const useChatStore = create<ChatState>((set, get) => ({
         recalled,
         proposed,
         tools,
-        providerInfo
+        providerInfo,
+        activeWinInfo
       );
 
-      // 9. Auto-execute any non-destructive tools that are already marked "always allow"
+      // 10. Auto-execute any non-destructive tools that are already marked "always allow"
       if (tools.length > 0) {
+        const allowed = get().alwaysAllowedCommands;
         for (let i = 0; i < tools.length; i++) {
           const t = tools[i];
-          if (
-            t.toolName === 'run_shell' &&
-            !t.isDestructive &&
-            get().alwaysAllowedCommands.includes(t.args.command)
-          ) {
-            get().approveToolExecution(assistantId, i);
+          if (!t.isDestructive) {
+            const cmdKey = t.args.command;
+            const scopedKey = `${t.toolName}:${cmdKey || t.args.path || t.args.target || 'default'}`;
+            if ((cmdKey && allowed.includes(cmdKey)) || allowed.includes(scopedKey)) {
+              get().approveToolExecution(assistantId, i);
+            }
           }
         }
       }
 
       // Success: clear last failed prompt
       set({ lastFailedPrompt: null });
+
+      // Trigger ambient nudge check if opt-in enabled
+      get().checkForAmbientNudge();
     } catch (err: unknown) {
       const errorMsg =
         err instanceof Error
           ? err.message
           : 'Failed to receive response from provider.';
 
-      // Actionable error mapping for Graceful Degradation (Tier 3)
       let actionableError = errorMsg;
       if (
         errorMsg.includes('Failed to fetch') ||
@@ -607,7 +750,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
           recalled,
           undefined,
           undefined,
-          providerInfo
+          providerInfo,
+          activeWinInfo
         );
       }
       set({ error: actionableError, lastFailedPrompt: trimmed });
@@ -616,4 +760,3 @@ export const useChatStore = create<ChatState>((set, get) => ({
     }
   },
 }));
-

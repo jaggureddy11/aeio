@@ -160,6 +160,15 @@ export async function openTarget(target: string): Promise<string> {
   return invoke<string>('open_target', { target });
 }
 
+export interface ActiveWindowInfo {
+  app_name: string;
+  title: string;
+}
+
+export async function getActiveWindow(): Promise<ActiveWindowInfo> {
+  return invoke<ActiveWindowInfo>('get_active_window');
+}
+
 // Secure OS Keychain Methods (Zero-plaintext BYOK storage)
 export async function getApiKey(target: string): Promise<string> {
   return invoke<string>('get_api_key', { target });

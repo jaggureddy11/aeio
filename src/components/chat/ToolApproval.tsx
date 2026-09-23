@@ -12,6 +12,7 @@ import {
   ChevronUp,
   Loader2,
   ShieldAlert,
+  ExternalLink,
 } from 'lucide-react';
 import { ToolExecution } from '../../stores/chatStore';
 
@@ -44,6 +45,8 @@ export const ToolApprovalCard: React.FC<Props> = ({
       case 'read_clipboard':
       case 'write_clipboard':
         return <Clipboard size={13} />;
+      case 'open_target':
+        return <ExternalLink size={13} />;
       default:
         return <Play size={13} />;
     }
@@ -61,6 +64,8 @@ export const ToolApprovalCard: React.FC<Props> = ({
         return 'Read Clipboard';
       case 'write_clipboard':
         return 'Write to Clipboard';
+      case 'open_target':
+        return 'Launch Application / File / URL';
       default:
         return execution.toolName;
     }
@@ -144,6 +149,13 @@ export const ToolApprovalCard: React.FC<Props> = ({
           <div className="code-command-snippet">
             <span className="arg-label">Copy content:</span>
             <div className="clipboard-preview">{execution.args.text}</div>
+          </div>
+        )}
+
+        {execution.toolName === 'open_target' && (
+          <div className="code-command-snippet">
+            <span className="arg-label">Target:</span>
+            <code>{execution.args.target || execution.args.path || execution.args.url}</code>
           </div>
         )}
 

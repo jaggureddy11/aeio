@@ -4,13 +4,16 @@ import { useWorkspaceStore } from '../../stores/workspaceStore';
 import { ChatMessageItem } from './ChatMessage';
 import { ChatInput } from './ChatInput';
 import logo from '../../assets/logo.png';
-import { Trash2, AlertTriangle, RotateCw, X } from 'lucide-react';
+import { Trash2, AlertTriangle, RotateCw, X, Sparkles } from 'lucide-react';
 
 export const ChatView: React.FC = () => {
   const {
     messages,
     isLoading,
     error,
+    activeNudge,
+    dismissNudge,
+    applyNudge,
     setError,
     sendMessage,
     retryLastMessage,
@@ -120,6 +123,39 @@ export const ChatView: React.FC = () => {
           </div>
         )}
       </div>
+
+      {/* Tier 5 Proactive Ambient Nudge (1-click dismiss, non-blocking) */}
+      {activeNudge && (
+        <div className="proactive-nudge-card animate-fadeIn">
+          <div className="nudge-icon">
+            <Sparkles size={13} />
+          </div>
+          <div className="nudge-content">
+            <span className="nudge-badge">Aeio Suggestion</span>
+            <p className="nudge-text">{activeNudge.suggestion}</p>
+          </div>
+          <div className="nudge-actions">
+            {activeNudge.actionPrompt && (
+              <button
+                type="button"
+                className="nudge-apply-btn"
+                onClick={() => applyNudge(activeNudge)}
+                disabled={isLoading}
+              >
+                Apply
+              </button>
+            )}
+            <button
+              type="button"
+              className="nudge-dismiss-btn"
+              onClick={() => dismissNudge(activeNudge.id)}
+              title="Dismiss suggestion"
+            >
+              <X size={12} />
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Input Bar */}
       <div className="chat-input-bar">

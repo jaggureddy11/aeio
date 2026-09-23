@@ -7,19 +7,46 @@ export interface SettingsState {
   ollamaModel: string;
   claudeApiKey: string;
   openaiApiKey: string;
+  activeWindowAwareness: boolean;
+  ambientProactive: boolean;
   setActiveProvider: (provider: LLMProviderType) => void;
   setOllamaModel: (model: string) => void;
   setClaudeApiKey: (key: string) => void;
   setOpenaiApiKey: (key: string) => void;
+  setActiveWindowAwareness: (enabled: boolean) => void;
+  setAmbientProactive: (enabled: boolean) => void;
 }
+
+const getStoredBool = (key: string, defaultVal: boolean): boolean => {
+  try {
+    const val = localStorage.getItem(key);
+    return val !== null ? val === 'true' : defaultVal;
+  } catch {
+    return defaultVal;
+  }
+};
 
 export const useSettingsStore = create<SettingsState>((set) => ({
   activeProvider: 'ollama',
   ollamaModel: 'llama3.2',
   claudeApiKey: '',
   openaiApiKey: '',
+  activeWindowAwareness: getStoredBool('aeio_active_window_awareness', false),
+  ambientProactive: getStoredBool('aeio_ambient_proactive', false),
   setActiveProvider: (activeProvider) => set({ activeProvider }),
   setOllamaModel: (ollamaModel) => set({ ollamaModel }),
   setClaudeApiKey: (claudeApiKey) => set({ claudeApiKey }),
   setOpenaiApiKey: (openaiApiKey) => set({ openaiApiKey }),
+  setActiveWindowAwareness: (enabled) => {
+    try {
+      localStorage.setItem('aeio_active_window_awareness', String(enabled));
+    } catch {}
+    set({ activeWindowAwareness: enabled });
+  },
+  setAmbientProactive: (enabled) => {
+    try {
+      localStorage.setItem('aeio_ambient_proactive', String(enabled));
+    } catch {}
+    set({ ambientProactive: enabled });
+  },
 }));

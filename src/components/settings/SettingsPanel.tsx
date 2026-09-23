@@ -16,6 +16,8 @@ import {
   Trash2,
   RefreshCw,
   Sliders,
+  AppWindow,
+  Compass,
 } from 'lucide-react';
 
 interface Props {
@@ -27,10 +29,14 @@ export const SettingsPanel: React.FC<Props> = ({ isOpen, onClose }) => {
   const {
     activeProvider,
     ollamaModel,
+    activeWindowAwareness,
+    ambientProactive,
     setActiveProvider,
     setOllamaModel,
     setClaudeApiKey,
     setOpenaiApiKey,
+    setActiveWindowAwareness,
+    setAmbientProactive,
   } = useSettingsStore();
 
   const [claudeInput, setClaudeInput] = useState('');
@@ -362,6 +368,66 @@ export const SettingsPanel: React.FC<Props> = ({ isOpen, onClose }) => {
                   </button>
                 )}
               </div>
+            </div>
+          </div>
+
+          {/* OS Integration & Active Window Context (Tier 2 Opt-in) */}
+          <div className="settings-section">
+            <h3 className="section-label">
+              <div className="label-with-icon">
+                <AppWindow size={14} />
+                <span>Active Window Context (Tier 2 Opt-in)</span>
+              </div>
+            </h3>
+            <div className="toggle-setting-card">
+              <div className="toggle-text-block">
+                <strong>Read Frontmost App Title on Summon</strong>
+                <p>
+                  When summoned, Aeio queries the process name and title of your active window (e.g. <code>VS Code - main.rs</code> or <code>Arc - Github</code>) to provide immediate context to your prompts.
+                </p>
+                <div className="privacy-callout">
+                  <ShieldCheck size={12} />
+                  <span>Strictly opt-in. Aeio never reads window contents or screen pixels without your explicit request.</span>
+                </div>
+              </div>
+              <label className="switch-toggle">
+                <input
+                  type="checkbox"
+                  checked={activeWindowAwareness}
+                  onChange={(e) => setActiveWindowAwareness(e.target.checked)}
+                />
+                <span className="slider-round" />
+              </label>
+            </div>
+          </div>
+
+          {/* Ambient & Proactive Intelligence (Tier 5 Opt-in) */}
+          <div className="settings-section">
+            <h3 className="section-label">
+              <div className="label-with-icon">
+                <Compass size={14} />
+                <span>Ambient Intelligence & Proactive Nudges (Tier 5 Opt-in)</span>
+              </div>
+            </h3>
+            <div className="toggle-setting-card">
+              <div className="toggle-text-block">
+                <strong>Pattern Noticing & Workspace Suggestions</strong>
+                <p>
+                  Lightweight checks for repeated queries and relevant workspace notes to suggest helpful actions without waiting to be asked.
+                </p>
+                <div className="privacy-callout">
+                  <ShieldCheck size={12} />
+                  <span>Never runs secretly — a glowing indicator appears in the header. Nudges are 1-click dismissible and never reappear. With toggle off, zero background checks run.</span>
+                </div>
+              </div>
+              <label className="switch-toggle">
+                <input
+                  type="checkbox"
+                  checked={ambientProactive}
+                  onChange={(e) => setAmbientProactive(e.target.checked)}
+                />
+                <span className="slider-round" />
+              </label>
             </div>
           </div>
 

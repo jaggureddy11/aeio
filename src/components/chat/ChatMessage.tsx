@@ -80,6 +80,14 @@ export const ChatMessageItem: React.FC<Props> = ({ message }) => {
                   🔒 Zero-leak
                 </span>
               )}
+              {message.activeWindowContext && (
+                <span
+                  className="window-context-tag"
+                  title={`Frontmost app when queried: ${message.activeWindowContext.app_name} (${message.activeWindowContext.title})`}
+                >
+                  🖥️ {message.activeWindowContext.app_name}
+                </span>
+              )}
             </div>
           )}
 

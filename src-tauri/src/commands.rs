@@ -184,6 +184,11 @@ pub fn open_target(target: String) -> Result<String, String> {
     tools::open_target(&target)
 }
 
+#[tauri::command]
+pub fn get_active_window() -> Result<tools::ActiveWindowInfo, String> {
+    tools::get_active_window()
+}
+
 // Secure Keychain Commands (Tier 0 & Tier 2: BYOK via OS Keychain)
 #[tauri::command]
 pub fn get_api_key(target: String) -> Result<String, String> {
