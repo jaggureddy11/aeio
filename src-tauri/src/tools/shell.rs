@@ -84,3 +84,35 @@ pub fn open_target(target: &str) -> Result<String, String> {
 
     Ok(format!("Opened {}", target))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_destructive_command_detection() {
+        assert!(is_destructive_command("rm -rf /tmp/test"));
+        assert!(is_destructive_command("del /f important.txt"));
+        assert!(is_destructive_command("format C:"));
+        assert!(is_destructive_command("dd if=/dev/zero of=/dev/sda"));
+        assert!(is_destructive_command("DROP TABLE users;"));
+        assert!(is_destructive_command("TRUNCATE TABLE logs;"));
+
+        // Safe non-destructive commands
+        assert!(!is_destructive_command("git status"));
+        assert!(!is_destructive_command("ls -la"));
+        assert!(!is_destructive_command("echo 'hello world'"));
+        assert!(!is_destructive_command("pwd"));
+        assert!(!is_destructive_command("cat package.json"));
+    }
+
+    #[test]
+    fn test_shell_command_execution() {
+        let res = run_shell_command("echo 'aeio_test_ok'", None);
+        assert!(res.is_ok());
+        let output = res.unwrap();
+        assert_eq!(output.exit_code, 0);
+        assert!(output.stdout.contains("aeio_test_ok"));
+        assert!(!output.is_destructive);
+    }
+}

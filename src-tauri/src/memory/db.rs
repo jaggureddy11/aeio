@@ -621,3 +621,75 @@ impl MemoryDb {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+
+    #[test]
+    fn test_memory_database_workflow() {
+        let test_dir = std::env::temp_dir().join(format!("aeio_test_{}", Uuid::new_v4()));
+        let db = MemoryDb::init(&test_dir).expect("Failed to initialize test db");
+
+        // 1. Verify default workspace
+        let active_ws = db.get_active_workspace().expect("Failed to get active workspace");
+        assert_eq!(active_ws.id, "default");
+        assert_eq!(active_ws.name, "General");
+
+        // 2. Create custom workspace
+        let ws = db
+            .create_workspace("Research", Some("🔬"), Some("Deep research workspace"))
+            .expect("Failed to create workspace");
+        assert_eq!(ws.name, "Research");
+        assert_eq!(ws.icon, Some("🔬".to_string()));
+
+        // 3. Add memory to custom workspace
+        let mem = db
+            .add_memory("Primary researcher is Dr. Alice", "person", Some(&ws.id), None)
+            .expect("Failed to add memory");
+        assert_eq!(mem.category, "person");
+        assert_eq!(mem.workspace_id, Some(ws.id.clone()));
+
+        // 4. Search memory in workspace
+        let results = db
+            .search_memories("Alice", Some(&ws.id), false, 5)
+            .expect("Failed to search memories");
+        assert!(!results.is_empty());
+        assert_eq!(results[0].memory.id, mem.id);
+
+        // 5. Test JSON & Markdown export
+        let json_export = db
+            .export_memories("json", Some(&ws.id))
+            .expect("Failed to export json");
+        assert!(json_export.contains("Dr. Alice"));
+
+        let md_export = db
+            .export_memories("markdown", Some(&ws.id))
+            .expect("Failed to export md");
+        assert!(md_export.contains("Dr. Alice"));
+
+        // 6. Test chat persistence
+        let chat_msg = SavedChatMessage {
+            id: "msg-123".to_string(),
+            role: "user".to_string(),
+            content: "Who is leading the research?".to_string(),
+            recalled_memories_json: None,
+            proposed_memories_json: None,
+            tool_executions_json: None,
+            provider_info_json: None,
+            workspace_id: Some(ws.id.clone()),
+            timestamp: 123456789,
+        };
+        db.save_chat_message(&chat_msg)
+            .expect("Failed to save chat message");
+        let loaded = db
+            .load_chat_messages(Some(&ws.id), 10)
+            .expect("Failed to load chat messages");
+        assert_eq!(loaded.len(), 1);
+        assert_eq!(loaded[0].id, "msg-123");
+
+        // Clean up test directory
+        let _ = fs::remove_dir_all(test_dir);
+    }
+}
+
