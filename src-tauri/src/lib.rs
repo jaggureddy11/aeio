@@ -2,6 +2,7 @@ use tauri::Manager;
 use tauri_plugin_global_shortcut::{Builder as GlobalShortcutBuilder, ShortcutState};
 
 pub mod commands;
+pub mod keychain;
 pub mod memory;
 pub mod tools;
 
@@ -55,6 +56,10 @@ pub fn run() {
             commands::write_clipboard,
             commands::check_destructive_command,
             commands::run_shell_command,
+            commands::get_api_key,
+            commands::set_api_key,
+            commands::delete_api_key,
+            commands::has_api_key,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

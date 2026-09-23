@@ -79,3 +79,24 @@ pub fn check_destructive_command(command: String) -> bool {
 pub fn run_shell_command(command: String, cwd: Option<String>) -> Result<ShellOutput, String> {
     tools::run_shell_command(&command, cwd.as_deref())
 }
+
+// Secure Keychain Commands (Tier 0 & Tier 2: BYOK via OS Keychain)
+#[tauri::command]
+pub fn get_api_key(target: String) -> Result<String, String> {
+    crate::keychain::get_api_key(&target)
+}
+
+#[tauri::command]
+pub fn set_api_key(target: String, key: String) -> Result<(), String> {
+    crate::keychain::set_api_key(&target, &key)
+}
+
+#[tauri::command]
+pub fn delete_api_key(target: String) -> Result<bool, String> {
+    crate::keychain::delete_api_key(&target)
+}
+
+#[tauri::command]
+pub fn has_api_key(target: String) -> bool {
+    crate::keychain::has_api_key(&target)
+}

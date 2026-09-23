@@ -86,3 +86,20 @@ export async function checkDestructiveCommand(command: string): Promise<boolean>
 export async function runShellCommand(command: string, cwd?: string): Promise<ShellOutput> {
   return invoke<ShellOutput>('run_shell_command', { command, cwd });
 }
+
+// Secure OS Keychain Methods (Zero-plaintext BYOK storage)
+export async function getApiKey(target: string): Promise<string> {
+  return invoke<string>('get_api_key', { target });
+}
+
+export async function setApiKey(target: string, key: string): Promise<void> {
+  return invoke<void>('set_api_key', { target, key });
+}
+
+export async function deleteApiKey(target: string): Promise<boolean> {
+  return invoke<boolean>('delete_api_key', { target });
+}
+
+export async function hasApiKey(target: string): Promise<boolean> {
+  return invoke<boolean>('has_api_key', { target });
+}

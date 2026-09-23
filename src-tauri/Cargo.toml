@@ -27,6 +27,7 @@ tauri-plugin-global-shortcut = "2.3.2"
 uuid = { version = "1.26.1", features = ["v4"] }
 chrono = "0.4.45"
 arboard = "3.6.1"
+keyring = "3"
 
 
 # Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration
