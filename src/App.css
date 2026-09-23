@@ -551,6 +551,67 @@ html, body, #root {
   align-items: center;
 }
 
+.memory-toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.export-menu-container {
+  position: relative;
+}
+
+.export-memory-btn {
+  background: var(--aeio-bg-card);
+  border: 1px solid var(--aeio-border);
+  color: var(--aeio-text-secondary);
+  font-size: 11px;
+  font-weight: 500;
+  padding: 5px 9px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  transition: all var(--aeio-transition);
+}
+
+.export-memory-btn:hover {
+  border-color: var(--aeio-primary);
+  color: var(--aeio-text-primary);
+}
+
+.export-dropdown-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  background: var(--aeio-bg-surface);
+  border: 1px solid var(--aeio-border);
+  border-radius: 7px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  display: flex;
+  flex-direction: column;
+  z-index: 100;
+  min-width: 170px;
+  overflow: hidden;
+}
+
+.export-menu-item {
+  background: transparent;
+  border: none;
+  color: var(--aeio-text-primary);
+  padding: 8px 12px;
+  text-align: left;
+  font-size: 11px;
+  cursor: pointer;
+  transition: background var(--aeio-transition);
+}
+
+.export-menu-item:hover {
+  background: rgba(13, 169, 85, 0.12);
+  color: var(--aeio-primary-hover);
+}
+
 .add-memory-btn {
   background: var(--aeio-primary);
   border: none;

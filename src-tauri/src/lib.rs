@@ -60,6 +60,10 @@ pub fn run() {
             commands::set_api_key,
             commands::delete_api_key,
             commands::has_api_key,
+            commands::save_chat_message,
+            commands::load_chat_messages,
+            commands::clear_chat_history,
+            commands::export_memories,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { useMemoryStore } from '../../stores/memoryStore';
 import { MemoryItem } from './MemoryItem';
-import { MemoryCategory } from '../../lib/ipc';
-import { Brain, Plus, Search, X } from 'lucide-react';
+import { MemoryCategory, exportMemories } from '../../lib/ipc';
+import { Brain, Plus, Search, X, Download } from 'lucide-react';
 
 const CATEGORIES: Array<{ id: MemoryCategory | 'all'; label: string }> = [
   { id: 'all', label: 'All' },
@@ -27,6 +27,7 @@ export const MemoryPanel: React.FC = () => {
   const [isAdding, setIsAdding] = useState(false);
   const [newContent, setNewContent] = useState('');
   const [newCategory, setNewCategory] = useState<MemoryCategory>('fact');
+  const [showExportMenu, setShowExportMenu] = useState(false);
 
   useEffect(() => {
     loadMemories();
@@ -37,6 +38,26 @@ export const MemoryPanel: React.FC = () => {
     await createMemory(newContent, newCategory);
     setNewContent('');
     setIsAdding(false);
+  };
+
+  const handleExport = async (format: 'json' | 'markdown') => {
+    try {
+      const data = await exportMemories(format);
+      const mime = format === 'json' ? 'application/json' : 'text/markdown';
+      const ext = format === 'json' ? 'json' : 'md';
+      const blob = new Blob([data], { type: mime });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `aeio_memories_${new Date().toISOString().slice(0, 10)}.${ext}`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      setShowExportMenu(false);
+    } catch (err) {
+      alert(`Export failed: ${err}`);
+    }
   };
 
   return (
@@ -62,14 +83,43 @@ export const MemoryPanel: React.FC = () => {
           )}
         </div>
 
-        <button
-          className="add-memory-btn"
-          onClick={() => setIsAdding(!isAdding)}
-          title="Add a new memory"
-        >
-          <Plus size={13} />
-          <span>New Memory</span>
-        </button>
+        <div className="memory-toolbar-actions">
+          <div className="export-menu-container">
+            <button
+              className="export-memory-btn"
+              onClick={() => setShowExportMenu(!showExportMenu)}
+              title="Export all stored memories (Markdown / JSON)"
+            >
+              <Download size={12} />
+              <span>Export</span>
+            </button>
+            {showExportMenu && (
+              <div className="export-dropdown-menu">
+                <button
+                  className="export-menu-item"
+                  onClick={() => handleExport('markdown')}
+                >
+                  Export as Markdown (.md)
+                </button>
+                <button
+                  className="export-menu-item"
+                  onClick={() => handleExport('json')}
+                >
+                  Export as JSON (.json)
+                </button>
+              </div>
+            )}
+          </div>
+
+          <button
+            className="add-memory-btn"
+            onClick={() => setIsAdding(!isAdding)}
+            title="Add a new memory"
+          >
+            <Plus size={13} />
+            <span>New Memory</span>
+          </button>
+        </div>
       </div>
 
       {/* Category Filter Pills */}

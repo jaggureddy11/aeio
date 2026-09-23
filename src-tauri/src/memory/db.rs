@@ -3,7 +3,7 @@ use std::path::Path;
 use std::sync::Mutex;
 use uuid::Uuid;
 use chrono::Utc;
-use super::models::{Memory, SearchResult};
+use super::models::{Memory, SavedChatMessage, SearchResult};
 
 pub struct MemoryDb {
     conn: Mutex<Connection>,
@@ -33,6 +33,17 @@ impl MemoryDb {
             );
             CREATE INDEX IF NOT EXISTS idx_memories_category ON memories(category);
             CREATE INDEX IF NOT EXISTS idx_memories_created_at ON memories(created_at);
+
+            CREATE TABLE IF NOT EXISTS chat_messages (
+                id TEXT PRIMARY KEY,
+                role TEXT NOT NULL,
+                content TEXT NOT NULL,
+                recalled_memories_json TEXT,
+                proposed_memories_json TEXT,
+                tool_executions_json TEXT,
+                timestamp INTEGER NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_chat_messages_timestamp ON chat_messages(timestamp);
             "#,
         )
         .map_err(|e| format!("Failed to initialize database schema: {}", e))?;
@@ -204,5 +215,105 @@ impl MemoryDb {
         scored_results.truncate(limit);
 
         Ok(scored_results)
+    }
+
+    // Chat Message Persistence (Tier 0: Chats survive app restarts)
+    pub fn save_chat_message(&self, msg: &SavedChatMessage) -> Result<(), String> {
+        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+        conn.execute(
+            r#"
+            INSERT OR REPLACE INTO chat_messages (
+                id, role, content, recalled_memories_json, proposed_memories_json, tool_executions_json, timestamp
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+            "#,
+            params![
+                &msg.id,
+                &msg.role,
+                &msg.content,
+                &msg.recalled_memories_json,
+                &msg.proposed_memories_json,
+                &msg.tool_executions_json,
+                msg.timestamp,
+            ],
+        )
+        .map_err(|e| format!("Failed to save chat message: {}", e))?;
+
+        Ok(())
+    }
+
+    pub fn load_chat_messages(&self, limit: usize) -> Result<Vec<SavedChatMessage>, String> {
+        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+        let mut stmt = conn
+            .prepare(
+                r#"
+                SELECT id, role, content, recalled_memories_json, proposed_memories_json, tool_executions_json, timestamp
+                FROM chat_messages
+                ORDER BY timestamp ASC
+                LIMIT ?1
+                "#,
+            )
+            .map_err(|e| e.to_string())?;
+
+        let rows = stmt
+            .query_map(params![limit as i64], |row| {
+                Ok(SavedChatMessage {
+                    id: row.get(0)?,
+                    role: row.get(1)?,
+                    content: row.get(2)?,
+                    recalled_memories_json: row.get(3)?,
+                    proposed_memories_json: row.get(4)?,
+                    tool_executions_json: row.get(5)?,
+                    timestamp: row.get(6)?,
+                })
+            })
+            .map_err(|e| e.to_string())?;
+
+        let mut messages = Vec::new();
+        for r in rows {
+            messages.push(r.map_err(|e| e.to_string())?);
+        }
+
+        Ok(messages)
+    }
+
+    pub fn clear_chat_history(&self) -> Result<(), String> {
+        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+        conn.execute("DELETE FROM chat_messages", params![])
+            .map_err(|e| format!("Failed to clear chat history: {}", e))?;
+        Ok(())
+    }
+
+    // Export Memories (Non-negotiable Constraint: Plain JSON/Markdown Export)
+    pub fn export_memories(&self, format: &str) -> Result<String, String> {
+        let all = self.list_memories(None)?;
+
+        if format.eq_ignore_ascii_case("json") {
+            serde_json::to_string_pretty(&all).map_err(|e| e.to_string())
+        } else {
+            // Markdown export
+            let mut md = String::from("# Aeio Stored Memories\n\n");
+            md.push_str(&format!("*Exported at: {}*\n\n", Utc::now().to_rfc3339()));
+
+            let categories = ["fact", "preference", "project", "person"];
+            for cat in categories {
+                let cat_memories: Vec<&Memory> = all.iter().filter(|m| m.category == cat).collect();
+                if !cat_memories.is_empty() {
+                    let title = match cat {
+                        "fact" => "Facts",
+                        "preference" => "Preferences",
+                        "project" => "Projects",
+                        "person" => "People / Contacts",
+                        _ => cat,
+                    };
+                    md.push_str(&format!("## {}\n\n", title));
+                    for m in cat_memories {
+                        md.push_str(&format!("- {}\n", m.content));
+                    }
+                    md.push('\n');
+                }
+            }
+
+            Ok(md)
+        }
     }
 }

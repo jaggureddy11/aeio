@@ -1,5 +1,5 @@
 use tauri::State;
-use crate::memory::{Memory, MemoryManager, SearchResult};
+use crate::memory::{Memory, MemoryManager, SavedChatMessage, SearchResult};
 use crate::tools::{self, FileMatch, ShellOutput};
 
 #[tauri::command]
@@ -47,6 +47,36 @@ pub fn search_memories(
     limit: Option<usize>,
 ) -> Result<Vec<SearchResult>, String> {
     state.db().search_memories(&query, limit.unwrap_or(10))
+}
+
+#[tauri::command]
+pub fn export_memories(
+    state: State<MemoryManager>,
+    format: String,
+) -> Result<String, String> {
+    state.db().export_memories(&format)
+}
+
+// Chat Persistence Commands (Tier 0: Chats survive app restarts)
+#[tauri::command]
+pub fn save_chat_message(
+    state: State<MemoryManager>,
+    message: SavedChatMessage,
+) -> Result<(), String> {
+    state.db().save_chat_message(&message)
+}
+
+#[tauri::command]
+pub fn load_chat_messages(
+    state: State<MemoryManager>,
+    limit: Option<usize>,
+) -> Result<Vec<SavedChatMessage>, String> {
+    state.db().load_chat_messages(limit.unwrap_or(100))
+}
+
+#[tauri::command]
+pub fn clear_chat_history(state: State<MemoryManager>) -> Result<(), String> {
+    state.db().clear_chat_history()
 }
 
 // Tool Commands

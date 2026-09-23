@@ -6,8 +6,12 @@ import logo from '../../assets/logo.png';
 import { Trash2 } from 'lucide-react';
 
 export const ChatView: React.FC = () => {
-  const { messages, isLoading, sendMessage, clearMessages } = useChatStore();
+  const { messages, isLoading, sendMessage, clearMessages, initChatHistory } = useChatStore();
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    initChatHistory();
+  }, [initChatHistory]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });

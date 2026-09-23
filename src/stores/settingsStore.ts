@@ -15,7 +15,7 @@ export interface SettingsState {
 
 export const useSettingsStore = create<SettingsState>((set) => ({
   activeProvider: 'ollama',
-  ollamaModel: 'llama3.1',
+  ollamaModel: 'llama3.2',
   claudeApiKey: '',
   openaiApiKey: '',
   setActiveProvider: (activeProvider) => set({ activeProvider }),

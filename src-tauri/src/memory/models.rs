@@ -28,3 +28,14 @@ pub struct SearchResult {
     pub memory: Memory,
     pub score: f32,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SavedChatMessage {
+    pub id: String,
+    pub role: String,
+    pub content: String,
+    pub recalled_memories_json: Option<String>,
+    pub proposed_memories_json: Option<String>,
+    pub tool_executions_json: Option<String>,
+    pub timestamp: i64,
+}

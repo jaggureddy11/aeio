@@ -103,3 +103,30 @@ export async function deleteApiKey(target: string): Promise<boolean> {
 export async function hasApiKey(target: string): Promise<boolean> {
   return invoke<boolean>('has_api_key', { target });
 }
+
+// Chat Persistence & Memory Export (Tier 0 & Non-Negotiable Constraint)
+export interface SavedChatMessage {
+  id: string;
+  role: string;
+  content: string;
+  recalled_memories_json?: string | null;
+  proposed_memories_json?: string | null;
+  tool_executions_json?: string | null;
+  timestamp: number;
+}
+
+export async function saveChatMessage(message: SavedChatMessage): Promise<void> {
+  return invoke<void>('save_chat_message', { message });
+}
+
+export async function loadChatMessages(limit?: number): Promise<SavedChatMessage[]> {
+  return invoke<SavedChatMessage[]>('load_chat_messages', { limit });
+}
+
+export async function clearChatHistory(): Promise<void> {
+  return invoke<void>('clear_chat_history');
+}
+
+export async function exportMemories(format: 'json' | 'markdown'): Promise<string> {
+  return invoke<string>('export_memories', { format });
+}

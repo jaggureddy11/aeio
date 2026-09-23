@@ -10,6 +10,9 @@ import {
   writeClipboard,
   runShellCommand,
   checkDestructiveCommand,
+  saveChatMessage,
+  loadChatMessages,
+  clearChatHistory,
 } from '../lib/ipc';
 
 export interface RecalledMemory {
@@ -50,6 +53,7 @@ export interface ChatState {
   isLoading: boolean;
   error: string | null;
   alwaysAllowedCommands: string[];
+  initChatHistory: () => Promise<void>;
   addMessage: (message: Omit<ChatMessage, 'id' | 'timestamp'>) => string;
   updateMessageContent: (
     id: string,
@@ -78,11 +82,49 @@ const REMEMBER_REGEX =
 const TOOL_CALL_REGEX =
   /<tool_call\s+name=["']?([^"'\s>]+)["']?(?:\s+args=(?:'([^']*)'|"([^"]*)"))?\s*(?:\/>|>([\s\S]*?)<\/tool_call>)/gi;
 
+function persistChatMessage(msg: ChatMessage) {
+  saveChatMessage({
+    id: msg.id,
+    role: msg.role,
+    content: msg.content,
+    recalled_memories_json: msg.recalledMemories ? JSON.stringify(msg.recalledMemories) : null,
+    proposed_memories_json: msg.proposedMemories ? JSON.stringify(msg.proposedMemories) : null,
+    tool_executions_json: msg.toolExecutions ? JSON.stringify(msg.toolExecutions) : null,
+    timestamp: msg.timestamp,
+  }).catch((err) => console.warn('Failed to persist chat message to SQLite:', err));
+}
+
 export const useChatStore = create<ChatState>((set, get) => ({
   messages: [],
   isLoading: false,
   error: null,
   alwaysAllowedCommands: [],
+
+  initChatHistory: async () => {
+    try {
+      const saved = await loadChatMessages(100);
+      if (saved && saved.length > 0) {
+        const parsed: ChatMessage[] = saved.map((s) => ({
+          id: s.id,
+          role: s.role as 'user' | 'assistant' | 'system',
+          content: s.content,
+          timestamp: s.timestamp,
+          recalledMemories: s.recalled_memories_json
+            ? JSON.parse(s.recalled_memories_json)
+            : undefined,
+          proposedMemories: s.proposed_memories_json
+            ? JSON.parse(s.proposed_memories_json)
+            : undefined,
+          toolExecutions: s.tool_executions_json
+            ? JSON.parse(s.tool_executions_json)
+            : undefined,
+        }));
+        set({ messages: parsed });
+      }
+    } catch (err) {
+      console.warn('Failed to load chat history from SQLite:', err);
+    }
+  },
 
   addMessage: (msg) => {
     const id = crypto.randomUUID();
@@ -92,14 +134,17 @@ export const useChatStore = create<ChatState>((set, get) => ({
       timestamp: Date.now(),
     };
     set((state) => ({ messages: [...state.messages, newMsg] }));
+    if (newMsg.role === 'user') {
+      persistChatMessage(newMsg);
+    }
     return id;
   },
 
   updateMessageContent: (id, content, isStreaming = false, recalled, proposed, tools) => {
-    set((state) => ({
-      messages: state.messages.map((m) => {
+    set((state) => {
+      const updatedMessages = state.messages.map((m) => {
         if (m.id !== id) return m;
-        return {
+        const updated = {
           ...m,
           content,
           isStreaming,
@@ -107,13 +152,23 @@ export const useChatStore = create<ChatState>((set, get) => ({
           ...(proposed ? { proposedMemories: proposed } : {}),
           ...(tools ? { toolExecutions: tools } : {}),
         };
-      }),
-    }));
+        if (!isStreaming) {
+          persistChatMessage(updated);
+        }
+        return updated;
+      });
+      return { messages: updatedMessages };
+    });
   },
 
   setError: (error) => set({ error }),
 
-  clearMessages: () => set({ messages: [], error: null }),
+  clearMessages: () => {
+    set({ messages: [], error: null });
+    clearChatHistory().catch((err) =>
+      console.warn('Failed to clear chat history in SQLite:', err)
+    );
+  },
 
   confirmMemoryProposal: async (messageId: string, index: number) => {
     const msg = get().messages.find((m) => m.id === messageId);
@@ -122,27 +177,33 @@ export const useChatStore = create<ChatState>((set, get) => ({
     const proposal = msg.proposedMemories[index];
     try {
       await addMemory(proposal.content, proposal.category);
-      set((state) => ({
-        messages: state.messages.map((m) => {
+      set((state) => {
+        const updatedMessages = state.messages.map((m) => {
           if (m.id !== messageId || !m.proposedMemories) return m;
           const updated = [...m.proposedMemories];
           updated[index] = { ...updated[index], isSaved: true };
-          return { ...m, proposedMemories: updated };
-        }),
-      }));
+          const res = { ...m, proposedMemories: updated };
+          persistChatMessage(res);
+          return res;
+        });
+        return { messages: updatedMessages };
+      });
     } catch (err: unknown) {
       set({ error: err instanceof Error ? err.message : String(err) });
     }
   },
 
   dismissMemoryProposal: (messageId: string, index: number) => {
-    set((state) => ({
-      messages: state.messages.map((m) => {
+    set((state) => {
+      const updatedMessages = state.messages.map((m) => {
         if (m.id !== messageId || !m.proposedMemories) return m;
         const updated = m.proposedMemories.filter((_, i) => i !== index);
-        return { ...m, proposedMemories: updated };
-      }),
-    }));
+        const res = { ...m, proposedMemories: updated };
+        persistChatMessage(res);
+        return res;
+      });
+      return { messages: updatedMessages };
+    });
   },
 
   approveToolExecution: async (messageId: string, index: number, alwaysAllow = false) => {
@@ -206,8 +267,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
         }));
       }
 
-      set((state) => ({
-        messages: state.messages.map((m) => {
+      set((state) => {
+        const updatedMessages = state.messages.map((m) => {
           if (m.id !== messageId || !m.toolExecutions) return m;
           const updated = [...m.toolExecutions];
           updated[index] = {
@@ -215,13 +276,16 @@ export const useChatStore = create<ChatState>((set, get) => ({
             status: 'completed',
             result,
           };
-          return { ...m, toolExecutions: updated };
-        }),
-      }));
+          const res = { ...m, toolExecutions: updated };
+          persistChatMessage(res);
+          return res;
+        });
+        return { messages: updatedMessages };
+      });
     } catch (err: unknown) {
       const errorStr = err instanceof Error ? err.message : String(err);
-      set((state) => ({
-        messages: state.messages.map((m) => {
+      set((state) => {
+        const updatedMessages = state.messages.map((m) => {
           if (m.id !== messageId || !m.toolExecutions) return m;
           const updated = [...m.toolExecutions];
           updated[index] = {
@@ -229,21 +293,27 @@ export const useChatStore = create<ChatState>((set, get) => ({
             status: 'error',
             error: errorStr,
           };
-          return { ...m, toolExecutions: updated };
-        }),
-      }));
+          const res = { ...m, toolExecutions: updated };
+          persistChatMessage(res);
+          return res;
+        });
+        return { messages: updatedMessages };
+      });
     }
   },
 
   denyToolExecution: (messageId: string, index: number) => {
-    set((state) => ({
-      messages: state.messages.map((m) => {
+    set((state) => {
+      const updatedMessages = state.messages.map((m) => {
         if (m.id !== messageId || !m.toolExecutions) return m;
         const updated = [...m.toolExecutions];
         updated[index] = { ...updated[index], status: 'denied' };
-        return { ...m, toolExecutions: updated };
-      }),
-    }));
+        const res = { ...m, toolExecutions: updated };
+        persistChatMessage(res);
+        return res;
+      });
+      return { messages: updatedMessages };
+    });
   },
 
   sendMessage: async (userContent: string) => {
