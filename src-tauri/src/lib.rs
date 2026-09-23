@@ -64,8 +64,16 @@ pub fn run() {
             commands::load_chat_messages,
             commands::clear_chat_history,
             commands::export_memories,
+            commands::list_workspaces,
+            commands::create_workspace,
+            commands::update_workspace,
+            commands::archive_workspace,
+            commands::set_active_workspace,
+            commands::get_active_workspace,
+            commands::open_target,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
+
 

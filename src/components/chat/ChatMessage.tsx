@@ -66,11 +66,29 @@ export const ChatMessageItem: React.FC<Props> = ({ message }) => {
 
         {/* Message Bubble */}
         <div className={`message-bubble ${isUser ? 'user-bubble' : 'assistant-bubble'}`}>
+          {!isUser && message.providerInfo && (
+            <div className="message-provider-meta">
+              <span className={`provider-dot ${message.providerInfo.isLocal ? 'local' : 'cloud'}`} />
+              <span className="provider-name">
+                {message.providerInfo.modelName}
+              </span>
+              <span className="provider-kind">
+                {message.providerInfo.isLocal ? 'Offline Local' : 'Cloud BYOK'}
+              </span>
+              {message.providerInfo.isPrivacyProtected && (
+                <span className="privacy-tag" title="Processed strictly on-device without outbound leakage">
+                  🔒 Zero-leak
+                </span>
+              )}
+            </div>
+          )}
+
           <div className="markdown-content">
             <ReactMarkdown>{message.content}</ReactMarkdown>
             {message.isStreaming && <span className="streaming-cursor">▋</span>}
           </div>
         </div>
+
 
         {/* Tool Execution Cards (Tier 2: Tool Execution with Gatekeeper) */}
         {hasTools && (

@@ -1,17 +1,29 @@
 import React, { useEffect, useRef } from 'react';
 import { useChatStore } from '../../stores/chatStore';
+import { useWorkspaceStore } from '../../stores/workspaceStore';
 import { ChatMessageItem } from './ChatMessage';
 import { ChatInput } from './ChatInput';
 import logo from '../../assets/logo.png';
-import { Trash2 } from 'lucide-react';
+import { Trash2, AlertTriangle, RotateCw, X } from 'lucide-react';
 
 export const ChatView: React.FC = () => {
-  const { messages, isLoading, sendMessage, clearMessages, initChatHistory } = useChatStore();
+  const {
+    messages,
+    isLoading,
+    error,
+    setError,
+    sendMessage,
+    retryLastMessage,
+    clearMessages,
+    initChatHistory,
+  } = useChatStore();
+
+  const activeWorkspace = useWorkspaceStore((s) => s.activeWorkspace);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    initChatHistory();
-  }, [initChatHistory]);
+    initChatHistory(activeWorkspace?.id);
+  }, [activeWorkspace?.id, initChatHistory]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -30,7 +42,7 @@ export const ChatView: React.FC = () => {
             <img src={logo} alt="Aeio logo" className="empty-logo" />
             <h3>Aeio Assistant</h3>
             <p className="empty-subtitle">
-              Your local-first assistant with transparent memory and native OS tools.
+              Your local-first assistant with transparent memory, workspace scoping, and native OS tools.
             </p>
             <div className="starter-chips">
               <button
@@ -45,15 +57,25 @@ export const ChatView: React.FC = () => {
               >
                 Tell me about your memory system
               </button>
+              <button
+                className="starter-chip"
+                onClick={() => sendMessage('What is the frontmost window or my current directory?')}
+              >
+                Inspect my environment
+              </button>
             </div>
           </div>
         ) : (
           <div className="messages-list">
             <div className="messages-header-actions">
+              <div className="current-workspace-pill">
+                <span>{activeWorkspace?.icon || '🌐'}</span>
+                <span>{activeWorkspace?.name || 'General'}</span>
+              </div>
               <button
                 className="clear-chat-btn"
                 onClick={clearMessages}
-                title="Clear current conversation"
+                title="Clear current workspace conversation"
               >
                 <Trash2 size={12} />
                 <span>Clear chat</span>
@@ -63,6 +85,38 @@ export const ChatView: React.FC = () => {
               <ChatMessageItem key={msg.id} message={msg} />
             ))}
             <div ref={messagesEndRef} />
+          </div>
+        )}
+
+        {/* Actionable Error Banner (Tier 3: Graceful Degradation) */}
+        {error && (
+          <div className="chat-error-banner animate-fadeIn">
+            <div className="chat-error-icon">
+              <AlertTriangle size={15} />
+            </div>
+            <div className="chat-error-body">
+              <div className="chat-error-title">Provider Connection Issue</div>
+              <div className="chat-error-msg">{error}</div>
+            </div>
+            <div className="chat-error-actions">
+              <button
+                type="button"
+                className="chat-error-retry-btn"
+                onClick={() => retryLastMessage()}
+                disabled={isLoading}
+              >
+                <RotateCw size={12} className={isLoading ? 'spinning' : ''} />
+                <span>Retry</span>
+              </button>
+              <button
+                type="button"
+                className="chat-error-dismiss-btn"
+                onClick={() => setError(null)}
+                title="Dismiss error"
+              >
+                <X size={13} />
+              </button>
+            </div>
           </div>
         )}
       </div>
@@ -76,3 +130,4 @@ export const ChatView: React.FC = () => {
 };
 
 export default ChatView;
+

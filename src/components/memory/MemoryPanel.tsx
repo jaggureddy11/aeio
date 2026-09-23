@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { useMemoryStore } from '../../stores/memoryStore';
+import { useWorkspaceStore } from '../../stores/workspaceStore';
 import { MemoryItem } from './MemoryItem';
 import { MemoryCategory, exportMemories } from '../../lib/ipc';
-import { Brain, Plus, Search, X, Download } from 'lucide-react';
+import { Brain, Plus, Search, X, Download, Globe } from 'lucide-react';
 
 const CATEGORIES: Array<{ id: MemoryCategory | 'all'; label: string }> = [
   { id: 'all', label: 'All' },
@@ -18,11 +19,15 @@ export const MemoryPanel: React.FC = () => {
     isLoading,
     activeCategory,
     searchQuery,
+    crossWorkspaceSearch,
     loadMemories,
     createMemory,
     setActiveCategory,
     setSearchQuery,
+    setCrossWorkspaceSearch,
   } = useMemoryStore();
+
+  const activeWorkspace = useWorkspaceStore((s) => s.activeWorkspace);
 
   const [isAdding, setIsAdding] = useState(false);
   const [newContent, setNewContent] = useState('');
@@ -31,25 +36,27 @@ export const MemoryPanel: React.FC = () => {
 
   useEffect(() => {
     loadMemories();
-  }, [loadMemories]);
+  }, [loadMemories, activeWorkspace?.id]);
 
   const handleCreate = async () => {
     if (!newContent.trim()) return;
-    await createMemory(newContent, newCategory);
+    await createMemory(newContent, newCategory, activeWorkspace?.id);
     setNewContent('');
     setIsAdding(false);
   };
 
-  const handleExport = async (format: 'json' | 'markdown') => {
+  const handleExport = async (format: 'json' | 'markdown', scopeWorkspace = true) => {
     try {
-      const data = await exportMemories(format);
+      const wsId = scopeWorkspace ? activeWorkspace?.id : undefined;
+      const data = await exportMemories(format, wsId);
       const mime = format === 'json' ? 'application/json' : 'text/markdown';
       const ext = format === 'json' ? 'json' : 'md';
       const blob = new Blob([data], { type: mime });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `aeio_memories_${new Date().toISOString().slice(0, 10)}.${ext}`;
+      const scopeLabel = scopeWorkspace ? (activeWorkspace?.name || 'workspace') : 'all';
+      a.download = `aeio_${scopeLabel}_memories_${new Date().toISOString().slice(0, 10)}.${ext}`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -69,7 +76,11 @@ export const MemoryPanel: React.FC = () => {
           <input
             type="text"
             className="memory-search-input"
-            placeholder="Search memories (hybrid exact & semantic)..."
+            placeholder={
+              crossWorkspaceSearch
+                ? 'Global search across ALL workspaces...'
+                : `Search memories in ${activeWorkspace?.name || 'General'}...`
+            }
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
           />
@@ -84,11 +95,21 @@ export const MemoryPanel: React.FC = () => {
         </div>
 
         <div className="memory-toolbar-actions">
+          <button
+            type="button"
+            className={`global-search-toggle-btn ${crossWorkspaceSearch ? 'active' : ''}`}
+            onClick={() => setCrossWorkspaceSearch(!crossWorkspaceSearch)}
+            title="Search memories across all workspaces (Tier 4)"
+          >
+            <Globe size={12} />
+            <span>{crossWorkspaceSearch ? 'All Workspaces' : activeWorkspace?.name || 'Workspace'}</span>
+          </button>
+
           <div className="export-menu-container">
             <button
               className="export-memory-btn"
               onClick={() => setShowExportMenu(!showExportMenu)}
-              title="Export all stored memories (Markdown / JSON)"
+              title="Export stored memories (Markdown / JSON)"
             >
               <Download size={12} />
               <span>Export</span>
@@ -97,15 +118,28 @@ export const MemoryPanel: React.FC = () => {
               <div className="export-dropdown-menu">
                 <button
                   className="export-menu-item"
-                  onClick={() => handleExport('markdown')}
+                  onClick={() => handleExport('markdown', true)}
                 >
-                  Export as Markdown (.md)
+                  Export {activeWorkspace?.name || 'Current'} (.md)
                 </button>
                 <button
                   className="export-menu-item"
-                  onClick={() => handleExport('json')}
+                  onClick={() => handleExport('json', true)}
                 >
-                  Export as JSON (.json)
+                  Export {activeWorkspace?.name || 'Current'} (.json)
+                </button>
+                <div className="export-menu-divider" />
+                <button
+                  className="export-menu-item"
+                  onClick={() => handleExport('markdown', false)}
+                >
+                  Export All Workspaces (.md)
+                </button>
+                <button
+                  className="export-menu-item"
+                  onClick={() => handleExport('json', false)}
+                >
+                  Export All Workspaces (.json)
                 </button>
               </div>
             )}
@@ -121,6 +155,7 @@ export const MemoryPanel: React.FC = () => {
           </button>
         </div>
       </div>
+
 
       {/* Category Filter Pills */}
       <div className="category-pills">

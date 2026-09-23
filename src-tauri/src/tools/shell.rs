@@ -56,3 +56,31 @@ pub fn run_shell_command(command: &str, cwd: Option<&str>) -> Result<ShellOutput
         is_destructive,
     })
 }
+
+pub fn open_target(target: &str) -> Result<String, String> {
+    let target = target.trim();
+    if target.is_empty() {
+        return Err("Target path or URL cannot be empty".to_string());
+    }
+
+    #[cfg(target_os = "macos")]
+    let mut cmd = Command::new("open");
+
+    #[cfg(target_os = "windows")]
+    let mut cmd = {
+        let mut c = Command::new("cmd");
+        c.args(["/C", "start", "", target]);
+        c
+    };
+
+    #[cfg(all(not(target_os = "macos"), not(target_os = "windows")))]
+    let mut cmd = Command::new("xdg-open");
+
+    #[cfg(not(target_os = "windows"))]
+    cmd.arg(target);
+
+    cmd.spawn()
+        .map_err(|e| format!("Failed to open target '{}': {}", target, e))?;
+
+    Ok(format!("Opened {}", target))
+}

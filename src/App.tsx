@@ -3,6 +3,7 @@ import logo from './assets/logo.png';
 import { ChatView } from './components/chat';
 import { MemoryPanel } from './components/memory';
 import { SettingsPanel } from './components/settings';
+import { WorkspaceSwitcher } from './components/workspace/WorkspaceSwitcher';
 import { useSettingsStore } from './stores/settingsStore';
 import { MessageSquare, Brain, Settings } from 'lucide-react';
 import './App.css';
@@ -20,11 +21,13 @@ export const App: React.FC = () => {
         <div className="brand-section">
           <img src={logo} alt="Aeio logo" className="brand-logo-img" />
           <span className="brand-title">aeio</span>
+          <WorkspaceSwitcher />
           <span className="status-badge">
             <span className="status-dot"></span>
             {activeProvider === 'ollama' ? ollamaModel : activeProvider}
           </span>
         </div>
+
 
         <nav className="header-nav">
           <button

@@ -8,6 +8,7 @@ import {
   searchMemories,
   updateMemory,
 } from '../lib/ipc';
+import { useWorkspaceStore } from './workspaceStore';
 
 export interface MemoryState {
   memories: MemoryRecord[];
@@ -15,13 +16,15 @@ export interface MemoryState {
   error: string | null;
   activeCategory: MemoryCategory | 'all';
   searchQuery: string;
+  crossWorkspaceSearch: boolean;
 
   loadMemories: () => Promise<void>;
-  createMemory: (content: string, category: MemoryCategory) => Promise<void>;
-  editMemory: (id: string, content: string, category: MemoryCategory) => Promise<void>;
+  createMemory: (content: string, category: MemoryCategory, workspaceId?: string) => Promise<void>;
+  editMemory: (id: string, content: string, category: MemoryCategory, workspaceId?: string) => Promise<void>;
   removeMemory: (id: string) => Promise<void>;
   setActiveCategory: (cat: MemoryCategory | 'all') => void;
   setSearchQuery: (query: string) => void;
+  setCrossWorkspaceSearch: (enabled: boolean) => void;
 }
 
 export const useMemoryStore = create<MemoryState>((set, get) => ({
@@ -30,13 +33,17 @@ export const useMemoryStore = create<MemoryState>((set, get) => ({
   error: null,
   activeCategory: 'all',
   searchQuery: '',
+  crossWorkspaceSearch: false,
 
   loadMemories: async () => {
     set({ isLoading: true, error: null });
     try {
-      const { activeCategory, searchQuery } = get();
+      const { activeCategory, searchQuery, crossWorkspaceSearch } = get();
+      const activeWs = useWorkspaceStore.getState().activeWorkspace;
+      const wsId = crossWorkspaceSearch ? undefined : activeWs?.id;
+
       if (searchQuery.trim()) {
-        const results = await searchMemories(searchQuery.trim(), 20);
+        const results = await searchMemories(searchQuery.trim(), wsId, crossWorkspaceSearch, 20);
         let mems = results.map((r) => r.memory);
         if (activeCategory !== 'all') {
           mems = mems.filter((m) => m.category === activeCategory);
@@ -44,7 +51,7 @@ export const useMemoryStore = create<MemoryState>((set, get) => ({
         set({ memories: mems });
       } else {
         const catFilter = activeCategory === 'all' ? undefined : activeCategory;
-        const mems = await listMemories(catFilter);
+        const mems = await listMemories(catFilter, wsId);
         set({ memories: mems });
       }
     } catch (err: unknown) {
@@ -54,10 +61,12 @@ export const useMemoryStore = create<MemoryState>((set, get) => ({
     }
   },
 
-  createMemory: async (content: string, category: MemoryCategory) => {
+  createMemory: async (content: string, category: MemoryCategory, workspaceId?: string) => {
     set({ isLoading: true, error: null });
     try {
-      await addMemory(content.trim(), category);
+      const activeWs = useWorkspaceStore.getState().activeWorkspace;
+      const wsId = workspaceId || activeWs?.id || 'default';
+      await addMemory(content.trim(), category, wsId);
       await get().loadMemories();
     } catch (err: unknown) {
       set({ error: err instanceof Error ? err.message : String(err) });
@@ -66,10 +75,12 @@ export const useMemoryStore = create<MemoryState>((set, get) => ({
     }
   },
 
-  editMemory: async (id: string, content: string, category: MemoryCategory) => {
+  editMemory: async (id: string, content: string, category: MemoryCategory, workspaceId?: string) => {
     set({ isLoading: true, error: null });
     try {
-      await updateMemory(id, content.trim(), category);
+      const activeWs = useWorkspaceStore.getState().activeWorkspace;
+      const wsId = workspaceId || activeWs?.id;
+      await updateMemory(id, content.trim(), category, wsId);
       await get().loadMemories();
     } catch (err: unknown) {
       set({ error: err instanceof Error ? err.message : String(err) });
@@ -99,4 +110,10 @@ export const useMemoryStore = create<MemoryState>((set, get) => ({
     set({ searchQuery });
     get().loadMemories();
   },
+
+  setCrossWorkspaceSearch: (crossWorkspaceSearch) => {
+    set({ crossWorkspaceSearch });
+    get().loadMemories();
+  },
 }));
+
