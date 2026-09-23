@@ -887,4 +887,160 @@ html, body, #root {
   }
 }
 
+/* Recalled Memories & Proposal Citations */
+.message-content-column {
+  max-width: 84%;
+  display: flex;
+  flex-direction: column;
+}
+
+.recalled-memories-badge-container {
+  margin-bottom: 5px;
+}
+
+.recalled-toggle-btn {
+  background: rgba(16, 185, 129, 0.08);
+  border: 1px solid var(--aeio-primary-border);
+  color: var(--aeio-primary-hover);
+  font-size: 10.5px;
+  font-weight: 500;
+  padding: 2px 7px;
+  border-radius: 6px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: all var(--aeio-transition);
+}
+
+.recalled-toggle-btn:hover {
+  background: var(--aeio-primary-subtle);
+  border-color: var(--aeio-primary);
+}
+
+.recalled-drawer {
+  margin-top: 4px;
+  background: var(--aeio-bg-card);
+  border: 1px solid var(--aeio-border);
+  border-radius: 6px;
+  padding: 6px 8px;
+  font-size: 11px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.recalled-item {
+  display: flex;
+  gap: 5px;
+  line-height: 1.35;
+}
+
+.recalled-category {
+  color: var(--aeio-primary-hover);
+  font-weight: 600;
+  text-transform: capitalize;
+  flex-shrink: 0;
+}
+
+.recalled-text {
+  color: var(--aeio-text-secondary);
+}
+
+/* Proposed Memories Approval Card */
+.proposed-memories-container {
+  margin-top: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.proposed-memory-card {
+  background: rgba(13, 169, 85, 0.06);
+  border: 1px dashed var(--aeio-primary-border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  transition: all var(--aeio-transition);
+}
+
+.proposed-memory-card.saved {
+  background: rgba(16, 185, 129, 0.1);
+  border-style: solid;
+  border-color: var(--aeio-primary);
+}
+
+.proposed-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.proposed-tag {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--aeio-primary-hover);
+}
+
+.dismiss-proposal-btn {
+  background: transparent;
+  border: none;
+  color: var(--aeio-text-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+}
+
+.dismiss-proposal-btn:hover {
+  color: #f87171;
+}
+
+.proposed-content {
+  font-size: 11.5px;
+  font-style: italic;
+  color: var(--aeio-text-primary);
+  margin-bottom: 6px;
+}
+
+.proposed-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.save-proposal-btn {
+  background: var(--aeio-primary);
+  border: none;
+  color: #ffffff;
+  font-size: 10.5px;
+  font-weight: 500;
+  padding: 3px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  transition: all var(--aeio-transition);
+}
+
+.save-proposal-btn:hover {
+  background: var(--aeio-primary-hover);
+  box-shadow: 0 0 8px var(--aeio-primary-glow);
+}
+
+.saved-indicator {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10.5px;
+  font-weight: 500;
+  color: var(--aeio-primary-hover);
+}
+
+
 
