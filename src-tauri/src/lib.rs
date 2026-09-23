@@ -35,7 +35,21 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(global_shortcut_plugin)
-        .invoke_handler(tauri::generate_handler![greet, commands::ping])
+        .setup(|app| {
+            let app_data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
+            let memory_manager = memory::MemoryManager::new(&app_data_dir)?;
+            app.manage(memory_manager);
+            Ok(())
+        })
+        .invoke_handler(tauri::generate_handler![
+            greet,
+            commands::ping,
+            commands::add_memory,
+            commands::list_memories,
+            commands::update_memory,
+            commands::delete_memory,
+            commands::search_memories,
+        ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
