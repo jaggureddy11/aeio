@@ -40,6 +40,13 @@ pub fn run() {
             let app_data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
             let memory_manager = memory::MemoryManager::new(&app_data_dir)?;
             app.manage(memory_manager);
+
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.center();
+                let _ = window.show();
+                let _ = window.set_focus();
+            }
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

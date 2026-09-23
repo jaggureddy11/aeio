@@ -14,13 +14,13 @@
       {
         "label": "main",
         "title": "aeio",
-        "width": 600,
-        "height": 400,
-        "visible": false,
+        "width": 640,
+        "height": 480,
+        "visible": true,
         "decorations": false,
         "alwaysOnTop": true,
         "center": true,
-        "resizable": false,
+        "resizable": true,
         "shadow": true
       }
     ],
