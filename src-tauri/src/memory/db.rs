@@ -46,7 +46,6 @@ impl MemoryDb {
                 updated_at INTEGER NOT NULL
             );
             CREATE INDEX IF NOT EXISTS idx_memories_category ON memories(category);
-            CREATE INDEX IF NOT EXISTS idx_memories_workspace ON memories(workspace_id);
             CREATE INDEX IF NOT EXISTS idx_memories_created_at ON memories(created_at);
 
             CREATE TABLE IF NOT EXISTS chat_messages (
@@ -61,7 +60,6 @@ impl MemoryDb {
                 timestamp INTEGER NOT NULL
             );
             CREATE INDEX IF NOT EXISTS idx_chat_messages_timestamp ON chat_messages(timestamp);
-            CREATE INDEX IF NOT EXISTS idx_chat_messages_workspace ON chat_messages(workspace_id);
             "#,
         )
         .map_err(|e| format!("Failed to initialize database schema: {}", e))?;
@@ -71,8 +69,13 @@ impl MemoryDb {
         let _ = conn.execute("ALTER TABLE chat_messages ADD COLUMN workspace_id TEXT", []);
         let _ = conn.execute("ALTER TABLE chat_messages ADD COLUMN provider_info_json TEXT", []);
 
+        // Safe indices after columns are guaranteed to exist
+        let _ = conn.execute("CREATE INDEX IF NOT EXISTS idx_memories_workspace ON memories(workspace_id)", []);
+        let _ = conn.execute("CREATE INDEX IF NOT EXISTS idx_chat_messages_workspace ON chat_messages(workspace_id)", []);
+
         // Seed default workspace if none exists
         let now = Utc::now().timestamp_millis();
+
         let _ = conn.execute(
             r#"
             INSERT OR IGNORE INTO workspaces (id, name, icon, description, is_active, is_archived, created_at, updated_at)
