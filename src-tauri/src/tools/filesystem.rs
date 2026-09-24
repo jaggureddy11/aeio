@@ -106,7 +106,9 @@ mod tests {
 
     #[test]
     fn test_read_file_directory_rejected() {
-        let res = read_file("/tmp");
+        let temp_dir = std::env::temp_dir();
+        let temp_path = temp_dir.to_str().unwrap();
+        let res = read_file(temp_path);
         assert!(res.is_err());
         assert!(res.unwrap_err().contains("Path is a directory"));
     }
