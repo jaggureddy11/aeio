@@ -12,9 +12,11 @@ pub struct ShellOutput {
 pub fn is_destructive_command(command: &str) -> bool {
     let lower = command.trim().to_lowercase();
     let destructive_patterns = [
-        "rm ", "rm\t", "rmdir", "del ", "del\t", "format ", "dd ",
-        "mkfs", "chmod -r", "chown -r", "> /dev/", "wipefs", "shred ",
-        ":(){ :|:& };:", "drop database", "drop table", "truncate table"
+        "rm ", "rm\t", "rmdir", "del ", "del\t", "erase ", "unlink ", "shred ",
+        "format ", "dd ", "mkfs", "fdisk", "parted", "wipefs", "srm ",
+        "chmod -r", "chmod 777", "chown -r", "> /dev/", "> /etc/", "> /system/",
+        ":(){ :|:& };:", "drop database", "drop table", "drop schema", "truncate table",
+        "git reset --hard", "git clean", "killall", "shutdown", "reboot", "halt"
     ];
 
     destructive_patterns.iter().any(|&p| lower.contains(p))
@@ -97,6 +99,11 @@ mod tests {
         assert!(is_destructive_command("dd if=/dev/zero of=/dev/sda"));
         assert!(is_destructive_command("DROP TABLE users;"));
         assert!(is_destructive_command("TRUNCATE TABLE logs;"));
+        assert!(is_destructive_command("git reset --hard HEAD~1"));
+        assert!(is_destructive_command("git clean -fd"));
+        assert!(is_destructive_command("unlink secret.key"));
+        assert!(is_destructive_command("erase test.log"));
+        assert!(is_destructive_command("shutdown -h now"));
 
         // Safe non-destructive commands
         assert!(!is_destructive_command("git status"));

@@ -33,8 +33,6 @@ export const SettingsPanel: React.FC<Props> = ({ isOpen, onClose }) => {
     ambientProactive,
     setActiveProvider,
     setOllamaModel,
-    setClaudeApiKey,
-    setOpenaiApiKey,
     setActiveWindowAwareness,
     setAmbientProactive,
   } = useSettingsStore();
@@ -88,7 +86,6 @@ export const SettingsPanel: React.FC<Props> = ({ isOpen, onClose }) => {
     if (!trimmed) return;
     try {
       await setApiKey('claude', trimmed);
-      setClaudeApiKey(trimmed);
       setClaudeInput('');
       setHasClaudeStored(true);
       showSuccess('Claude API key secured in OS Keychain');
@@ -100,7 +97,6 @@ export const SettingsPanel: React.FC<Props> = ({ isOpen, onClose }) => {
   const handleDeleteClaudeKey = async () => {
     try {
       await deleteApiKey('claude');
-      setClaudeApiKey('');
       setHasClaudeStored(false);
       showSuccess('Claude API key removed from OS Keychain');
     } catch (err: unknown) {
@@ -113,7 +109,6 @@ export const SettingsPanel: React.FC<Props> = ({ isOpen, onClose }) => {
     if (!trimmed) return;
     try {
       await setApiKey('openai', trimmed);
-      setOpenaiApiKey(trimmed);
       setOpenaiInput('');
       setHasOpenaiStored(true);
       showSuccess('OpenAI API key secured in OS Keychain');
@@ -125,7 +120,6 @@ export const SettingsPanel: React.FC<Props> = ({ isOpen, onClose }) => {
   const handleDeleteOpenaiKey = async () => {
     try {
       await deleteApiKey('openai');
-      setOpenaiApiKey('');
       setHasOpenaiStored(false);
       showSuccess('OpenAI API key removed from OS Keychain');
     } catch (err: unknown) {

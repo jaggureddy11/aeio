@@ -686,7 +686,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
           try {
             isDestructive = await checkDestructiveCommand(args.command);
           } catch {
-            isDestructive = false;
+            // Fail-safe: require explicit confirmation if check encounters an error
+            isDestructive = true;
           }
         }
 

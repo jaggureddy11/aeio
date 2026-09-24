@@ -31,22 +31,16 @@ export async function chatWithActiveProvider(
   let resolvedApiKey = options?.apiKey;
   if (!resolvedApiKey) {
     if (provider.id === 'claude') {
-      resolvedApiKey = settings.claudeApiKey;
-      if (!resolvedApiKey) {
-        try {
-          resolvedApiKey = await getApiKey('claude');
-        } catch {
-          // not found in keychain
-        }
+      try {
+        resolvedApiKey = await getApiKey('claude');
+      } catch {
+        // not found in keychain
       }
     } else if (provider.id === 'openai') {
-      resolvedApiKey = settings.openaiApiKey;
-      if (!resolvedApiKey) {
-        try {
-          resolvedApiKey = await getApiKey('openai');
-        } catch {
-          // not found in keychain
-        }
+      try {
+        resolvedApiKey = await getApiKey('openai');
+      } catch {
+        // not found in keychain
       }
     }
   }

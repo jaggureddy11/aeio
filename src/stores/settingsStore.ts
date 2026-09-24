@@ -8,15 +8,11 @@ export interface SettingsState {
   activeTab: ActiveTab;
   activeProvider: LLMProviderType;
   ollamaModel: string;
-  claudeApiKey: string;
-  openaiApiKey: string;
   activeWindowAwareness: boolean;
   ambientProactive: boolean;
   setActiveTab: (tab: ActiveTab) => void;
   setActiveProvider: (provider: LLMProviderType) => void;
   setOllamaModel: (model: string) => void;
-  setClaudeApiKey: (key: string) => void;
-  setOpenaiApiKey: (key: string) => void;
   setActiveWindowAwareness: (enabled: boolean) => void;
   setAmbientProactive: (enabled: boolean) => void;
 }
@@ -34,15 +30,11 @@ export const useSettingsStore = create<SettingsState>((set) => ({
   activeTab: 'chat',
   activeProvider: 'ollama',
   ollamaModel: 'llama3.2',
-  claudeApiKey: '',
-  openaiApiKey: '',
   activeWindowAwareness: getStoredBool('aeio_active_window_awareness', false),
   ambientProactive: getStoredBool('aeio_ambient_proactive', false),
   setActiveTab: (activeTab) => set({ activeTab }),
   setActiveProvider: (activeProvider) => set({ activeProvider }),
   setOllamaModel: (ollamaModel) => set({ ollamaModel }),
-  setClaudeApiKey: (claudeApiKey) => set({ claudeApiKey }),
-  setOpenaiApiKey: (openaiApiKey) => set({ openaiApiKey }),
   setActiveWindowAwareness: (enabled) => {
     try {
       localStorage.setItem('aeio_active_window_awareness', String(enabled));
