@@ -131,6 +131,50 @@ export const XML_TOOL_CALL_REGEX =
 export const JSON_TOOL_CALL_REGEX =
   /<tool_call>\s*(\{[\s\S]*?\})\s*<\/tool_call>/gi;
 
+/**
+ * Micro-throttled streaming buffer for high-frequency token updates.
+ * Caps React state and Markdown parser updates to ~33fps (30ms interval)
+ * during fast local/remote token generation, eliminating UI micro-stutters.
+ */
+class StreamingThrottle {
+  private lastUpdate = 0;
+  private timer: ReturnType<typeof setTimeout> | null = null;
+  private pending: (() => void) | null = null;
+  private intervalMs: number;
+
+  constructor(intervalMs = 30) {
+    this.intervalMs = intervalMs;
+  }
+
+  schedule(fn: () => void) {
+    this.pending = fn;
+    const now = performance.now();
+    const elapsed = now - this.lastUpdate;
+
+    if (elapsed >= this.intervalMs) {
+      this.flush();
+    } else if (this.timer === null) {
+      this.timer = setTimeout(() => {
+        this.timer = null;
+        this.flush();
+      }, this.intervalMs - elapsed);
+    }
+  }
+
+  flush() {
+    if (this.timer !== null) {
+      clearTimeout(this.timer);
+      this.timer = null;
+    }
+    if (this.pending) {
+      const fn = this.pending;
+      this.pending = null;
+      this.lastUpdate = performance.now();
+      fn();
+    }
+  }
+}
+
 function persistChatMessage(msg: ChatMessage) {
   const activeWs = useWorkspaceStore.getState().activeWorkspace;
   const wsId = msg.workspaceId || activeWs?.id || 'default';
@@ -727,6 +771,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     set({ isLoading: true });
 
     let rawStreamed = '';
+    const streamThrottle = new StreamingThrottle(30);
 
     try {
       await chatWithActiveProvider(conversation, {
@@ -734,39 +779,44 @@ export const useChatStore = create<ChatState>((set, get) => ({
         onChunk: (chunk) => {
           rawStreamed += chunk;
 
-          // Check if streaming is currently inside open thinking tags
-          let streamReasoning: string | undefined = undefined;
-          const openThink = UNCLOSED_THINK_REGEX.exec(rawStreamed);
-          if (openThink && openThink[1]) {
-            streamReasoning = openThink[1].trim();
-          } else {
-            const closedMatches = [...rawStreamed.matchAll(new RegExp(THINK_REGEX.source, 'gi'))];
-            if (closedMatches.length > 0) {
-              streamReasoning = closedMatches.map((m) => m[1].trim()).join('\n\n');
+          streamThrottle.schedule(() => {
+            // Check if streaming is currently inside open thinking tags
+            let streamReasoning: string | undefined = undefined;
+            const openThink = UNCLOSED_THINK_REGEX.exec(rawStreamed);
+            if (openThink && openThink[1]) {
+              streamReasoning = openThink[1].trim();
+            } else {
+              const closedMatches = [...rawStreamed.matchAll(new RegExp(THINK_REGEX.source, 'gi'))];
+              if (closedMatches.length > 0) {
+                streamReasoning = closedMatches.map((m) => m[1].trim()).join('\n\n');
+              }
             }
-          }
 
-          const cleanDisplay = rawStreamed
-            .replace(THINK_REGEX, '')
-            .replace(UNCLOSED_THINK_REGEX, '')
-            .replace(REMEMBER_REGEX, '')
-            .replace(XML_TOOL_CALL_REGEX, '')
-            .replace(JSON_TOOL_CALL_REGEX, '')
-            .trim();
+            const cleanDisplay = rawStreamed
+              .replace(THINK_REGEX, '')
+              .replace(UNCLOSED_THINK_REGEX, '')
+              .replace(REMEMBER_REGEX, '')
+              .replace(XML_TOOL_CALL_REGEX, '')
+              .replace(JSON_TOOL_CALL_REGEX, '')
+              .trim();
 
-          get().updateMessageContent(
-            assistantId,
-            cleanDisplay || (streamReasoning ? 'Thinking...' : '...'),
-            true,
-            recalled,
-            undefined,
-            undefined,
-            providerInfo,
-            activeWinInfo,
-            streamReasoning
-          );
+            get().updateMessageContent(
+              assistantId,
+              cleanDisplay || (streamReasoning ? 'Thinking...' : '...'),
+              true,
+              recalled,
+              undefined,
+              undefined,
+              providerInfo,
+              activeWinInfo,
+              streamReasoning
+            );
+          });
         },
       });
+
+      // Synchronously flush any pending streamed tokens immediately
+      streamThrottle.flush();
 
       // 8. Parse completed reasoning
       let finalReasoning: string | undefined = undefined;
@@ -896,6 +946,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       // Trigger ambient nudge check if opt-in enabled
       get().checkForAmbientNudge();
     } catch (err: unknown) {
+      streamThrottle.flush();
       const errorMsg =
         err instanceof Error
           ? err.message

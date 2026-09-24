@@ -9,7 +9,7 @@ interface Props {
   message: MessageType;
 }
 
-export const ChatMessageItem: React.FC<Props> = ({ message }) => {
+export const ChatMessageItem: React.FC<Props> = React.memo(({ message }) => {
   const isUser = message.role === 'user';
   const {
     confirmMemoryProposal,
@@ -190,4 +190,13 @@ export const ChatMessageItem: React.FC<Props> = ({ message }) => {
       </div>
     </div>
   );
-};
+}, (prev, next) => {
+  return (
+    prev.message.id === next.message.id &&
+    prev.message.content === next.message.content &&
+    prev.message.isStreaming === next.message.isStreaming &&
+    prev.message.reasoning === next.message.reasoning &&
+    prev.message.toolExecutions === next.message.toolExecutions &&
+    prev.message.proposedMemories === next.message.proposedMemories
+  );
+});
