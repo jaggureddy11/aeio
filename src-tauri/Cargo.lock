@@ -14,18 +14,21 @@ version = "0.1.0"
 dependencies = [
  "arboard",
  "candle-core",
+ "candle-nn",
  "candle-transformers",
  "chrono",
  "keyring",
  "rusqlite",
  "serde",
  "serde_json",
+ "sha2",
  "sqlite-vec",
  "tauri",
  "tauri-build",
  "tauri-plugin-global-shortcut",
  "tauri-plugin-opener",
  "tauri-plugin-single-instance",
+ "tokenizers",
  "uuid",
 ]
 

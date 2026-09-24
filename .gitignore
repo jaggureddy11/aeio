@@ -25,3 +25,8 @@ dist-ssr
 *.db
 *.db*
 .env*
+
+# Model weights & downloaded resources
+src-tauri/resources/models/
+*.safetensors
+*.onnx

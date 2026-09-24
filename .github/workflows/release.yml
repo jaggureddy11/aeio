@@ -44,6 +44,15 @@ jobs:
       - name: Install Frontend Dependencies
         run: npm ci
 
+      - name: Fetch and Verify Semantic Models (macOS/Linux)
+        if: matrix.platform == 'macos-latest'
+        run: bash scripts/fetch-models.sh
+
+      - name: Fetch and Verify Semantic Models (Windows)
+        if: matrix.platform == 'windows-latest'
+        shell: pwsh
+        run: .\scripts\fetch-models.ps1
+
       - name: Build and Package with Tauri Action
         uses: tauri-apps/tauri-action@v0
         env:

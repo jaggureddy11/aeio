@@ -43,12 +43,22 @@ Aeio is a local-first personal AI assistant that lives on your desktop instead o
    npm install
    ```
 
-3. Run in local development mode:
+3. Fetch and verify semantic embedding model weights:
+   - **macOS / Linux**:
+     ```bash
+     bash scripts/fetch-models.sh
+     ```
+   - **Windows (PowerShell)**:
+     ```powershell
+     .\scripts\fetch-models.ps1
+     ```
+
+4. Run in local development mode:
    ```bash
    npm run tauri dev
    ```
 
-4. Build production bundle:
+5. Build production bundle:
    ```bash
    npm run tauri build
    ```
