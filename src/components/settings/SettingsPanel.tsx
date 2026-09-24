@@ -5,7 +5,9 @@ import {
   deleteApiKey,
   hasApiKey,
   getLocalLogs,
+  getTelemetryLogs,
   clearLocalLogs,
+  recordError,
 } from '../../lib/ipc';
 import { ollamaProvider } from '../../lib/providers/ollama';
 import { qwenCoderProvider } from '../../lib/providers/qwenCoder';
@@ -159,11 +161,63 @@ export const SettingsPanel: React.FC<Props> = ({ isOpen, onClose, onOpenOnboardi
     }
   };
 
+  const [outboundLogs, setOutboundLogs] = useState<string | null>(null);
+  const [isViewingOutboundLogs, setIsViewingOutboundLogs] = useState(false);
+  const [testPayloadPreview, setTestPayloadPreview] = useState<string | null>(null);
+
+  const handleToggleOutboundLogs = async () => {
+    if (!isViewingOutboundLogs) {
+      try {
+        const logs = await getTelemetryLogs();
+        setOutboundLogs(logs);
+        setIsViewingOutboundLogs(true);
+      } catch (err) {
+        setOutboundLogs(`Failed to read outbound logs: ${err}`);
+        setIsViewingOutboundLogs(true);
+      }
+    } else {
+      setIsViewingOutboundLogs(false);
+    }
+  };
+
+  const handleTriggerTestError = async () => {
+    try {
+      // Trigger a synthetic diagnostic error containing sensitive path and key to verify sanitization
+      const payload = await recordError(
+        'DiagnosticVerificationError',
+        'Manual verification trigger with path /Users/apple/secret/prompt.txt and key sk-ant-api03-1234567890abcdef',
+        'Error: Verification\n    at handleTriggerTestError (/Users/apple/Desktop/PROJECTS/aeio/src/SettingsPanel.tsx:170:15)',
+        telemetryOptIn,
+        ollamaModel || 'qwen2.5-coder:7b'
+      );
+      if (payload) {
+        setTestPayloadPreview(JSON.stringify(payload, null, 2));
+        showSuccess('Diagnostic event recorded & payload validated');
+      } else {
+        setTestPayloadPreview(null);
+        showSuccess('Local error recorded (outbound disabled while opt-in is OFF)');
+      }
+      // Refresh visible logs if open
+      if (isViewingLogs) {
+        const logs = await getLocalLogs();
+        setLocalLogs(logs);
+      }
+      if (isViewingOutboundLogs) {
+        const outLogs = await getTelemetryLogs();
+        setOutboundLogs(outLogs);
+      }
+    } catch (err) {
+      alert(`Diagnostic trigger failed: ${err}`);
+    }
+  };
+
   const handleClearLogs = async () => {
     try {
       await clearLocalLogs();
       setLocalLogs('No local error logs found.');
-      showSuccess('Local error log file cleared');
+      setOutboundLogs('No outbound telemetry payloads logged.');
+      setTestPayloadPreview(null);
+      showSuccess('Local and outbound error logs cleared');
     } catch (err) {
       alert(`Failed to clear logs: ${err}`);
     }
@@ -678,6 +732,84 @@ export const SettingsPanel: React.FC<Props> = ({ isOpen, onClose, onOpenOnboardi
                   color: 'var(--aeio-text-secondary)',
                 }}>
                   {localLogs}
+                </div>
+              )}
+            </div>
+
+            {/* Outbound Telemetry Audit Box */}
+            <div className="shortcut-box" style={{ marginTop: '10px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div>
+                  <div style={{ fontSize: '12px', fontWeight: 500, color: 'var(--aeio-text-primary)' }}>
+                    Outbound Telemetry Payloads & 30-Day Rotating ID
+                  </div>
+                  <div style={{ fontSize: '11px', color: 'var(--aeio-text-muted)', marginTop: '2px' }}>
+                    Client identifier auto-rotates every 30 days. No persistent user ID.
+                  </div>
+                </div>
+                <div style={{ display: 'flex', gap: '6px' }}>
+                  <button
+                    type="button"
+                    className="action-btn secondary"
+                    style={{ padding: '5px 10px', fontSize: '11px', width: 'auto' }}
+                    onClick={handleTriggerTestError}
+                    aria-label="Send diagnostic test event"
+                    title="Triggers a simulated error to audit the exact payload schema and verify sanitization"
+                  >
+                    <Activity size={12} />
+                    <span>Test Event</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="action-btn secondary"
+                    style={{ padding: '5px 10px', fontSize: '11px', width: 'auto' }}
+                    onClick={handleToggleOutboundLogs}
+                    aria-label="Inspect outbound telemetry log"
+                  >
+                    <FileText size={12} />
+                    <span>{isViewingOutboundLogs ? 'Hide Payloads' : 'Inspect Payloads'}</span>
+                  </button>
+                </div>
+              </div>
+
+              {testPayloadPreview && (
+                <div style={{ marginTop: '10px' }}>
+                  <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--aeio-accent)' }}>
+                    Last Generated Outbound Payload (Verified Schema):
+                  </div>
+                  <div className="local-logs-viewer" style={{
+                    marginTop: '4px',
+                    padding: '10px',
+                    borderRadius: '6px',
+                    background: 'rgba(0, 0, 0, 0.5)',
+                    border: '1px solid var(--aeio-border-subtle)',
+                    maxHeight: '160px',
+                    overflowY: 'auto',
+                    fontFamily: 'monospace',
+                    fontSize: '11px',
+                    whiteSpace: 'pre-wrap',
+                    color: '#7ee787',
+                  }}>
+                    {testPayloadPreview}
+                  </div>
+                </div>
+              )}
+
+              {isViewingOutboundLogs && (
+                <div className="local-logs-viewer" style={{
+                  marginTop: '10px',
+                  padding: '10px',
+                  borderRadius: '6px',
+                  background: 'rgba(0, 0, 0, 0.4)',
+                  border: '1px solid var(--aeio-border-subtle)',
+                  maxHeight: '160px',
+                  overflowY: 'auto',
+                  fontFamily: 'monospace',
+                  fontSize: '11px',
+                  whiteSpace: 'pre-wrap',
+                  color: 'var(--aeio-text-secondary)',
+                }}>
+                  {outboundLogs}
                 </div>
               )}
             </div>

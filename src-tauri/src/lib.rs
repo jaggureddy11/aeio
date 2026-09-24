@@ -90,6 +90,7 @@ pub fn run() {
             commands::get_active_window,
             commands::record_error,
             commands::get_local_logs,
+            commands::get_telemetry_logs,
             commands::clear_local_logs,
         ])
         .run(tauri::generate_context!())

@@ -231,22 +231,40 @@ export async function ping(): Promise<string> {
   return invoke<string>('ping');
 }
 
+export interface TelemetryPayload {
+  anonymous_id: string;
+  timestamp: string;
+  app_version: string;
+  os: string;
+  arch: string;
+  error_type: string;
+  error_message: string;
+  sanitized_stack: string;
+  model_name?: string | null;
+}
+
 export async function recordError(
   errorName: string,
   message: string,
   stack?: string,
-  optIn?: boolean
-): Promise<void> {
-  return invoke<void>('record_error', {
+  optIn?: boolean,
+  modelName?: string
+): Promise<TelemetryPayload | null> {
+  return invoke<TelemetryPayload | null>('record_error', {
     errorName,
     message,
     stack: stack ?? null,
     optIn: optIn ?? false,
+    modelName: modelName ?? null,
   });
 }
 
 export async function getLocalLogs(): Promise<string> {
   return invoke<string>('get_local_logs');
+}
+
+export async function getTelemetryLogs(): Promise<string> {
+  return invoke<string>('get_telemetry_logs');
 }
 
 export async function clearLocalLogs(): Promise<void> {

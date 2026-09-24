@@ -210,7 +210,7 @@ pub fn has_api_key(target: String) -> bool {
     crate::keychain::has_api_key(&target)
 }
 
-// Observability & Diagnostics Commands (Phase 4: Privacy-safe local error logging)
+// Observability & Diagnostics Commands (Phase 4: Privacy-safe local error logging & opt-in telemetry)
 #[tauri::command]
 pub fn record_error(
     state: State<crate::observability::ErrorLogger>,
@@ -218,8 +218,9 @@ pub fn record_error(
     message: String,
     stack: Option<String>,
     opt_in: bool,
-) -> Result<(), String> {
-    state.record_error(&error_name, &message, stack.as_deref(), opt_in)
+    model_name: Option<String>,
+) -> Result<Option<crate::observability::TelemetryPayload>, String> {
+    state.record_error(&error_name, &message, stack.as_deref(), opt_in, model_name.as_deref())
 }
 
 #[tauri::command]
@@ -230,9 +231,17 @@ pub fn get_local_logs(
 }
 
 #[tauri::command]
+pub fn get_telemetry_logs(
+    state: State<crate::observability::ErrorLogger>,
+) -> Result<String, String> {
+    state.read_outbound_logs()
+}
+
+#[tauri::command]
 pub fn clear_local_logs(
     state: State<crate::observability::ErrorLogger>,
 ) -> Result<(), String> {
     state.clear_logs()
 }
+
 

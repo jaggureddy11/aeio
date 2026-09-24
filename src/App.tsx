@@ -25,24 +25,37 @@ export const App: React.FC = () => {
   const [showOnboarding, setShowOnboarding] = useState(!hasCompletedOnboarding);
   const [isInitializing, setIsInitializing] = useState(true);
 
-  // Global error & unhandled rejection listener for privacy-safe local logging
+  // Global error & unhandled rejection listener for privacy-safe local logging and opt-in telemetry
   useEffect(() => {
     const handleError = (event: ErrorEvent) => {
-      const optIn = useSettingsStore.getState().telemetryOptIn;
+      const state = useSettingsStore.getState();
+      const optIn = state.telemetryOptIn;
+      const modelName = state.ollamaModel || undefined;
       recordError(
         event.error?.name || 'UncaughtError',
         event.message || 'Unknown window error',
         event.error?.stack,
-        optIn
-      ).catch(() => {});
+        optIn,
+        modelName
+      ).then((payload) => {
+        if (payload) {
+          console.info('[Aeio Telemetry] Outbound payload recorded:', payload);
+        }
+      }).catch(() => {});
     };
 
     const handleRejection = (event: PromiseRejectionEvent) => {
-      const optIn = useSettingsStore.getState().telemetryOptIn;
+      const state = useSettingsStore.getState();
+      const optIn = state.telemetryOptIn;
+      const modelName = state.ollamaModel || undefined;
       const reason = event.reason;
       const message = typeof reason === 'string' ? reason : reason?.message || JSON.stringify(reason);
       const stack = reason instanceof Error ? reason.stack : undefined;
-      recordError('UnhandledPromiseRejection', message, stack, optIn).catch(() => {});
+      recordError('UnhandledPromiseRejection', message, stack, optIn, modelName).then((payload) => {
+        if (payload) {
+          console.info('[Aeio Telemetry] Outbound payload recorded:', payload);
+        }
+      }).catch(() => {});
     };
 
     window.addEventListener('error', handleError);
