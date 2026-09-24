@@ -1,0 +1,50 @@
+[
+  {
+    "id": "mem_01",
+    "content": "PostgreSQL production database runs on port 5432 with connection pooling enabled",
+    "category": "fact",
+    "workspace_id": "default",
+    "created_at": 1727173200000,
+    "updated_at": 1727173200000
+  },
+  {
+    "id": "mem_02",
+    "content": "Default system shell is zsh on macOS Sequoia 15.1 with brew prefix /usr/local",
+    "category": "fact",
+    "workspace_id": "default",
+    "created_at": 1727173260000,
+    "updated_at": 1727173260000
+  },
+  {
+    "id": "mem_03",
+    "content": "Prefers dark obsidian aesthetic inspired by composite.com with terracotta accents and zero emojis",
+    "category": "preference",
+    "workspace_id": "default",
+    "created_at": 1727173320000,
+    "updated_at": 1727173320000
+  },
+  {
+    "id": "mem_04",
+    "content": "Always provide concise technical explanations with diff blocks rather than full file rewrites",
+    "category": "preference",
+    "workspace_id": "default",
+    "created_at": 1727173380000,
+    "updated_at": 1727173380000
+  },
+  {
+    "id": "mem_05",
+    "content": "Aeio desktop AI assistant production hardening, packaging, and signing track",
+    "category": "project",
+    "workspace_id": "default",
+    "created_at": 1727173440000,
+    "updated_at": 1727173440000
+  },
+  {
+    "id": "mem_06",
+    "content": "Alex Rivera senior DevOps engineer handling Kubernetes clusters and AWS infrastructure",
+    "category": "person",
+    "workspace_id": "default",
+    "created_at": 1727173500000,
+    "updated_at": 1727173500000
+  }
+]

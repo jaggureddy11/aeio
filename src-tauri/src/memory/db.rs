@@ -1222,5 +1222,54 @@ mod tests {
         // Clean up
         let _ = fs::remove_dir_all(test_dir);
     }
+
+    #[test]
+    fn test_export_memories_json_and_markdown_verification() {
+        let test_dir = std::env::temp_dir().join(format!("aeio_export_test_{}", Uuid::new_v4()));
+        let db = MemoryDb::init(&test_dir).expect("Failed to initialize test db");
+
+        // Seed diverse test memories across all 4 core categories
+        db.add_memory("Server runs Ubuntu 24.04 LTS on port 8080", "fact", Some("default"), None).unwrap();
+        db.add_memory("Prefers concise responses with dark obsidian theme", "preference", Some("default"), None).unwrap();
+        db.add_memory("Aeio desktop AI assistant production hardening track", "project", Some("default"), None).unwrap();
+        db.add_memory("Sarah Chen lead database architect", "person", Some("default"), None).unwrap();
+
+        // 1. Export JSON
+        let json_output = db.export_memories("json", None).expect("JSON export failed");
+        assert!(!json_output.is_empty());
+        let parsed_json: serde_json::Value = serde_json::from_str(&json_output).expect("Invalid JSON export");
+        let arr = parsed_json.as_array().expect("JSON root is not array");
+        assert_eq!(arr.len(), 4);
+
+        // 2. Export Markdown
+        let md_output = db.export_memories("markdown", None).expect("Markdown export failed");
+        assert!(md_output.contains("# Aeio Stored Memories"));
+        assert!(md_output.contains("## Facts"));
+        assert!(md_output.contains("- Server runs Ubuntu 24.04 LTS on port 8080"));
+        assert!(md_output.contains("## Preferences"));
+        assert!(md_output.contains("- Prefers concise responses with dark obsidian theme"));
+        assert!(md_output.contains("## Projects"));
+        assert!(md_output.contains("- Aeio desktop AI assistant production hardening track"));
+        assert!(md_output.contains("## People / Contacts"));
+        assert!(md_output.contains("- Sarah Chen lead database architect"));
+
+        // Write verification files to disk to confirm physical file generation
+        let json_path = test_dir.join("aeio-memories-export.json");
+        let md_path = test_dir.join("aeio-memories-export.md");
+        fs::write(&json_path, &json_output).expect("Failed to write json");
+        fs::write(&md_path, &md_output).expect("Failed to write md");
+
+        assert!(json_path.exists());
+        assert!(md_path.exists());
+
+        // Verify content from disk
+        let disk_json = fs::read_to_string(&json_path).unwrap();
+        let disk_md = fs::read_to_string(&md_path).unwrap();
+        assert_eq!(disk_json, json_output);
+        assert_eq!(disk_md, md_output);
+
+        // Clean up
+        let _ = fs::remove_dir_all(test_dir);
+    }
 }
 
