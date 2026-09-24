@@ -2,12 +2,64 @@ import React, { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { ChatMessage as MessageType, useChatStore } from '../../stores/chatStore';
 import logo from '../../assets/logo.png';
-import { User, Brain, Check, Plus, X, ChevronDown, ChevronUp, Lock, Monitor, Cpu } from 'lucide-react';
+import { User, Brain, Check, Plus, X, ChevronDown, ChevronUp, Lock, Monitor, Cpu, Copy } from 'lucide-react';
 import { ToolApprovalCard } from './ToolApproval';
 
 interface Props {
   message: MessageType;
 }
+
+const CodeBlock: React.FC<any> = ({ node, inline, className, children, ...props }) => {
+  const [copied, setCopied] = useState(false);
+  const match = /language-(\w+)/.exec(className || '');
+  const language = match ? match[1] : '';
+  const codeContent = String(children).replace(/\n$/, '');
+
+  if (inline || (!match && !codeContent.includes('\n'))) {
+    return (
+      <code className="inline-code" {...props}>
+        {children}
+      </code>
+    );
+  }
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(codeContent);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <div className="code-block-wrapper">
+      <div className="code-block-header">
+        <span className="code-block-lang">{language || 'code'}</span>
+        <button
+          type="button"
+          className="code-copy-btn"
+          onClick={handleCopy}
+          title="Copy code"
+        >
+          {copied ? (
+            <>
+              <Check size={11} className="copy-icon-success" />
+              <span>Copied</span>
+            </>
+          ) : (
+            <>
+              <Copy size={11} />
+              <span>Copy</span>
+            </>
+          )}
+        </button>
+      </div>
+      <pre className="code-pre">
+        <code className={className} {...props}>
+          {children}
+        </code>
+      </pre>
+    </div>
+  );
+};
 
 export const ChatMessageItem: React.FC<Props> = React.memo(({ message }) => {
   const isUser = message.role === 'user';
@@ -122,7 +174,7 @@ export const ChatMessageItem: React.FC<Props> = React.memo(({ message }) => {
           )}
 
           <div className="markdown-content">
-            <ReactMarkdown>{message.content}</ReactMarkdown>
+            <ReactMarkdown components={{ code: CodeBlock }}>{message.content}</ReactMarkdown>
             {message.isStreaming && <span className="streaming-cursor" aria-hidden="true" />}
           </div>
         </div>

@@ -40,6 +40,21 @@ export const MemoryPanel: React.FC = () => {
     loadMemories();
   }, [loadMemories, activeWorkspace?.id]);
 
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (showExportMenu) {
+          setShowExportMenu(false);
+        } else if (isAdding) {
+          setIsAdding(false);
+          setNewContent('');
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [showExportMenu, isAdding]);
+
   const handleCreate = async () => {
     if (!newContent.trim()) return;
     await createMemory(newContent, newCategory, activeWorkspace?.id);
@@ -209,9 +224,15 @@ export const MemoryPanel: React.FC = () => {
 
           <textarea
             className="add-memory-textarea"
-            placeholder="e.g. Prefers TypeScript over JavaScript, works at Acme Corp, likes concise answers..."
+            placeholder="e.g. Prefers TypeScript over JavaScript, works at Acme Corp, likes concise answers... (⌘+Enter to save)"
             value={newContent}
             onChange={(e) => setNewContent(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+                e.preventDefault();
+                handleCreate();
+              }
+            }}
             rows={2}
             autoFocus
           />
@@ -250,6 +271,17 @@ export const MemoryPanel: React.FC = () => {
                 ? `No memories matched "${searchQuery}".`
                 : 'Aeio learns facts, preferences, and projects as you chat, or you can add them manually above.'}
             </p>
+            {searchQuery && (
+              <button
+                type="button"
+                className="starter-chip"
+                onClick={() => setSearchQuery('')}
+                style={{ marginTop: '8px' }}
+              >
+                <X size={11} />
+                <span>Clear search filter</span>
+              </button>
+            )}
             {!isAdding && !searchQuery && (
               <button
                 className="starter-chip"

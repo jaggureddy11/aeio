@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import logo from './assets/logo.png';
 import { ChatView } from './components/chat';
 import { MemoryPanel } from './components/memory';
@@ -6,6 +6,7 @@ import { SettingsPanel } from './components/settings';
 import { WorkspaceSwitcher } from './components/workspace/WorkspaceSwitcher';
 import { OnboardingModal } from './components/onboarding';
 import { useSettingsStore } from './stores/settingsStore';
+import { hideWindow } from './lib/ipc';
 import { MessageSquare, Brain, Settings } from 'lucide-react';
 import './App.css';
 
@@ -22,6 +23,20 @@ export const App: React.FC = () => {
   } = useSettingsStore();
 
   const [showOnboarding, setShowOnboarding] = useState(!hasCompletedOnboarding);
+
+  useEffect(() => {
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (showOnboarding) {
+          setShowOnboarding(false);
+          return;
+        }
+        hideWindow();
+      }
+    };
+    window.addEventListener('keydown', handleGlobalKeyDown);
+    return () => window.removeEventListener('keydown', handleGlobalKeyDown);
+  }, [showOnboarding]);
 
   return (
     <div className="app-container">

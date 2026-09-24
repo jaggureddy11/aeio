@@ -11,10 +11,22 @@ export const ChatInput: React.FC<Props> = ({ onSend, isLoading }) => {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
+    textareaRef.current?.focus();
+  }, []);
+
+  useEffect(() => {
     if (!isLoading && textareaRef.current) {
       textareaRef.current.focus();
     }
   }, [isLoading]);
+
+  useEffect(() => {
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+      const scrollH = textareaRef.current.scrollHeight;
+      textareaRef.current.style.height = `${Math.min(Math.max(scrollH, 36), 140)}px`;
+    }
+  }, [input]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -28,6 +40,9 @@ export const ChatInput: React.FC<Props> = ({ onSend, isLoading }) => {
     if (!trimmed || isLoading) return;
     onSend(trimmed);
     setInput('');
+    if (textareaRef.current) {
+      textareaRef.current.style.height = '36px';
+    }
   };
 
   return (

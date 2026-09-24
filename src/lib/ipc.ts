@@ -227,3 +227,13 @@ export async function exportMemories(
   });
 }
 
+export async function hideWindow(): Promise<void> {
+  try {
+    const { getCurrentWebviewWindow } = await import('@tauri-apps/api/webviewWindow');
+    await getCurrentWebviewWindow().hide();
+  } catch (err) {
+    console.debug('hideWindow not supported in browser environment', err);
+  }
+}
+
+

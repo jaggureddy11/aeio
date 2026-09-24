@@ -373,6 +373,12 @@ export const SettingsPanel: React.FC<Props> = ({ isOpen, onClose, onOpenOnboardi
                   placeholder={hasClaudeStored ? '••••••••••••••••••••••••' : 'sk-ant-...'}
                   value={claudeInput}
                   onChange={(e) => setClaudeInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleSaveClaudeKey();
+                    }
+                  }}
                 />
                 <button
                   className="key-save-btn"
@@ -412,6 +418,12 @@ export const SettingsPanel: React.FC<Props> = ({ isOpen, onClose, onOpenOnboardi
                   placeholder={hasOpenaiStored ? '••••••••••••••••••••••••' : 'sk-...'}
                   value={openaiInput}
                   onChange={(e) => setOpenaiInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleSaveOpenaiKey();
+                    }
+                  }}
                 />
                 <button
                   className="key-save-btn"
@@ -552,6 +564,17 @@ export const SettingsPanel: React.FC<Props> = ({ isOpen, onClose, onOpenOnboardi
                   className="custom-hotkey-input"
                   value={hotkeyInput}
                   onChange={(e) => setHotkeyInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      const clean = hotkeyInput.trim();
+                      if (clean) {
+                        setHotkey(clean);
+                        setHotkeySaved(true);
+                        setTimeout(() => setHotkeySaved(false), 1500);
+                      }
+                    }
+                  }}
                   placeholder="e.g. CommandOrControl+Shift+Space"
                 />
                 <button

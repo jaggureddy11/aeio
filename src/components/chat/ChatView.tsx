@@ -44,24 +44,35 @@ export const ChatView: React.FC = () => {
   const [copiedOllamaCmd, setCopiedOllamaCmd] = useState(false);
 
   const activeWorkspace = useWorkspaceStore((s) => s.activeWorkspace);
+  const scrollAreaRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const isUserNearBottom = useRef(true);
 
   useEffect(() => {
     initChatHistory(activeWorkspace?.id);
   }, [activeWorkspace?.id, initChatHistory]);
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  const handleScroll = () => {
+    if (!scrollAreaRef.current) return;
+    const { scrollTop, scrollHeight, clientHeight } = scrollAreaRef.current;
+    isUserNearBottom.current = scrollHeight - (scrollTop + clientHeight) < 80;
+  };
+
+  const handleSend = (text: string) => {
+    isUserNearBottom.current = true;
+    sendMessage(text);
   };
 
   useEffect(() => {
-    scrollToBottom();
+    if (isUserNearBottom.current && scrollAreaRef.current) {
+      scrollAreaRef.current.scrollTop = scrollAreaRef.current.scrollHeight;
+    }
   }, [messages]);
 
   return (
     <div className="chat-container">
       {/* Messages Scroll Area */}
-      <div className="messages-area">
+      <div className="messages-area" ref={scrollAreaRef} onScroll={handleScroll}>
         {messages.length === 0 ? (
           <div className="chat-empty-state">
             <div className="empty-brand-badge">
@@ -77,7 +88,7 @@ export const ChatView: React.FC = () => {
               <button
                 type="button"
                 className="quick-action-card"
-                onClick={() => sendMessage('Find recent files or documents I saved on my machine')}
+                onClick={() => handleSend('Find recent files or documents I saved on my machine')}
               >
                 <div className="action-icon-frame">
                   <FileSearch size={14} />
@@ -94,7 +105,7 @@ export const ChatView: React.FC = () => {
               <button
                 type="button"
                 className="quick-action-card"
-                onClick={() => sendMessage('Read my clipboard and summarize what is on it')}
+                onClick={() => handleSend('Read my clipboard and summarize what is on it')}
               >
                 <div className="action-icon-frame">
                   <Clipboard size={14} />
@@ -111,7 +122,7 @@ export const ChatView: React.FC = () => {
               <button
                 type="button"
                 className="quick-action-card"
-                onClick={() => sendMessage('What memories do you have saved about me, my projects, or preferences?')}
+                onClick={() => handleSend('What memories do you have saved about me, my projects, or preferences?')}
               >
                 <div className="action-icon-frame">
                   <Brain size={14} />
@@ -128,7 +139,7 @@ export const ChatView: React.FC = () => {
               <button
                 type="button"
                 className="quick-action-card"
-                onClick={() => sendMessage('What is my frontmost active application and window title?')}
+                onClick={() => handleSend('What is my frontmost active application and window title?')}
               >
                 <div className="action-icon-frame">
                   <AppWindow size={14} />
@@ -323,7 +334,7 @@ export const ChatView: React.FC = () => {
 
       {/* Input Bar */}
       <div className="chat-input-bar">
-        <ChatInput onSend={sendMessage} isLoading={isLoading} />
+        <ChatInput onSend={handleSend} isLoading={isLoading} />
       </div>
     </div>
   );
