@@ -478,11 +478,12 @@ impl MemoryDb {
         Ok(rows_affected > 0)
     }
 
-    /// Hybrid search: Exact match, word boundary, and keyword relevance ranking
+    /// Hybrid search: Exact phrase, token match, and vector cosine similarity relevance ranking
     /// Tier 4 Scoped Recall: Searches within workspace_id, or across all if cross_workspace is true.
-    pub fn search_memories(
+    pub fn search_memories_hybrid(
         &self,
         query: &str,
+        query_embedding: Option<&[f32]>,
         workspace_id: Option<&str>,
         cross_workspace: bool,
         limit: usize,
@@ -494,15 +495,6 @@ impl MemoryDb {
         };
 
         let trimmed_query = query.trim().to_lowercase();
-
-        if trimmed_query.is_empty() {
-            return Ok(memories
-                .into_iter()
-                .take(limit)
-                .map(|m| SearchResult { memory: m, score: 1.0 })
-                .collect());
-        }
-
         let query_tokens: Vec<&str> = trimmed_query.split_whitespace().collect();
         let mut scored_results: Vec<SearchResult> = Vec::new();
 
@@ -511,7 +503,7 @@ impl MemoryDb {
             let mut score = 0.0f32;
 
             // 1. Exact phrase match gives highest boost
-            if content_lower.contains(&trimmed_query) {
+            if !trimmed_query.is_empty() && content_lower.contains(&trimmed_query) {
                 score += 10.0;
             }
 
@@ -529,23 +521,45 @@ impl MemoryDb {
                 score += 1.5;
             }
 
-            if score > 0.0 {
-                // Normalize by token coverage
+            if matched_tokens > 0 {
                 let coverage = matched_tokens as f32 / query_tokens.len().max(1) as f32;
                 score += coverage * 3.0;
+            }
 
+            // 3. Vector embedding cosine similarity boost (Tier 1: Semantic Recall)
+            if let (Some(q_emb), Some(mem_emb_bytes)) = (query_embedding, &mem.embedding) {
+                let mem_emb = bytes_to_floats(mem_emb_bytes);
+                let sim = cosine_similarity(q_emb, &mem_emb);
+                // Normalize cosine similarity from [-1.0, 1.0] to [0.0, 1.0] and scale by 10.0
+                let sim_score = ((sim + 1.0) / 2.0) * 10.0;
+                if sim_score > 0.0 {
+                    score += sim_score;
+                }
+            }
+
+            if score > 0.0 || (trimmed_query.is_empty() && query_embedding.is_none()) {
                 scored_results.push(SearchResult {
                     memory: mem,
-                    score,
+                    score: if score == 0.0 { 1.0 } else { score },
                 });
             }
         }
 
-        // Sort descending by score
+        // Sort descending by relevance score
         scored_results.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
         scored_results.truncate(limit);
 
         Ok(scored_results)
+    }
+
+    pub fn search_memories(
+        &self,
+        query: &str,
+        workspace_id: Option<&str>,
+        cross_workspace: bool,
+        limit: usize,
+    ) -> Result<Vec<SearchResult>, String> {
+        self.search_memories_hybrid(query, None, workspace_id, cross_workspace, limit)
     }
 
     // Chat Message Persistence (Tier 0 & Tier 4: Scoped to workspace)
@@ -672,6 +686,38 @@ impl MemoryDb {
     }
 }
 
+pub fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
+    if a.len() != b.len() || a.is_empty() {
+        return 0.0;
+    }
+    let mut dot = 0.0f32;
+    let mut norm_a = 0.0f32;
+    let mut norm_b = 0.0f32;
+    for (x, y) in a.iter().zip(b.iter()) {
+        dot += x * y;
+        norm_a += x * x;
+        norm_b += y * y;
+    }
+    if norm_a <= 0.0 || norm_b <= 0.0 {
+        return 0.0;
+    }
+    (dot / (norm_a.sqrt() * norm_b.sqrt())).clamp(-1.0, 1.0)
+}
+
+pub fn bytes_to_floats(bytes: &[u8]) -> Vec<f32> {
+    bytes
+        .chunks_exact(4)
+        .map(|chunk| f32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]))
+        .collect()
+}
+
+pub fn floats_to_bytes(floats: &[f32]) -> Vec<u8> {
+    floats
+        .iter()
+        .flat_map(|f| f.to_le_bytes())
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -775,6 +821,126 @@ mod tests {
         );
 
         // Clean up test directory
+        let _ = fs::remove_dir_all(test_dir);
+    }
+
+    #[test]
+    fn test_memory_crud_complete() {
+        let test_dir = std::env::temp_dir().join(format!("aeio_crud_test_{}", Uuid::new_v4()));
+        let db = MemoryDb::init(&test_dir).expect("Failed to initialize test db");
+
+        // 1. Create
+        let mem = db
+            .add_memory("Prefers concise terminal commands", "preference", Some("default"), None)
+            .expect("Failed to create memory");
+        assert_eq!(mem.content, "Prefers concise terminal commands");
+        assert_eq!(mem.category, "preference");
+
+        // 2. Read / List with category filter
+        let prefs = db.list_memories(Some("preference"), Some("default")).expect("Failed to list");
+        assert_eq!(prefs.len(), 1);
+        assert_eq!(prefs[0].id, mem.id);
+
+        let facts = db.list_memories(Some("fact"), Some("default")).expect("Failed to list");
+        assert_eq!(facts.len(), 0);
+
+        // 3. Update
+        let updated = db
+            .update_memory(&mem.id, "Prefers concise shell & CLI commands", "preference", Some("default"))
+            .expect("Failed to update memory");
+        assert_eq!(updated.content, "Prefers concise shell & CLI commands");
+
+        // 4. Delete
+        let deleted = db.delete_memory(&mem.id).expect("Failed to delete memory");
+        assert!(deleted);
+
+        // 5. Verify absent
+        let after_delete = db.list_memories(None, Some("default")).expect("Failed to list");
+        assert_eq!(after_delete.len(), 0);
+
+        // Clean up
+        let _ = fs::remove_dir_all(test_dir);
+    }
+
+    #[test]
+    fn test_vector_search_relevance_ranking() {
+        let test_dir = std::env::temp_dir().join(format!("aeio_vector_test_{}", Uuid::new_v4()));
+        let db = MemoryDb::init(&test_dir).expect("Failed to initialize test db");
+
+        // Query vector points along X axis [1.0, 0.0]
+        let query_vec: [f32; 2] = [1.0, 0.0];
+
+        // Memory A: highly aligned vector [0.98, 0.05]
+        let emb_a = floats_to_bytes(&[0.98, 0.05]);
+        let mem_a = db
+            .add_memory("Kubernetes cluster configuration", "project", Some("default"), Some(emb_a))
+            .expect("Failed to add memory A");
+
+        // Memory B: orthogonal vector [0.0, 1.0]
+        let emb_b = floats_to_bytes(&[0.0, 1.0]);
+        let mem_b = db
+            .add_memory("Favorite coffee brew temperature", "preference", Some("default"), Some(emb_b))
+            .expect("Failed to add memory B");
+
+        // Search with query embedding
+        let results = db
+            .search_memories_hybrid("", Some(&query_vec), Some("default"), false, 10)
+            .expect("Failed to search hybrid");
+
+        assert_eq!(results.len(), 2);
+        // Memory A must rank FIRST with higher relevance score than Memory B
+        assert_eq!(results[0].memory.id, mem_a.id);
+        assert_eq!(results[1].memory.id, mem_b.id);
+        assert!(results[0].score > results[1].score);
+
+        // Clean up
+        let _ = fs::remove_dir_all(test_dir);
+    }
+
+    #[test]
+    fn test_workspace_isolation_backend() {
+        let test_dir = std::env::temp_dir().join(format!("aeio_iso_test_{}", Uuid::new_v4()));
+        let db = MemoryDb::init(&test_dir).expect("Failed to initialize test db");
+
+        // Create Workspace A & Workspace B
+        let ws_a = db.create_workspace("Work", None, None).expect("Failed to create ws A");
+        let ws_b = db.create_workspace("Personal", None, None).expect("Failed to create ws B");
+
+        // Add secret memory to Workspace A
+        let mem_a = db
+            .add_memory("Confidential Q4 financial report credentials", "project", Some(&ws_a.id), None)
+            .expect("Failed to add mem A");
+
+        // Add memory to Workspace B
+        let mem_b = db
+            .add_memory("Weekend hiking equipment packing list", "fact", Some(&ws_b.id), None)
+            .expect("Failed to add mem B");
+
+        // 1. Scoped search in Workspace B MUST NOT contain Workspace A memory
+        let search_in_b = db
+            .search_memories("financial credentials", Some(&ws_b.id), false, 10)
+            .expect("Failed to search ws B");
+        assert!(
+            search_in_b.iter().all(|r| r.memory.id != mem_a.id),
+            "Workspace A memory leaked into Workspace B search!"
+        );
+
+        // 2. Scoped search in Workspace A finds it
+        let search_in_a = db
+            .search_memories("financial credentials", Some(&ws_a.id), false, 10)
+            .expect("Failed to search ws A");
+        assert_eq!(search_in_a.len(), 1);
+        assert_eq!(search_in_a[0].memory.id, mem_a.id);
+
+        // 3. Cross-workspace search explicitly enabled surfaces both
+        let cross_results = db
+            .search_memories("equipment report", None, true, 10)
+            .expect("Failed cross-workspace search");
+        let found_ids: Vec<_> = cross_results.iter().map(|r| &r.memory.id).collect();
+        assert!(found_ids.contains(&&mem_a.id));
+        assert!(found_ids.contains(&&mem_b.id));
+
+        // Clean up
         let _ = fs::remove_dir_all(test_dir);
     }
 }
