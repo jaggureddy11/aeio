@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 
-export type LLMProviderType = 'ollama' | 'claude' | 'openai';
+export type LLMProviderType = 'qwen-coder' | 'ollama' | 'claude' | 'openai';
 
 export type ActiveTab = 'chat' | 'memory' | 'settings';
 
@@ -41,8 +41,8 @@ const getStoredString = (key: string, defaultVal: string): string => {
 
 export const useSettingsStore = create<SettingsState>((set) => ({
   activeTab: 'chat',
-  activeProvider: 'ollama',
-  ollamaModel: 'llama3.2',
+  activeProvider: 'qwen-coder',
+  ollamaModel: 'qwen3-coder',
   activeWindowAwareness: getStoredBool('aeio_active_window_awareness', false),
   ambientProactive: getStoredBool('aeio_ambient_proactive', false),
   hasCompletedOnboarding: getStoredBool('aeio_first_run_completed', false),

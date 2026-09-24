@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { ChatMessage as MessageType, useChatStore } from '../../stores/chatStore';
 import logo from '../../assets/logo.png';
-import { User, Brain, Check, Plus, X, ChevronDown, ChevronUp, Lock, Monitor } from 'lucide-react';
+import { User, Brain, Check, Plus, X, ChevronDown, ChevronUp, Lock, Monitor, Cpu } from 'lucide-react';
 import { ToolApprovalCard } from './ToolApproval';
 
 interface Props {
@@ -18,6 +18,7 @@ export const ChatMessageItem: React.FC<Props> = ({ message }) => {
     denyToolExecution,
   } = useChatStore();
   const [showRecalled, setShowRecalled] = useState(false);
+  const [showReasoning, setShowReasoning] = useState(false);
 
   const hasRecalled = !isUser && message.recalledMemories && message.recalledMemories.length > 0;
   const hasProposed = !isUser && message.proposedMemories && message.proposedMemories.length > 0;
@@ -91,6 +92,31 @@ export const ChatMessageItem: React.FC<Props> = ({ message }) => {
                   <Monitor size={9} className="tag-micro-icon" />
                   <span>{message.activeWindowContext.app_name}</span>
                 </span>
+              )}
+            </div>
+          )}
+
+          {/* Qwen3-Coder Internal Thought Process / Reasoning */}
+          {!isUser && message.reasoning && (
+            <div className="reasoning-disclosure">
+              <button
+                type="button"
+                className="reasoning-toggle-btn"
+                onClick={() => setShowReasoning(!showReasoning)}
+                title="Toggle internal reasoning chain"
+              >
+                <Cpu size={10} className="reasoning-icon" />
+                <span>Thought process</span>
+                <span className="reasoning-wordcount">
+                  ({message.reasoning.split(/\s+/).filter(Boolean).length} words)
+                </span>
+                {showReasoning ? <ChevronUp size={10} /> : <ChevronDown size={10} />}
+              </button>
+
+              {showReasoning && (
+                <div className="reasoning-drawer">
+                  <pre className="reasoning-content">{message.reasoning}</pre>
+                </div>
               )}
             </div>
           )}

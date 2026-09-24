@@ -6,6 +6,7 @@ import {
   hasApiKey,
 } from '../../lib/ipc';
 import { ollamaProvider } from '../../lib/providers/ollama';
+import { qwenCoderProvider } from '../../lib/providers/qwenCoder';
 import {
   X,
   Cpu,
@@ -74,9 +75,10 @@ export const SettingsPanel: React.FC<Props> = ({ isOpen, onClose, onOpenOnboardi
     setIsCheckingOllama(true);
     setOllamaStatus(null);
     try {
-      const res = await ollamaProvider.checkHealth();
+      const provider = activeProvider === 'qwen-coder' ? qwenCoderProvider : ollamaProvider;
+      const res = await provider.checkHealth();
       if (res.ok) {
-        setOllamaStatus('Online — Ollama daemon running and accessible');
+        setOllamaStatus(res.message || 'Online — Local inference daemon running and accessible');
       } else {
         setOllamaStatus(res.message || 'Offline — Could not reach localhost:11434');
       }
@@ -170,7 +172,31 @@ export const SettingsPanel: React.FC<Props> = ({ isOpen, onClose, onOpenOnboardi
           <div className="settings-section">
             <h3 className="section-label">Active Provider</h3>
             <div className="provider-card-grid">
-              {/* Ollama Card */}
+              {/* Qwen3-Coder Card (Primary) */}
+              <div
+                className={`provider-option-card ${
+                  activeProvider === 'qwen-coder' ? 'selected' : ''
+                }`}
+                onClick={() => {
+                  setActiveProvider('qwen-coder');
+                  if (!ollamaModel || ollamaModel === 'llama3.2') {
+                    setOllamaModel('qwen3-coder');
+                  }
+                }}
+              >
+                <div className="provider-option-header">
+                  <div className="provider-option-title">
+                    <Cpu size={15} />
+                    <span>Qwen3-Coder</span>
+                  </div>
+                  <span className="badge-offline">Primary Local</span>
+                </div>
+                <p className="provider-option-desc">
+                  Optimized for code generation, 32k context, tool calling, and agentic desktop execution.
+                </p>
+              </div>
+
+              {/* Ollama Generic Card */}
               <div
                 className={`provider-option-card ${
                   activeProvider === 'ollama' ? 'selected' : ''
@@ -185,7 +211,7 @@ export const SettingsPanel: React.FC<Props> = ({ isOpen, onClose, onOpenOnboardi
                   <span className="badge-offline">Local First</span>
                 </div>
                 <p className="provider-option-desc">
-                  100% offline, zero data leaves your machine. Default.
+                  Run custom local weights (Llama 3.2, Mistral, DeepSeek) via Ollama.
                 </p>
               </div>
 
@@ -204,7 +230,7 @@ export const SettingsPanel: React.FC<Props> = ({ isOpen, onClose, onOpenOnboardi
                   <span className="badge-cloud">BYOK</span>
                 </div>
                 <p className="provider-option-desc">
-                  Anthropic Claude 3.5 Sonnet for deep reasoning & coding.
+                  Anthropic Claude 3.5 Sonnet for frontier reasoning & coding.
                 </p>
               </div>
 
@@ -229,10 +255,10 @@ export const SettingsPanel: React.FC<Props> = ({ isOpen, onClose, onOpenOnboardi
             </div>
           </div>
 
-          {/* Local Ollama Settings */}
+          {/* Local Model Configuration */}
           <div className="settings-section">
             <div className="section-header-flex">
-              <h3 className="section-label">Ollama Configuration</h3>
+              <h3 className="section-label">Local Model Configuration</h3>
               <button
                 className="ollama-refresh-btn"
                 onClick={testOllama}
@@ -247,17 +273,53 @@ export const SettingsPanel: React.FC<Props> = ({ isOpen, onClose, onOpenOnboardi
             </div>
 
             <div className="settings-input-group">
-              <label>Default Model Name</label>
+              <label>Model Tag / Name</label>
               <div className="input-with-action">
                 <input
                   type="text"
                   value={ollamaModel}
                   onChange={(e) => setOllamaModel(e.target.value)}
-                  placeholder="e.g. llama3.2, llama3.1, mistral, qwen2.5"
+                  placeholder="e.g. qwen3-coder, qwen2.5-coder:7b, llama3.2"
                 />
               </div>
-              <span className="input-hint">
-                Installed models can be pulled anytime via <code>ollama pull &lt;model&gt;</code>
+
+              {/* Quick Model Presets */}
+              <div className="hotkey-preset-section" style={{ marginTop: '8px' }}>
+                <span className="field-label" style={{ fontSize: '11px', color: 'var(--aeio-text-muted)' }}>Quick Presets:</span>
+                <div className="preset-buttons-row" style={{ display: 'flex', gap: '6px', marginTop: '4px', flexWrap: 'wrap' }}>
+                  <button
+                    type="button"
+                    className={`preset-btn ${ollamaModel === 'qwen3-coder' ? 'active' : ''}`}
+                    onClick={() => setOllamaModel('qwen3-coder')}
+                  >
+                    qwen3-coder
+                  </button>
+                  <button
+                    type="button"
+                    className={`preset-btn ${ollamaModel === 'qwen2.5-coder:7b' ? 'active' : ''}`}
+                    onClick={() => setOllamaModel('qwen2.5-coder:7b')}
+                  >
+                    qwen2.5-coder:7b
+                  </button>
+                  <button
+                    type="button"
+                    className={`preset-btn ${ollamaModel === 'qwen2.5-coder:14b' ? 'active' : ''}`}
+                    onClick={() => setOllamaModel('qwen2.5-coder:14b')}
+                  >
+                    qwen2.5-coder:14b
+                  </button>
+                  <button
+                    type="button"
+                    className={`preset-btn ${ollamaModel === 'llama3.2' ? 'active' : ''}`}
+                    onClick={() => setOllamaModel('llama3.2')}
+                  >
+                    llama3.2
+                  </button>
+                </div>
+              </div>
+
+              <span className="input-hint" style={{ marginTop: '6px' }}>
+                Weights are stored locally. Pull with <code>ollama pull {ollamaModel || 'qwen3-coder'}</code>
               </span>
             </div>
 

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useSettingsStore } from '../../stores/settingsStore';
-import { ollamaProvider } from '../../lib/providers/ollama';
+import { qwenCoderProvider } from '../../lib/providers/qwenCoder';
 import { openTarget, setApiKey, hasApiKey } from '../../lib/ipc';
 import {
   Cpu,
@@ -40,6 +40,7 @@ export const OnboardingModal: React.FC<Props> = ({ isOpen, onClose }) => {
   const [ollamaHealthy, setOllamaHealthy] = useState<boolean | null>(null);
   const [ollamaError, setOllamaError] = useState<string | null>(null);
   const [copiedOllamaCmd, setCopiedOllamaCmd] = useState(false);
+  const [copiedPullCmd, setCopiedPullCmd] = useState(false);
   const [skippedLocalMode, setSkippedLocalMode] = useState(false);
 
   // Step 2: Hotkey Rebinding
@@ -64,14 +65,14 @@ export const OnboardingModal: React.FC<Props> = ({ isOpen, onClose }) => {
     setIsCheckingOllama(true);
     setOllamaError(null);
     try {
-      const res = await ollamaProvider.checkHealth();
+      const res = await qwenCoderProvider.checkHealth();
       setOllamaHealthy(res.ok);
       if (!res.ok) {
-        setOllamaError(res.message || 'Could not connect to Ollama on localhost:11434');
+        setOllamaError(res.message || 'Could not connect to local AI runtime on localhost:11434');
       }
     } catch {
       setOllamaHealthy(false);
-      setOllamaError('Could not connect to Ollama on localhost:11434');
+      setOllamaError('Could not connect to local AI runtime on localhost:11434');
     } finally {
       setIsCheckingOllama(false);
     }
@@ -93,6 +94,14 @@ export const OnboardingModal: React.FC<Props> = ({ isOpen, onClose }) => {
       await navigator.clipboard.writeText('ollama serve');
       setCopiedOllamaCmd(true);
       setTimeout(() => setCopiedOllamaCmd(false), 2000);
+    } catch {}
+  };
+
+  const copyPullQwen = async () => {
+    try {
+      await navigator.clipboard.writeText('ollama run qwen3-coder');
+      setCopiedPullCmd(true);
+      setTimeout(() => setCopiedPullCmd(false), 2000);
     } catch {}
   };
 
@@ -194,16 +203,16 @@ export const OnboardingModal: React.FC<Props> = ({ isOpen, onClose }) => {
 
         {/* Step Content */}
         <div className="onboarding-body">
-          {/* STEP 1: OLLAMA DETECTION */}
+          {/* STEP 1: QWEN3-CODER DETECTION */}
           {step === 1 && (
             <div className="onboarding-step-panel">
               <div className="step-badge-tag">
                 <Cpu size={12} />
-                <span>Local-First Foundation</span>
+                <span>Primary Model: Qwen3-Coder</span>
               </div>
-              <h2 className="step-title">Detecting local Ollama runtime</h2>
+              <h2 className="step-title">Detecting local Qwen3-Coder runtime</h2>
               <p className="step-subtitle">
-                Aeio is designed to live on your desktop and run models locally without third-party server dependency.
+                Aeio uses Qwen3-Coder as its primary model for code generation, 32k context, tool calling, and local agentic execution.
               </p>
 
               <div className="step-card">
@@ -216,18 +225,34 @@ export const OnboardingModal: React.FC<Props> = ({ isOpen, onClose }) => {
                   <div className="ollama-detect-status success">
                     <Check size={14} className="status-icon-check" />
                     <div>
-                      <div className="status-headline">Ollama is running locally</div>
-                      <div className="status-subline">Active model: {ollamaModel}. Zero data leaves your machine.</div>
+                      <div className="status-headline">Local AI engine is running</div>
+                      <div className="status-subline">Active model: {ollamaModel || 'qwen3-coder'}. 100% offline local inference.</div>
                     </div>
                   </div>
                 ) : (
                   <div className="ollama-detect-status warning">
-                    <div className="status-headline">Ollama daemon is not detected</div>
+                    <div className="status-headline">Local runtime is not detected</div>
                     <div className="status-subline">{ollamaError}</div>
 
                     <div className="ollama-remedy-box">
                       <div className="remedy-instruction">
-                        1. Start Ollama from your terminal:
+                        1. Start local engine & pull Qwen3-Coder:
+                      </div>
+                      <div className="code-snippet-row">
+                        <code>ollama run qwen3-coder</code>
+                        <button
+                          type="button"
+                          className="copy-btn"
+                          onClick={copyPullQwen}
+                          title="Copy command"
+                        >
+                          {copiedPullCmd ? <Check size={12} /> : <Copy size={12} />}
+                          <span>{copiedPullCmd ? 'Copied' : 'Copy'}</span>
+                        </button>
+                      </div>
+
+                      <div className="remedy-instruction">
+                        2. Or launch background daemon:
                       </div>
                       <div className="code-snippet-row">
                         <code>ollama serve</code>

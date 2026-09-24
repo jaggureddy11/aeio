@@ -629,6 +629,63 @@ html, body, #root {
   color: var(--aeio-text-muted);
 }
 
+/* Qwen3-Coder Internal Reasoning & Chain of Thought */
+.reasoning-disclosure {
+  margin-bottom: 8px;
+}
+
+.reasoning-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--aeio-border-subtle);
+  border-radius: 4px;
+  padding: 2px 7px;
+  font-size: 10px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  color: var(--aeio-text-muted);
+  cursor: pointer;
+  transition: all var(--aeio-transition);
+}
+
+.reasoning-toggle-btn:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--aeio-text-secondary);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+.reasoning-icon {
+  color: var(--aeio-primary);
+}
+
+.reasoning-wordcount {
+  font-size: 9px;
+  opacity: 0.7;
+}
+
+.reasoning-drawer {
+  margin-top: 6px;
+  margin-bottom: 6px;
+  background: rgba(0, 0, 0, 0.45);
+  border-left: 2px solid rgba(240, 86, 35, 0.5);
+  border-radius: 4px;
+  padding: 6px 10px;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.reasoning-content {
+  margin: 0;
+  padding: 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 10.5px;
+  line-height: 1.5;
+  color: #94a3b8;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 .markdown-content p {
   margin-bottom: 6px;
 }

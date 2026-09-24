@@ -1,17 +1,19 @@
 import { ChatOptions, LLMProvider, ProviderMessage } from './types';
+import { qwenCoderProvider } from './qwenCoder';
 import { ollamaProvider } from './ollama';
 import { claudeProvider } from './claude';
 import { openAIProvider } from './openai';
 import { LLMProviderType, useSettingsStore } from '../../stores/settingsStore';
 
 export const providers: Record<LLMProviderType, LLMProvider> = {
+  'qwen-coder': qwenCoderProvider,
   ollama: ollamaProvider,
   claude: claudeProvider,
   openai: openAIProvider,
 };
 
 export function getProvider(type: LLMProviderType): LLMProvider {
-  return providers[type] || ollamaProvider;
+  return providers[type] || qwenCoderProvider;
 }
 
 export function getActiveProvider(): LLMProvider {
@@ -49,7 +51,7 @@ export async function chatWithActiveProvider(
     ...options,
     model:
       options?.model ||
-      (provider.id === 'ollama' ? settings.ollamaModel : undefined),
+      (provider.id === 'qwen-coder' || provider.id === 'ollama' ? settings.ollamaModel : undefined),
     apiKey: resolvedApiKey,
   };
 
