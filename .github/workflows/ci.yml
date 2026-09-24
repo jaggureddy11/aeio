@@ -32,6 +32,9 @@ jobs:
       - name: Install Frontend Dependencies
         run: npm ci
 
+      - name: Fetch and Verify Semantic Models
+        run: bash scripts/fetch-models.sh
+
       - name: Cargo Check Backend
         run: cargo check --manifest-path src-tauri/Cargo.toml
 
