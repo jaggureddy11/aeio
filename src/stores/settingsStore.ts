@@ -12,6 +12,7 @@ export interface SettingsState {
   ambientProactive: boolean;
   hasCompletedOnboarding: boolean;
   hotkey: string;
+  telemetryOptIn: boolean;
   setActiveTab: (tab: ActiveTab) => void;
   setActiveProvider: (provider: LLMProviderType) => void;
   setOllamaModel: (model: string) => void;
@@ -19,6 +20,7 @@ export interface SettingsState {
   setAmbientProactive: (enabled: boolean) => void;
   setHasCompletedOnboarding: (completed: boolean) => void;
   setHotkey: (hotkey: string) => void;
+  setTelemetryOptIn: (enabled: boolean) => void;
 }
 
 const getStoredBool = (key: string, defaultVal: boolean): boolean => {
@@ -47,6 +49,7 @@ export const useSettingsStore = create<SettingsState>((set) => ({
   ambientProactive: getStoredBool('aeio_ambient_proactive', false),
   hasCompletedOnboarding: getStoredBool('aeio_first_run_completed', false),
   hotkey: getStoredString('aeio_global_hotkey', 'CommandOrControl+Shift+Space'),
+  telemetryOptIn: getStoredBool('aeio_telemetry_opt_in', false),
   setActiveTab: (activeTab) => set({ activeTab }),
   setActiveProvider: (activeProvider) => set({ activeProvider }),
   setOllamaModel: (ollamaModel) => set({ ollamaModel }),
@@ -75,4 +78,11 @@ export const useSettingsStore = create<SettingsState>((set) => ({
     } catch {}
     set({ hotkey: clean });
   },
+  setTelemetryOptIn: (enabled: boolean) => {
+    try {
+      localStorage.setItem('aeio_telemetry_opt_in', String(enabled));
+    } catch {}
+    set({ telemetryOptIn: enabled });
+  },
 }));
+

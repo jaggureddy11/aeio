@@ -4,6 +4,8 @@ import {
   setApiKey,
   deleteApiKey,
   hasApiKey,
+  getLocalLogs,
+  clearLocalLogs,
 } from '../../lib/ipc';
 import { ollamaProvider } from '../../lib/providers/ollama';
 import { qwenCoderProvider } from '../../lib/providers/qwenCoder';
@@ -19,6 +21,8 @@ import {
   Sliders,
   AppWindow,
   Compass,
+  Activity,
+  FileText,
 } from 'lucide-react';
 
 interface Props {
@@ -34,11 +38,13 @@ export const SettingsPanel: React.FC<Props> = ({ isOpen, onClose, onOpenOnboardi
     activeWindowAwareness,
     ambientProactive,
     hotkey,
+    telemetryOptIn,
     setActiveProvider,
     setOllamaModel,
     setActiveWindowAwareness,
     setAmbientProactive,
     setHotkey,
+    setTelemetryOptIn,
   } = useSettingsStore();
 
   const [hotkeyInput, setHotkeyInput] = useState(hotkey);
@@ -52,6 +58,9 @@ export const SettingsPanel: React.FC<Props> = ({ isOpen, onClose, onOpenOnboardi
   const [ollamaStatus, setOllamaStatus] = useState<string | null>(null);
   const [isCheckingOllama, setIsCheckingOllama] = useState(false);
   const [saveSuccessMsg, setSaveSuccessMsg] = useState<string | null>(null);
+
+  const [localLogs, setLocalLogs] = useState<string | null>(null);
+  const [isViewingLogs, setIsViewingLogs] = useState(false);
 
   useEffect(() => {
     if (isOpen === undefined || isOpen === true) {
@@ -132,6 +141,31 @@ export const SettingsPanel: React.FC<Props> = ({ isOpen, onClose, onOpenOnboardi
       showSuccess('OpenAI API key removed from OS Keychain');
     } catch (err: unknown) {
       alert(`Failed to remove key: ${err}`);
+    }
+  };
+
+  const handleToggleLogs = async () => {
+    if (!isViewingLogs) {
+      try {
+        const logs = await getLocalLogs();
+        setLocalLogs(logs);
+        setIsViewingLogs(true);
+      } catch (err) {
+        setLocalLogs(`Failed to read logs: ${err}`);
+        setIsViewingLogs(true);
+      }
+    } else {
+      setIsViewingLogs(false);
+    }
+  };
+
+  const handleClearLogs = async () => {
+    try {
+      await clearLocalLogs();
+      setLocalLogs('No local error logs found.');
+      showSuccess('Local error log file cleared');
+    } catch (err) {
+      alert(`Failed to clear logs: ${err}`);
     }
   };
 
@@ -558,6 +592,94 @@ export const SettingsPanel: React.FC<Props> = ({ isOpen, onClose, onOpenOnboardi
                 />
                 <span className="slider-round" />
               </label>
+            </div>
+          </div>
+
+          {/* Privacy-Safe Observability & Diagnostics (Phase 4 Opt-in) */}
+          <div className="settings-section">
+            <h3 className="section-label">
+              <div className="label-with-icon">
+                <Activity size={14} />
+                <span>Privacy-Safe Observability & Diagnostics (Opt-in)</span>
+              </div>
+            </h3>
+            <div className="toggle-setting-card">
+              <div className="toggle-text-block">
+                <strong>Anonymous Crash & Error Reporting</strong>
+                <p>
+                  Helps diagnose bugs and unexpected runtime panics. When enabled, reports only sanitized error codes, OS architecture, and sanitized stack traces.
+                </p>
+                <div className="privacy-callout">
+                  <ShieldCheck size={12} />
+                  <span>Strictly opt-in (Default OFF). ZERO memories, ZERO chat messages, ZERO API keys, and ZERO usernames are ever collected or sent.</span>
+                </div>
+              </div>
+              <label className="switch-toggle" aria-label="Toggle anonymous crash and error reporting">
+                <input
+                  type="checkbox"
+                  role="switch"
+                  aria-checked={telemetryOptIn}
+                  checked={telemetryOptIn}
+                  onChange={(e) => setTelemetryOptIn(e.target.checked)}
+                />
+                <span className="slider-round" />
+              </label>
+            </div>
+
+            {/* Local Disk Log Transparency Box */}
+            <div className="shortcut-box" style={{ marginTop: '10px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div>
+                  <div style={{ fontSize: '12px', fontWeight: 500, color: 'var(--aeio-text-primary)' }}>
+                    Local Error Log File
+                  </div>
+                  <div style={{ fontSize: '11px', color: 'var(--aeio-text-muted)', marginTop: '2px' }}>
+                    Stored locally at <code>~/.aeio/logs/errors.log</code> (auto-rotated at 2MB). Always active offline even when telemetry is disabled.
+                  </div>
+                </div>
+                <div style={{ display: 'flex', gap: '6px' }}>
+                  <button
+                    type="button"
+                    className="action-btn secondary"
+                    style={{ padding: '5px 10px', fontSize: '11px', width: 'auto' }}
+                    onClick={handleToggleLogs}
+                    aria-label="Inspect local error log"
+                  >
+                    <FileText size={12} />
+                    <span>{isViewingLogs ? 'Hide Log' : 'Inspect Log'}</span>
+                  </button>
+                  {isViewingLogs && (
+                    <button
+                      type="button"
+                      className="action-btn secondary"
+                      style={{ padding: '5px 10px', fontSize: '11px', width: 'auto', color: '#ff6b6b' }}
+                      onClick={handleClearLogs}
+                      aria-label="Clear local error log"
+                    >
+                      <Trash2 size={12} />
+                      <span>Clear</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {isViewingLogs && (
+                <div className="local-logs-viewer" style={{
+                  marginTop: '10px',
+                  padding: '10px',
+                  borderRadius: '6px',
+                  background: 'rgba(0, 0, 0, 0.4)',
+                  border: '1px solid var(--aeio-border-subtle)',
+                  maxHeight: '160px',
+                  overflowY: 'auto',
+                  fontFamily: 'monospace',
+                  fontSize: '11px',
+                  whiteSpace: 'pre-wrap',
+                  color: 'var(--aeio-text-secondary)',
+                }}>
+                  {localLogs}
+                </div>
+              )}
             </div>
           </div>
 

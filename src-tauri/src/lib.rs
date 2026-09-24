@@ -4,6 +4,7 @@ use tauri_plugin_global_shortcut::{Builder as GlobalShortcutBuilder, ShortcutSta
 pub mod commands;
 pub mod keychain;
 pub mod memory;
+pub mod observability;
 pub mod tools;
 
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
@@ -47,6 +48,7 @@ pub fn run() {
             let app_data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
             let memory_manager = memory::MemoryManager::new(&app_data_dir)?;
             app.manage(memory_manager);
+            app.manage(observability::ErrorLogger::new());
 
             if let Some(window) = app.get_webview_window("main") {
                 let _ = window.center();
@@ -86,6 +88,9 @@ pub fn run() {
             commands::get_active_workspace,
             commands::open_target,
             commands::get_active_window,
+            commands::record_error,
+            commands::get_local_logs,
+            commands::clear_local_logs,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

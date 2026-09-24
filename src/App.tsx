@@ -6,7 +6,7 @@ import { SettingsPanel } from './components/settings';
 import { WorkspaceSwitcher } from './components/workspace/WorkspaceSwitcher';
 import { OnboardingModal } from './components/onboarding';
 import { useSettingsStore } from './stores/settingsStore';
-import { hideWindow, ping } from './lib/ipc';
+import { hideWindow, ping, recordError } from './lib/ipc';
 import { MessageSquare, Brain, Settings } from 'lucide-react';
 import './App.css';
 
@@ -24,6 +24,35 @@ export const App: React.FC = () => {
 
   const [showOnboarding, setShowOnboarding] = useState(!hasCompletedOnboarding);
   const [isInitializing, setIsInitializing] = useState(true);
+
+  // Global error & unhandled rejection listener for privacy-safe local logging
+  useEffect(() => {
+    const handleError = (event: ErrorEvent) => {
+      const optIn = useSettingsStore.getState().telemetryOptIn;
+      recordError(
+        event.error?.name || 'UncaughtError',
+        event.message || 'Unknown window error',
+        event.error?.stack,
+        optIn
+      ).catch(() => {});
+    };
+
+    const handleRejection = (event: PromiseRejectionEvent) => {
+      const optIn = useSettingsStore.getState().telemetryOptIn;
+      const reason = event.reason;
+      const message = typeof reason === 'string' ? reason : reason?.message || JSON.stringify(reason);
+      const stack = reason instanceof Error ? reason.stack : undefined;
+      recordError('UnhandledPromiseRejection', message, stack, optIn).catch(() => {});
+    };
+
+    window.addEventListener('error', handleError);
+    window.addEventListener('unhandledrejection', handleRejection);
+
+    return () => {
+      window.removeEventListener('error', handleError);
+      window.removeEventListener('unhandledrejection', handleRejection);
+    };
+  }, []);
 
   useEffect(() => {
     let mounted = true;

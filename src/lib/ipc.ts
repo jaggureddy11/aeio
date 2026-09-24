@@ -231,6 +231,28 @@ export async function ping(): Promise<string> {
   return invoke<string>('ping');
 }
 
+export async function recordError(
+  errorName: string,
+  message: string,
+  stack?: string,
+  optIn?: boolean
+): Promise<void> {
+  return invoke<void>('record_error', {
+    errorName,
+    message,
+    stack: stack ?? null,
+    optIn: optIn ?? false,
+  });
+}
+
+export async function getLocalLogs(): Promise<string> {
+  return invoke<string>('get_local_logs');
+}
+
+export async function clearLocalLogs(): Promise<void> {
+  return invoke<void>('clear_local_logs');
+}
+
 export async function hideWindow(): Promise<void> {
   try {
     const { getCurrentWebviewWindow } = await import('@tauri-apps/api/webviewWindow');
