@@ -93,6 +93,7 @@ export const MemoryPanel: React.FC = () => {
           <input
             type="text"
             className="memory-search-input"
+            aria-label="Search memories"
             placeholder={
               crossWorkspaceSearch
                 ? 'Global search across ALL workspaces...'
@@ -103,10 +104,12 @@ export const MemoryPanel: React.FC = () => {
           />
           {searchQuery && (
             <button
+              type="button"
               className="clear-search-btn"
               onClick={() => setSearchQuery('')}
+              aria-label="Clear memory search filter"
             >
-              <X size={12} />
+              <X size={12} aria-hidden="true" />
             </button>
           )}
         </div>
@@ -117,29 +120,39 @@ export const MemoryPanel: React.FC = () => {
             className={`global-search-toggle-btn ${crossWorkspaceSearch ? 'active' : ''}`}
             onClick={() => setCrossWorkspaceSearch(!crossWorkspaceSearch)}
             title="Search memories across all workspaces (Tier 4)"
+            aria-pressed={crossWorkspaceSearch}
+            aria-label={`Toggle global search. Currently ${crossWorkspaceSearch ? 'searching all workspaces' : 'searching active workspace only'}`}
           >
-            <Globe size={12} />
+            <Globe size={12} aria-hidden="true" />
             <span>{crossWorkspaceSearch ? 'All Workspaces' : activeWorkspace?.name || 'Workspace'}</span>
           </button>
 
           <div className="export-menu-container">
             <button
+              type="button"
               className="export-memory-btn"
               onClick={() => setShowExportMenu(!showExportMenu)}
               title="Export stored memories (Markdown / JSON)"
+              aria-haspopup="true"
+              aria-expanded={showExportMenu}
+              aria-label="Export stored memories"
             >
-              <Download size={12} />
+              <Download size={12} aria-hidden="true" />
               <span>Export</span>
             </button>
             {showExportMenu && (
-              <div className="export-dropdown-menu">
+              <div className="export-dropdown-menu" role="menu">
                 <button
+                  type="button"
+                  role="menuitem"
                   className="export-menu-item"
                   onClick={() => handleExport('markdown', true)}
                 >
                   Export {activeWorkspace?.name || 'Current'} (.md)
                 </button>
                 <button
+                  type="button"
+                  role="menuitem"
                   className="export-menu-item"
                   onClick={() => handleExport('json', true)}
                 >
@@ -147,12 +160,16 @@ export const MemoryPanel: React.FC = () => {
                 </button>
                 <div className="export-menu-divider" />
                 <button
+                  type="button"
+                  role="menuitem"
                   className="export-menu-item"
                   onClick={() => handleExport('markdown', false)}
                 >
                   Export All Workspaces (.md)
                 </button>
                 <button
+                  type="button"
+                  role="menuitem"
                   className="export-menu-item"
                   onClick={() => handleExport('json', false)}
                 >
@@ -163,11 +180,14 @@ export const MemoryPanel: React.FC = () => {
           </div>
 
           <button
+            type="button"
             className="add-memory-btn"
             onClick={() => setIsAdding(!isAdding)}
             title="Add a new memory"
+            aria-expanded={isAdding}
+            aria-label="Add new memory"
           >
-            <Plus size={13} />
+            <Plus size={13} aria-hidden="true" />
             <span>New Memory</span>
           </button>
         </div>
@@ -175,8 +195,8 @@ export const MemoryPanel: React.FC = () => {
 
       {/* Surfaced SQLite / Disk Storage Error (Phase A: Resilience) */}
       {error && (
-        <div className="memory-error-banner animate-fadeIn">
-          <AlertTriangle size={14} className="memory-error-icon" />
+        <div className="memory-error-banner animate-fadeIn" role="alert">
+          <AlertTriangle size={14} className="memory-error-icon" aria-hidden="true" />
           <div className="memory-error-info">
             <span className="memory-error-title">Storage Warning: </span>
             <span className="memory-error-text">{error}</span>
@@ -186,17 +206,22 @@ export const MemoryPanel: React.FC = () => {
             className="memory-error-dismiss-btn"
             onClick={clearError}
             title="Dismiss error"
+            aria-label="Dismiss storage warning"
           >
-            <X size={12} />
+            <X size={12} aria-hidden="true" />
           </button>
         </div>
       )}
 
       {/* Category Filter Pills */}
-      <div className="category-pills">
+      <div className="category-pills" role="tablist" aria-label="Memory category filters">
         {CATEGORIES.map((cat) => (
           <button
             key={cat.id}
+            type="button"
+            role="tab"
+            aria-selected={activeCategory === cat.id}
+            aria-label={`Filter by ${cat.label}`}
             className={`category-pill ${activeCategory === cat.id ? 'active' : ''}`}
             onClick={() => setActiveCategory(cat.id)}
           >
@@ -214,6 +239,7 @@ export const MemoryPanel: React.FC = () => {
               className="category-select"
               value={newCategory}
               onChange={(e) => setNewCategory(e.target.value as MemoryCategory)}
+              aria-label="Category for new memory"
             >
               <option value="fact">Fact</option>
               <option value="preference">Preference</option>
@@ -235,6 +261,7 @@ export const MemoryPanel: React.FC = () => {
             }}
             rows={2}
             autoFocus
+            aria-label="New memory text content"
           />
 
           <div className="add-memory-actions">
@@ -244,6 +271,7 @@ export const MemoryPanel: React.FC = () => {
                 setNewContent('');
                 setIsAdding(false);
               }}
+              aria-label="Cancel adding memory"
             >
               Cancel
             </button>
@@ -251,6 +279,7 @@ export const MemoryPanel: React.FC = () => {
               className="btn-save"
               onClick={handleCreate}
               disabled={!newContent.trim()}
+              aria-label="Save memory"
             >
               Save Memory
             </button>
@@ -277,6 +306,7 @@ export const MemoryPanel: React.FC = () => {
                 className="starter-chip"
                 onClick={() => setSearchQuery('')}
                 style={{ marginTop: '8px' }}
+                aria-label="Clear search filter"
               >
                 <X size={11} />
                 <span>Clear search filter</span>
@@ -286,6 +316,7 @@ export const MemoryPanel: React.FC = () => {
               <button
                 className="starter-chip"
                 onClick={() => setIsAdding(true)}
+                aria-label="Add your first memory"
               >
                 <Plus size={11} />
                 <span>Add your first memory</span>

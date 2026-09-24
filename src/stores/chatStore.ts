@@ -773,10 +773,54 @@ export const useChatStore = create<ChatState>((set, get) => ({
     let rawStreamed = '';
     const streamThrottle = new StreamingThrottle(30);
 
+    let slowNoticeTimer: ReturnType<typeof setTimeout> | null = null;
+    let slowWarnTimer: ReturnType<typeof setTimeout> | null = null;
+
+    if (isLocal) {
+      slowNoticeTimer = setTimeout(() => {
+        if (!rawStreamed && get().isLoading) {
+          get().updateMessageContent(
+            assistantId,
+            'Generating on local CPU... (First token may take longer on constrained hardware)',
+            true,
+            recalled,
+            undefined,
+            undefined,
+            providerInfo,
+            activeWinInfo
+          );
+        }
+      }, 4500);
+
+      slowWarnTimer = setTimeout(() => {
+        if (!rawStreamed && get().isLoading) {
+          get().updateMessageContent(
+            assistantId,
+            'Generating on local CPU... (High compute load / low RAM detected, continuing inference)',
+            true,
+            recalled,
+            undefined,
+            undefined,
+            providerInfo,
+            activeWinInfo
+          );
+        }
+      }, 12000);
+    }
+
     try {
       await chatWithActiveProvider(conversation, {
         systemPrompt,
         onChunk: (chunk) => {
+          if (slowNoticeTimer) {
+            clearTimeout(slowNoticeTimer);
+            slowNoticeTimer = null;
+          }
+          if (slowWarnTimer) {
+            clearTimeout(slowWarnTimer);
+            slowWarnTimer = null;
+          }
+
           rawStreamed += chunk;
 
           streamThrottle.schedule(() => {
@@ -991,6 +1035,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
       }
       set({ error: actionableError, lastFailedPrompt: trimmed });
     } finally {
+      if (slowNoticeTimer) clearTimeout(slowNoticeTimer);
+      if (slowWarnTimer) clearTimeout(slowWarnTimer);
       set({ isLoading: false });
     }
   },

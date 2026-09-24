@@ -1,5 +1,6 @@
 pub mod db;
 pub mod models;
+pub mod embeddings;
 
 use std::path::Path;
 use std::sync::Arc;

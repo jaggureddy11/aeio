@@ -6,7 +6,7 @@ import { SettingsPanel } from './components/settings';
 import { WorkspaceSwitcher } from './components/workspace/WorkspaceSwitcher';
 import { OnboardingModal } from './components/onboarding';
 import { useSettingsStore } from './stores/settingsStore';
-import { hideWindow } from './lib/ipc';
+import { hideWindow, ping } from './lib/ipc';
 import { MessageSquare, Brain, Settings } from 'lucide-react';
 import './App.css';
 
@@ -23,6 +23,25 @@ export const App: React.FC = () => {
   } = useSettingsStore();
 
   const [showOnboarding, setShowOnboarding] = useState(!hasCompletedOnboarding);
+  const [isInitializing, setIsInitializing] = useState(true);
+
+  useEffect(() => {
+    let mounted = true;
+    const checkInit = async () => {
+      try {
+        await ping();
+        if (mounted) setIsInitializing(false);
+      } catch (err) {
+        if (mounted) {
+          setTimeout(checkInit, 150);
+        }
+      }
+    };
+    checkInit();
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   useEffect(() => {
     const handleGlobalKeyDown = (e: KeyboardEvent) => {
@@ -33,15 +52,42 @@ export const App: React.FC = () => {
         }
         hideWindow();
       }
+
+      // Keyboard navigation: Cmd/Ctrl + 1 / 2 / 3 for immediate mouse-free tab switching
+      if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey) {
+        if (e.key === '1') {
+          e.preventDefault();
+          setActiveTab('chat');
+        } else if (e.key === '2') {
+          e.preventDefault();
+          setActiveTab('memory');
+        } else if (e.key === '3') {
+          e.preventDefault();
+          setActiveTab('settings');
+        }
+      }
     };
     window.addEventListener('keydown', handleGlobalKeyDown);
     return () => window.removeEventListener('keydown', handleGlobalKeyDown);
-  }, [showOnboarding]);
+  }, [showOnboarding, setActiveTab]);
+
+  if (isInitializing) {
+    return (
+      <div className="app-container" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', background: '#090a0c' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '14px' }}>
+          <img src={logo} alt="Aeio logo" style={{ width: '40px', height: '40px', opacity: 0.8, animation: 'pulse 1.8s infinite ease-in-out' }} />
+          <span style={{ fontSize: '12px', color: 'rgba(255, 255, 255, 0.45)', fontFamily: 'Inter, monospace', letterSpacing: '0.04em' }}>
+            Initializing local memory vault...
+          </span>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="app-container">
       {/* Draggable Utility Header */}
-      <header className="app-header" data-tauri-drag-region>
+      <header className="app-header" data-tauri-drag-region role="banner">
         <div className="brand-section">
           <div className="brand-logo-frame">
             <img src={logo} alt="Aeio logo" className="brand-logo-img" />
@@ -49,44 +95,53 @@ export const App: React.FC = () => {
           <span className="brand-title">aeio</span>
           <div className="header-divider" />
           <WorkspaceSwitcher />
-          <div className="status-badge" title="Active model status">
+          <div className="status-badge" title="Active model status" aria-label={`Active model: ${activeProvider === 'ollama' ? ollamaModel : activeProvider}`}>
             <span className="status-dot"></span>
             <span className="status-label">{activeProvider === 'ollama' ? ollamaModel : activeProvider}</span>
           </div>
           {ambientProactive && (
-            <span className="ambient-active-badge" title="Ambient pattern noticing is enabled (Tier 5 opt-in)">
+            <span className="ambient-active-badge" title="Ambient pattern noticing is enabled (Tier 5 opt-in)" aria-label="Ambient noticing active">
               <span className="ambient-pulse-dot" />
               ambient
             </span>
           )}
           {activeWindowAwareness && (
-            <span className="host-aware-badge" title="Active window awareness enabled (Tier 2 opt-in)">
+            <span className="host-aware-badge" title="Active window awareness enabled (Tier 2 opt-in)" aria-label="Active window awareness enabled">
               window aware
             </span>
           )}
         </div>
 
-        <nav className="header-nav">
+        <nav className="header-nav" role="tablist" aria-label="Main Navigation">
           <button
+            role="tab"
+            aria-selected={activeTab === 'chat'}
+            aria-label="Chat view (⌘1)"
             className={`nav-tab ${activeTab === 'chat' ? 'active' : ''}`}
             onClick={() => setActiveTab('chat')}
-            title="Chat view"
+            title="Chat view (⌘1)"
           >
             <MessageSquare size={12} />
             <span>Chat</span>
           </button>
           <button
+            role="tab"
+            aria-selected={activeTab === 'memory'}
+            aria-label="Memory store (⌘2)"
             className={`nav-tab ${activeTab === 'memory' ? 'active' : ''}`}
             onClick={() => setActiveTab('memory')}
-            title="Memory store"
+            title="Memory store (⌘2)"
           >
             <Brain size={12} />
             <span>Memory</span>
           </button>
           <button
+            role="tab"
+            aria-selected={activeTab === 'settings'}
+            aria-label="Settings panel (⌘3)"
             className={`nav-tab ${activeTab === 'settings' ? 'active' : ''}`}
             onClick={() => setActiveTab('settings')}
-            title="Settings"
+            title="Settings (⌘3)"
           >
             <Settings size={12} />
             <span>Settings</span>

@@ -1,9 +1,21 @@
 use rusqlite::{params, Connection};
+use sqlite_vec::sqlite3_vec_init;
+use rusqlite::ffi::sqlite3_auto_extension;
 use std::path::Path;
-use std::sync::Mutex;
+use std::sync::{Mutex, Once};
 use uuid::Uuid;
 use chrono::Utc;
 use super::models::{Memory, SavedChatMessage, SearchResult, Workspace};
+
+static INIT_VEC: Once = Once::new();
+
+pub fn ensure_sqlite_vec_registered() {
+    INIT_VEC.call_once(|| {
+        unsafe {
+            sqlite3_auto_extension(Some(std::mem::transmute(sqlite3_vec_init as *const ())));
+        }
+    });
+}
 
 pub struct MemoryDb {
     conn: Mutex<Connection>,
@@ -26,12 +38,19 @@ impl MemoryDb {
                     db_path, e
                 );
                 if db_path.exists() {
-                    let quarantine_name = format!(
-                        "aeio_memories.db.corrupted.{}",
-                        Utc::now().timestamp_millis()
-                    );
-                    let quarantine_path = dir.join(quarantine_name);
+                    let timestamp = Utc::now().timestamp_millis();
+                    let quarantine_name = format!("aeio_memories.db.corrupted.{}", timestamp);
+                    let quarantine_path = dir.join(&quarantine_name);
                     let _ = std::fs::rename(&db_path, &quarantine_path);
+
+                    let wal_path = dir.join("aeio_memories.db-wal");
+                    if wal_path.exists() {
+                        let _ = std::fs::rename(&wal_path, dir.join(format!("{}.wal", quarantine_name)));
+                    }
+                    let shm_path = dir.join("aeio_memories.db-shm");
+                    if shm_path.exists() {
+                        let _ = std::fs::remove_file(&shm_path);
+                    }
                 }
                 Self::open_and_validate(&db_path).map_err(|err| {
                     format!("Failed to create clean SQLite database after quarantine: {}", err)
@@ -45,6 +64,7 @@ impl MemoryDb {
     }
 
     fn open_and_validate(db_path: &Path) -> Result<Connection, String> {
+        ensure_sqlite_vec_registered();
         let conn = Connection::open(db_path)
             .map_err(|e| format!("Failed to open SQLite connection: {}", e))?;
 
@@ -64,6 +84,17 @@ impl MemoryDb {
         let check_res: Result<i64, _> = conn.query_row("PRAGMA schema_version", [], |row| row.get(0));
         if check_res.is_err() {
             return Err("SQLite schema verification failed".to_string());
+        }
+
+        let integrity_res: Result<String, _> = conn.query_row("PRAGMA quick_check(1)", [], |row| row.get(0));
+        match integrity_res {
+            Ok(ref status) if status == "ok" => {}
+            Ok(ref other) => {
+                return Err(format!("SQLite integrity quick_check reported corruption: {}", other));
+            }
+            Err(e) => {
+                return Err(format!("SQLite integrity query failed: {}", e));
+            }
         }
 
         Self::setup_schema(&conn).map_err(|e| format!("Failed to initialize schema: {}", e))?;
@@ -175,6 +206,27 @@ impl MemoryDb {
             "INSERT INTO memories_fts(id, content, category) SELECT m.id, m.content, m.category FROM memories m WHERE m.id NOT IN (SELECT id FROM memories_fts)",
             [],
         );
+
+        // sqlite-vec virtual table for 384-dimensional vector similarity search
+        let _ = conn.execute_batch(
+            r#"
+            CREATE VIRTUAL TABLE IF NOT EXISTS vec_memories USING vec0(
+                id text primary key,
+                embedding float[384] distance_metric=cosine
+            );
+            "#,
+        );
+
+        // Backfill memories with embeddings into vec_memories if missing
+        let _ = conn.execute(
+            r#"
+            INSERT OR IGNORE INTO vec_memories(id, embedding)
+            SELECT id, embedding FROM memories
+            WHERE embedding IS NOT NULL AND id NOT IN (SELECT id FROM vec_memories)
+            "#,
+            [],
+        );
+
         let _ = conn.execute(
             "UPDATE chat_messages SET workspace_id = 'default' WHERE workspace_id IS NULL",
             [],
@@ -403,17 +455,27 @@ impl MemoryDb {
         let now = Utc::now().timestamp_millis();
         let ws_id = workspace_id.unwrap_or("default");
 
+        let emb_bytes = match embedding {
+            Some(bytes) => bytes,
+            None => super::embeddings::embed_text_bytes(content),
+        };
+
         conn.execute(
             "INSERT INTO memories (id, content, category, embedding, workspace_id, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
-            params![&id, content, category, &embedding, ws_id, now, now],
+            params![&id, content, category, &emb_bytes, ws_id, now, now],
         )
         .map_err(|e| format!("Failed to insert memory: {}", e))?;
+
+        let _ = conn.execute(
+            "INSERT OR REPLACE INTO vec_memories (id, embedding) VALUES (?1, ?2)",
+            params![&id, &emb_bytes],
+        );
 
         Ok(Memory {
             id,
             content: content.to_string(),
             category: category.to_string(),
-            embedding,
+            embedding: Some(emb_bytes),
             workspace_id: Some(ws_id.to_string()),
             created_at: now,
             updated_at: now,
@@ -474,16 +536,17 @@ impl MemoryDb {
     ) -> Result<Memory, String> {
         let conn = self.conn.lock().map_err(|e| e.to_string())?;
         let now = Utc::now().timestamp_millis();
+        let emb_bytes = super::embeddings::embed_text_bytes(content);
 
         let rows_affected = if let Some(ws) = workspace_id {
             conn.execute(
-                "UPDATE memories SET content = ?1, category = ?2, workspace_id = ?3, updated_at = ?4 WHERE id = ?5",
-                params![content, category, ws, now, id],
+                "UPDATE memories SET content = ?1, category = ?2, workspace_id = ?3, embedding = ?4, updated_at = ?5 WHERE id = ?6",
+                params![content, category, ws, &emb_bytes, now, id],
             )
         } else {
             conn.execute(
-                "UPDATE memories SET content = ?1, category = ?2, updated_at = ?3 WHERE id = ?4",
-                params![content, category, now, id],
+                "UPDATE memories SET content = ?1, category = ?2, embedding = ?3, updated_at = ?4 WHERE id = ?5",
+                params![content, category, &emb_bytes, now, id],
             )
         }
         .map_err(|e| format!("Failed to update memory: {}", e))?;
@@ -491,6 +554,11 @@ impl MemoryDb {
         if rows_affected == 0 {
             return Err(format!("Memory with id '{}' not found", id));
         }
+
+        let _ = conn.execute(
+            "INSERT OR REPLACE INTO vec_memories (id, embedding) VALUES (?1, ?2)",
+            params![id, &emb_bytes],
+        );
 
         let mut stmt = conn
             .prepare("SELECT id, content, category, embedding, workspace_id, created_at, updated_at FROM memories WHERE id = ?1")
@@ -512,6 +580,7 @@ impl MemoryDb {
 
     pub fn delete_memory(&self, id: &str) -> Result<bool, String> {
         let conn = self.conn.lock().map_err(|e| e.to_string())?;
+        let _ = conn.execute("DELETE FROM vec_memories WHERE id = ?1", params![id]);
         let rows_affected = conn
             .execute("DELETE FROM memories WHERE id = ?1", params![id])
             .map_err(|e| format!("Failed to delete memory: {}", e))?;
@@ -519,7 +588,7 @@ impl MemoryDb {
         Ok(rows_affected > 0)
     }
 
-    /// Hybrid search: Exact phrase, token match, and vector cosine similarity relevance ranking
+    /// Hybrid search: Reciprocal Rank Fusion (RRF) merging FTS5 BM25 keyword search and sqlite-vec vector similarity search
     /// Tier 4 Scoped Recall: Searches within workspace_id, or across all if cross_workspace is true.
     pub fn search_memories_hybrid(
         &self,
@@ -529,36 +598,38 @@ impl MemoryDb {
         cross_workspace: bool,
         limit: usize,
     ) -> Result<Vec<SearchResult>, String> {
-        let trimmed_query = query.trim().to_lowercase();
-        let query_tokens: Vec<&str> = trimmed_query.split_whitespace().collect();
+        let trimmed_query = query.trim();
+        let conn = self.conn.lock().map_err(|e| e.to_string())?;
 
-        // Optimized Candidate Selection:
-        // Use FTS5 inverted index to find matching candidate memories in sub-millisecond time,
-        // falling back to indexed SQL candidate query if FTS returns no rows or fails.
-        let memories = if query_embedding.is_none() && !query_tokens.is_empty() {
-            let conn = self.conn.lock().map_err(|e| e.to_string())?;
+        if trimmed_query.is_empty() && query_embedding.is_none() {
+            // Empty query: return most recent memories
+            drop(conn);
+            let recents = self.list_memories(None, if cross_workspace { None } else { workspace_id })?;
+            return Ok(recents
+                .into_iter()
+                .take(limit)
+                .map(|m| SearchResult { memory: m, score: 1.0 })
+                .collect());
+        }
 
-            // Prepare FTS5 query with alphanumeric tokens
+        // 1. FTS5 BM25 Keyword Search
+        let mut fts_ranks: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
+        let query_tokens: Vec<&str> = trimmed_query
+            .split_whitespace()
+            .map(|t| t.trim_matches(|c: char| !c.is_alphanumeric()))
+            .filter(|t| !t.is_empty())
+            .collect();
+
+        if !query_tokens.is_empty() {
             let fts_terms: Vec<String> = query_tokens
                 .iter()
-                .map(|t| {
-                    let cleaned: String = t.chars().filter(|c| c.is_alphanumeric()).collect();
-                    if cleaned.is_empty() {
-                        String::new()
-                    } else {
-                        format!("\"{}*\"", cleaned)
-                    }
-                })
-                .filter(|s| !s.is_empty())
+                .map(|t| format!("\"{}*\"", t))
                 .collect();
 
             let fts_query = fts_terms.join(" OR ");
-            let mut fts_candidates = Vec::new();
-
             if !fts_query.is_empty() {
                 let mut sql = String::from(
-                    "SELECT m.id, m.content, m.category, m.embedding, m.workspace_id, m.created_at, m.updated_at \
-                     FROM memories_fts f \
+                    "SELECT f.id FROM memories_fts f \
                      JOIN memories m ON f.id = m.id \
                      WHERE memories_fts MATCH ?"
                 );
@@ -574,184 +645,149 @@ impl MemoryDb {
                     }
                 }
 
-                sql.push_str(" ORDER BY bm25(memories_fts) ASC, m.created_at DESC LIMIT ?");
+                sql.push_str(" ORDER BY bm25(memories_fts) ASC LIMIT ?");
                 params_vec.push(rusqlite::types::Value::Integer((limit * 10).max(100) as i64));
 
                 if let Ok(mut stmt) = conn.prepare(&sql) {
                     if let Ok(iter) = stmt.query_map(rusqlite::params_from_iter(params_vec), |row| {
-                        Ok(Memory {
-                            id: row.get(0)?,
-                            content: row.get(1)?,
-                            category: row.get(2)?,
-                            embedding: row.get(3)?,
-                            workspace_id: row.get(4)?,
-                            created_at: row.get(5)?,
-                            updated_at: row.get(6)?,
-                        })
+                        row.get::<_, String>(0)
                     }) {
-                        for m in iter.flatten() {
-                            fts_candidates.push(m);
+                        for (rank_idx, id_res) in iter.enumerate() {
+                            if let Ok(id) = id_res {
+                                fts_ranks.insert(id, rank_idx + 1);
+                            }
                         }
                     }
                 }
             }
+        }
 
-            if !fts_candidates.is_empty() {
-                fts_candidates
-            } else {
-                // If FTS returned 0 candidates, fallback to LIKE candidates or empty
-                let mut sql = String::from(
-                    "SELECT id, content, category, embedding, workspace_id, created_at, updated_at FROM memories WHERE ",
-                );
-                let mut params_vec: Vec<rusqlite::types::Value> = Vec::new();
+        // 2. sqlite-vec Vector Similarity Search
+        let mut vec_ranks: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
+        let q_vec = match query_embedding {
+            Some(v) => v.to_vec(),
+            None => super::embeddings::embed_text(trimmed_query),
+        };
+        let q_bytes = floats_to_bytes(&q_vec);
 
-                if !cross_workspace {
-                    if let Some(ws) = workspace_id {
-                        sql.push_str("workspace_id = ? AND (");
-                        params_vec.push(rusqlite::types::Value::Text(ws.to_string()));
-                    } else {
-                        sql.push_str("(workspace_id IS NULL OR workspace_id = 'default') AND (");
+        let k_candidates = (limit * 5).clamp(50, 200);
+        let vec_sql = "SELECT id, distance FROM vec_memories WHERE embedding MATCH ?1 AND k = ?2 ORDER BY distance ASC";
+
+        if let Ok(mut stmt) = conn.prepare(vec_sql) {
+            if let Ok(iter) = stmt.query_map(params![&q_bytes, k_candidates as i64], |row| {
+                row.get::<_, String>(0)
+            }) {
+                let mut rank_counter = 1;
+                for id_res in iter {
+                    if let Ok(id) = id_res {
+                        if !cross_workspace {
+                            let target_ws = workspace_id.unwrap_or("default");
+                            let mem_ws: Result<Option<String>, _> = conn.query_row(
+                                "SELECT workspace_id FROM memories WHERE id = ?1",
+                                params![&id],
+                                |row| row.get(0),
+                            );
+                            let is_match = match mem_ws {
+                                Ok(Some(ref ws)) => ws == target_ws,
+                                Ok(None) => target_ws == "default",
+                                Err(_) => false,
+                            };
+                            if !is_match {
+                                continue;
+                            }
+                        }
+                        vec_ranks.insert(id, rank_counter);
+                        rank_counter += 1;
+                        if rank_counter > limit * 3 {
+                            break;
+                        }
                     }
-                } else {
-                    sql.push_str("(");
                 }
-
-                let mut conditions = Vec::new();
-                conditions.push("content LIKE ?");
-                params_vec.push(rusqlite::types::Value::Text(format!("%{}%", trimmed_query)));
-
-                for token in &query_tokens {
-                    conditions.push("content LIKE ?");
-                    params_vec.push(rusqlite::types::Value::Text(format!("%{}%", token)));
-                    conditions.push("category LIKE ?");
-                    params_vec.push(rusqlite::types::Value::Text(format!("%{}%", token)));
-                }
-
-                sql.push_str(&conditions.join(" OR "));
-                sql.push_str(") ORDER BY created_at DESC LIMIT ?");
-                params_vec.push(rusqlite::types::Value::Integer((limit * 10).max(100) as i64));
-
-                let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
-                let iter = stmt
-                    .query_map(rusqlite::params_from_iter(params_vec), |row| {
-                        Ok(Memory {
-                            id: row.get(0)?,
-                            content: row.get(1)?,
-                            category: row.get(2)?,
-                            embedding: row.get(3)?,
-                            workspace_id: row.get(4)?,
-                            created_at: row.get(5)?,
-                            updated_at: row.get(6)?,
-                        })
-                    })
-                    .map_err(|e| e.to_string())?;
-
-                let mut candidates = Vec::new();
-                for m in iter {
-                    candidates.push(m.map_err(|e| e.to_string())?);
-                }
-                candidates
             }
-        } else if trimmed_query.is_empty() && query_embedding.is_none() {
-            // Empty query with limit: query directly with SQL LIMIT
-            let conn = self.conn.lock().map_err(|e| e.to_string())?;
-            let mut sql = String::from(
-                "SELECT id, content, category, embedding, workspace_id, created_at, updated_at FROM memories",
+        }
+
+        // 3. Reciprocal Rank Fusion (RRF)
+        // RRF(d) = sum_{m in M} (1.0 / (k + rank_m(d))) where standard k = 60.0
+        const RRF_K: f32 = 60.0;
+        let mut rrf_scores: std::collections::HashMap<String, f32> = std::collections::HashMap::new();
+
+        for (id, &rank) in &fts_ranks {
+            let score = 1.0 / (RRF_K + rank as f32);
+            *rrf_scores.entry(id.clone()).or_insert(0.0) += score;
+        }
+
+        for (id, &rank) in &vec_ranks {
+            let score = 1.0 / (RRF_K + rank as f32);
+            *rrf_scores.entry(id.clone()).or_insert(0.0) += score;
+        }
+
+        // Fallback to substring matching if both FTS and sqlite-vec found 0 candidates
+        if rrf_scores.is_empty() && !trimmed_query.is_empty() {
+            let mut fallback_sql = String::from(
+                "SELECT id FROM memories WHERE (content LIKE ?1 OR category LIKE ?1)"
             );
-            let mut params_vec: Vec<rusqlite::types::Value> = Vec::new();
+            let mut fallback_params: Vec<rusqlite::types::Value> = Vec::new();
+            fallback_params.push(rusqlite::types::Value::Text(format!("%{}%", trimmed_query)));
 
             if !cross_workspace {
                 if let Some(ws) = workspace_id {
-                    sql.push_str(" WHERE workspace_id = ?");
-                    params_vec.push(rusqlite::types::Value::Text(ws.to_string()));
+                    fallback_sql.push_str(" AND workspace_id = ?");
+                    fallback_params.push(rusqlite::types::Value::Text(ws.to_string()));
                 } else {
-                    sql.push_str(" WHERE (workspace_id IS NULL OR workspace_id = 'default')");
+                    fallback_sql.push_str(" AND (workspace_id IS NULL OR workspace_id = 'default')");
                 }
             }
 
-            sql.push_str(" ORDER BY created_at DESC LIMIT ?");
-            params_vec.push(rusqlite::types::Value::Integer(limit as i64));
+            fallback_sql.push_str(" ORDER BY created_at DESC LIMIT ?");
+            fallback_params.push(rusqlite::types::Value::Integer(limit as i64));
 
-            let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
-            let iter = stmt
-                .query_map(rusqlite::params_from_iter(params_vec), |row| {
-                    Ok(Memory {
-                        id: row.get(0)?,
-                        content: row.get(1)?,
-                        category: row.get(2)?,
-                        embedding: row.get(3)?,
-                        workspace_id: row.get(4)?,
-                        created_at: row.get(5)?,
-                        updated_at: row.get(6)?,
-                    })
-                })
+            if let Ok(mut stmt) = conn.prepare(&fallback_sql) {
+                if let Ok(iter) = stmt.query_map(rusqlite::params_from_iter(fallback_params), |row| {
+                    row.get::<_, String>(0)
+                }) {
+                    for (idx, id_res) in iter.enumerate() {
+                        if let Ok(id) = id_res {
+                            rrf_scores.insert(id, 1.0 / (RRF_K + idx as f32 + 1.0));
+                        }
+                    }
+                }
+            }
+        }
+
+        // Sort candidate IDs descending by RRF fused relevance score
+        let mut sorted_candidates: Vec<(String, f32)> = rrf_scores.into_iter().collect();
+        sorted_candidates.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+        sorted_candidates.truncate(limit);
+
+        // Fetch full Memory objects in ranked order
+        let mut results = Vec::new();
+        for (id, rrf_score) in sorted_candidates {
+            let mut stmt = conn
+                .prepare(
+                    "SELECT id, content, category, embedding, workspace_id, created_at, updated_at \
+                     FROM memories WHERE id = ?1"
+                )
                 .map_err(|e| e.to_string())?;
 
-            let mut candidates = Vec::new();
-            for m in iter {
-                candidates.push(m.map_err(|e| e.to_string())?);
-            }
-            candidates
-        } else if cross_workspace {
-            self.list_memories(None, None)?
-        } else {
-            self.list_memories(None, workspace_id)?
-        };
-
-        let mut scored_results: Vec<SearchResult> = Vec::new();
-
-        for mem in memories {
-            let content_lower = mem.content.to_lowercase();
-            let mut score = 0.0f32;
-
-            // 1. Exact phrase match gives highest boost
-            if !trimmed_query.is_empty() && content_lower.contains(&trimmed_query) {
-                score += 10.0;
-            }
-
-            // 2. Token matches
-            let mut matched_tokens = 0;
-            for token in &query_tokens {
-                if content_lower.contains(token) {
-                    matched_tokens += 1;
-                    score += 2.0;
-                }
-            }
-
-            // Category match bonus
-            if query_tokens.iter().any(|&t| mem.category.to_lowercase().contains(t)) {
-                score += 1.5;
-            }
-
-            if matched_tokens > 0 {
-                let coverage = matched_tokens as f32 / query_tokens.len().max(1) as f32;
-                score += coverage * 3.0;
-            }
-
-            // 3. Vector embedding cosine similarity boost (Tier 1: Semantic Recall)
-            if let (Some(q_emb), Some(mem_emb_bytes)) = (query_embedding, &mem.embedding) {
-                let mem_emb = bytes_to_floats(mem_emb_bytes);
-                let sim = cosine_similarity(q_emb, &mem_emb);
-                // Normalize cosine similarity from [-1.0, 1.0] to [0.0, 1.0] and scale by 10.0
-                let sim_score = ((sim + 1.0) / 2.0) * 10.0;
-                if sim_score > 0.0 {
-                    score += sim_score;
-                }
-            }
-
-            if score > 0.0 || (trimmed_query.is_empty() && query_embedding.is_none()) {
-                scored_results.push(SearchResult {
+            if let Ok(mem) = stmt.query_row(params![&id], |row| {
+                Ok(Memory {
+                    id: row.get(0)?,
+                    content: row.get(1)?,
+                    category: row.get(2)?,
+                    embedding: row.get(3)?,
+                    workspace_id: row.get(4)?,
+                    created_at: row.get(5)?,
+                    updated_at: row.get(6)?,
+                })
+            }) {
+                results.push(SearchResult {
                     memory: mem,
-                    score: if score == 0.0 { 1.0 } else { score },
+                    score: rrf_score * 100.0,
                 });
             }
         }
 
-        // Sort descending by relevance score
-        scored_results.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
-        scored_results.truncate(limit);
-
-        Ok(scored_results)
+        Ok(results)
     }
 
     pub fn search_memories(
@@ -1027,6 +1063,63 @@ mod tests {
     }
 
     #[test]
+    fn test_mid_write_crash_and_wal_recovery() {
+        let test_dir = std::env::temp_dir().join(format!("aeio_crash_midwrite_{}", Uuid::new_v4()));
+        let db_file = test_dir.join("aeio_memories.db");
+        let wal_file = test_dir.join("aeio_memories.db-wal");
+
+        // 1. Setup healthy initial DB
+        {
+            let db = MemoryDb::init(&test_dir).expect("Initial db creation failed");
+            db.add_memory("Pre-crash established memory", "fact", Some("default"), None)
+                .expect("Failed to add pre-crash memory");
+        }
+
+        // 2. Simulate mid-write process kill / power failure:
+        // Truncate/corrupt the db file and append a damaged WAL journal file
+        let mut db_bytes = fs::read(&db_file).expect("Failed to read db file");
+        if db_bytes.len() > 100 {
+            // Overwrite a page header with garbage
+            for b in &mut db_bytes[40..100] {
+                *b = 0xFF;
+            }
+            fs::write(&db_file, db_bytes).expect("Failed to corrupt db bytes");
+        }
+        fs::write(&wal_file, b"INCOMPLETE_TORN_WAL_FRAME_FROM_CRASHED_PROCESS_MIDWRITE_123456789")
+            .expect("Failed to write torn WAL file");
+
+        // 3. Re-initialize MemoryDb: auto-recovery MUST detect the corruption, quarantine both DB and WAL, and bring up a fresh DB
+        let recovered_db = MemoryDb::init(&test_dir).expect("MemoryDb failed to recover from mid-write crash");
+
+        // 4. Verify system is fully functional
+        let new_mem = recovered_db
+            .add_memory("Post-recovery working memory", "fact", Some("default"), None)
+            .expect("Failed to add memory in recovered DB");
+        assert_eq!(new_mem.content, "Post-recovery working memory");
+
+        // 5. Verify quarantined artifacts exist on disk
+        let dir_entries: Vec<String> = fs::read_dir(&test_dir)
+            .expect("Failed to read dir")
+            .filter_map(|e| e.ok())
+            .map(|e| e.file_name().to_string_lossy().to_string())
+            .collect();
+
+        assert!(
+            dir_entries.iter().any(|name| name.starts_with("aeio_memories.db.corrupted.")),
+            "Corrupted DB was not quarantined! Found: {:?}",
+            dir_entries
+        );
+        // Verify active database file exists and is operational
+        assert!(
+            dir_entries.iter().any(|name| name == "aeio_memories.db"),
+            "Recovered database file missing! Found: {:?}",
+            dir_entries
+        );
+
+        let _ = fs::remove_dir_all(test_dir);
+    }
+
+    #[test]
     fn test_memory_crud_complete() {
         let test_dir = std::env::temp_dir().join(format!("aeio_crud_test_{}", Uuid::new_v4()));
         let db = MemoryDb::init(&test_dir).expect("Failed to initialize test db");
@@ -1069,17 +1162,23 @@ mod tests {
         let test_dir = std::env::temp_dir().join(format!("aeio_vector_test_{}", Uuid::new_v4()));
         let db = MemoryDb::init(&test_dir).expect("Failed to initialize test db");
 
-        // Query vector points along X axis [1.0, 0.0]
-        let query_vec: [f32; 2] = [1.0, 0.0];
+        // Query vector points along X axis in 384d space
+        let mut query_vec = [0.0f32; 384];
+        query_vec[0] = 1.0;
 
-        // Memory A: highly aligned vector [0.98, 0.05]
-        let emb_a = floats_to_bytes(&[0.98, 0.05]);
+        // Memory A: highly aligned vector
+        let mut vec_a = [0.0f32; 384];
+        vec_a[0] = 0.98;
+        vec_a[1] = 0.05;
+        let emb_a = floats_to_bytes(&vec_a);
         let mem_a = db
             .add_memory("Kubernetes cluster configuration", "project", Some("default"), Some(emb_a))
             .expect("Failed to add memory A");
 
-        // Memory B: orthogonal vector [0.0, 1.0]
-        let emb_b = floats_to_bytes(&[0.0, 1.0]);
+        // Memory B: orthogonal vector
+        let mut vec_b = [0.0f32; 384];
+        vec_b[1] = 1.0;
+        let emb_b = floats_to_bytes(&vec_b);
         let mem_b = db
             .add_memory("Favorite coffee brew temperature", "preference", Some("default"), Some(emb_b))
             .expect("Failed to add memory B");
@@ -1096,6 +1195,49 @@ mod tests {
         assert!(results[0].score > results[1].score);
 
         // Clean up
+        let _ = fs::remove_dir_all(test_dir);
+    }
+
+    #[test]
+    fn test_hybrid_search_5_semantic_queries() {
+        let test_dir = std::env::temp_dir().join(format!("aeio_sem_test_{}", Uuid::new_v4()));
+        let db = MemoryDb::init(&test_dir).expect("Failed to initialize test db");
+
+        let pairs = [
+            ("High workload and busy schedule this week", "I'm completely swamped and overwhelmed"),
+            ("Car maintenance and mechanic invoice", "automobile repair expenses"),
+            ("International travel documents in bedroom safe", "where is my passport stored"),
+            ("Prefers pour-over espresso with oat milk", "favorite morning beverage caffeine"),
+            ("Customer sync conference call schedule", "client meeting timetable"),
+        ];
+
+        let mut mem_ids = Vec::new();
+        for (content, _) in &pairs {
+            let mem = db
+                .add_memory(content, "general", Some("default"), None)
+                .expect("Failed to add memory");
+            mem_ids.push(mem.id);
+        }
+
+        for (idx, (_, query)) in pairs.iter().enumerate() {
+            // 1. Keyword search alone with strict FTS returns 0 hits (no overlapping terms)
+            let fts_only = db.search_memories(query, Some("default"), false, 10).unwrap_or_default();
+            let _fts_found = fts_only.iter().any(|m| m.memory.id == mem_ids[idx]);
+
+            // 2. Hybrid search with semantic embedding finds the relevant memory
+            let hybrid_results = db
+                .search_memories_hybrid(query, None, Some("default"), false, 5)
+                .expect("Hybrid search failed");
+            
+            let hybrid_found = hybrid_results.iter().any(|r| r.memory.id == mem_ids[idx]);
+
+            assert!(
+                hybrid_found,
+                "Query '{}' should have found memory '{}' via hybrid search",
+                query, pairs[idx].0
+            );
+        }
+
         let _ = fs::remove_dir_all(test_dir);
     }
 
@@ -1174,7 +1316,8 @@ mod tests {
                 "Personal contact: Alex Rivera senior devops engineer",
             ];
 
-            let dummy_embedding = floats_to_bytes(&[0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8]);
+            let dummy_vec = [0.01f32; 384];
+            let dummy_embedding = floats_to_bytes(&dummy_vec);
 
             for i in 0..5000 {
                 let id = format!("mem_bench_{}", i);
@@ -1185,14 +1328,19 @@ mod tests {
 
                 tx.execute(
                     "INSERT INTO memories (id, content, category, embedding, workspace_id, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, 'default', ?5, ?6)",
-                    params![id, content, cat, dummy_embedding, now, now],
+                    params![&id, &content, &cat, &dummy_embedding, now, now],
+                ).unwrap();
+
+                tx.execute(
+                    "INSERT OR REPLACE INTO vec_memories (id, embedding) VALUES (?1, ?2)",
+                    params![&id, &dummy_embedding],
                 ).unwrap();
             }
             tx.commit().unwrap();
         }
 
         let insert_elapsed = start_insert.elapsed();
-        println!("5,000 memories inserted in {:.2?}", insert_elapsed);
+        println!("5,000 memories (FTS5 + sqlite-vec) inserted in {:.2?}", insert_elapsed);
 
         // Benchmark queries
         let test_queries = [
@@ -1218,6 +1366,88 @@ mod tests {
 
         let avg_duration = total_duration / test_queries.len() as u32;
         println!("Average search latency across 5,000 memories: {:.2?}", avg_duration);
+
+        // Clean up
+        let _ = fs::remove_dir_all(test_dir);
+    }
+
+    #[test]
+    fn test_synthetic_50000_memories_search_benchmark() {
+        use std::time::Instant;
+
+        let test_dir = std::env::temp_dir().join(format!("aeio_bench_50000_{}", Uuid::new_v4()));
+        let db = MemoryDb::init(&test_dir).expect("Failed to initialize test db");
+
+        println!("\n--- Populating 50,000 synthetic memories for scale test ---");
+        let start_insert = Instant::now();
+
+        {
+            let mut conn = db.conn.lock().unwrap();
+            let tx = conn.transaction().unwrap();
+            let categories = ["fact", "preference", "project", "person"];
+            let sample_topics = [
+                "PostgreSQL database connection pooling and timeout configurations",
+                "Frontend typography scale using Inter and hairline borders",
+                "AWS S3 bucket policy for cold-storage backups",
+                "User preferred dark obsidian theme with terracotta accents",
+                "Rust async runtime Tokio multi-threading concurrency patterns",
+                "Docker container memory limit and CPU quota adjustments",
+                "Kubernetes pod security standards and network isolation rules",
+                "Qwen3-Coder local inference hyperparameter calibration",
+                "TailwindCSS vs Vanilla CSS design tokens architectural review",
+                "Personal contact: Alex Rivera senior devops engineer",
+            ];
+
+            let dummy_vec = [0.01f32; 384];
+            let dummy_embedding = floats_to_bytes(&dummy_vec);
+
+            for i in 0..50000 {
+                let id = format!("mem_bench50k_{}", i);
+                let topic = sample_topics[i % sample_topics.len()];
+                let content = format!("[Entry #{}] {} with detail tag #{}", i, topic, i % 100);
+                let cat = categories[i % categories.len()];
+                let now = Utc::now().timestamp_millis();
+
+                tx.execute(
+                    "INSERT INTO memories (id, content, category, embedding, workspace_id, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, 'default', ?5, ?6)",
+                    params![&id, &content, &cat, &dummy_embedding, now, now],
+                ).unwrap();
+
+                tx.execute(
+                    "INSERT OR REPLACE INTO vec_memories (id, embedding) VALUES (?1, ?2)",
+                    params![&id, &dummy_embedding],
+                ).unwrap();
+            }
+            tx.commit().unwrap();
+        }
+
+        let insert_elapsed = start_insert.elapsed();
+        println!("50,000 memories (FTS5 + sqlite-vec) inserted in {:.2?}", insert_elapsed);
+
+        // Benchmark queries
+        let test_queries = [
+            "PostgreSQL database",
+            "Qwen3-Coder local inference",
+            "Alex Rivera senior devops",
+            "hairline borders obsidian",
+            "nonexistent random query term xyz123",
+        ];
+
+        let mut total_duration = std::time::Duration::ZERO;
+
+        for query in &test_queries {
+            let start_query = Instant::now();
+            let results = db.search_memories(query, Some("default"), false, 10).expect("Search failed");
+            let elapsed = start_query.elapsed();
+            total_duration += elapsed;
+            println!("Search at 50,000 scale for '{}' -> {} results in {:.2?}", query, results.len(), elapsed);
+            if !query.contains("nonexistent") {
+                assert!(!results.is_empty(), "Expected results for query: {}", query);
+            }
+        }
+
+        let avg_duration = total_duration / test_queries.len() as u32;
+        println!("Average search latency across 50,000 memories: {:.2?}", avg_duration);
 
         // Clean up
         let _ = fs::remove_dir_all(test_dir);
@@ -1270,6 +1500,61 @@ mod tests {
 
         // Clean up
         let _ = fs::remove_dir_all(test_dir);
+    }
+
+    #[test]
+    fn test_sqlite_vec_init_and_virtual_table() {
+        ensure_sqlite_vec_registered();
+        let conn = Connection::open_in_memory().expect("open in memory failed");
+
+        // Verify vec_version function is available
+        let version: String = conn
+            .query_row("SELECT vec_version()", [], |r| r.get(0))
+            .expect("vec_version query failed");
+        assert!(!version.is_empty(), "vec_version should return non-empty version string");
+
+        // Create vec0 virtual table for 384-dimensional embeddings (e.g. all-MiniLM-L6-v2)
+        conn.execute_batch(
+            r#"
+            CREATE VIRTUAL TABLE test_vec USING vec0(
+                id text primary key,
+                embedding float[384] distance_metric=cosine
+            );
+            "#,
+        )
+        .expect("CREATE VIRTUAL TABLE USING vec0 failed");
+
+        // Insert a dummy vector
+        let dummy_vec: Vec<f32> = (0..384).map(|i| (i as f32) / 384.0).collect();
+        let bytes = floats_to_bytes(&dummy_vec);
+
+        conn.execute(
+            "INSERT INTO test_vec(id, embedding) VALUES (?1, ?2)",
+            params!["test-1", &bytes],
+        )
+        .expect("INSERT into test_vec failed");
+
+        // Query nearest neighbor using MATCH
+        let mut stmt = conn
+            .prepare(
+                r#"
+                SELECT id, distance
+                FROM test_vec
+                WHERE embedding MATCH ?1 AND k = 1
+                "#,
+            )
+            .expect("prepare MATCH query failed");
+
+        let mut rows = stmt
+            .query(params![&bytes])
+            .expect("query MATCH failed");
+
+        let row = rows.next().expect("failed to get next row").expect("row missing");
+        let matched_id: String = row.get(0).expect("failed to get id");
+        let distance: f64 = row.get(1).expect("failed to get distance");
+
+        assert_eq!(matched_id, "test-1");
+        assert!(distance < 0.001, "Exact match should have distance near 0");
     }
 }
 

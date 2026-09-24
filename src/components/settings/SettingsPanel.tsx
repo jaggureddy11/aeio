@@ -154,14 +154,14 @@ export const SettingsPanel: React.FC<Props> = ({ isOpen, onClose, onOpenOnboardi
           <h2>Settings & Providers</h2>
         </div>
         {onClose && (
-          <button className="settings-close-btn" onClick={onClose}>
+          <button className="settings-close-btn" onClick={onClose} aria-label="Close settings" title="Close settings">
             <X size={16} />
           </button>
         )}
       </div>
 
       {saveSuccessMsg && (
-        <div className="settings-banner success">
+        <div className="settings-banner success" role="status" aria-live="polite">
           <Check size={13} />
           <span>{saveSuccessMsg}</span>
         </div>
@@ -170,10 +170,13 @@ export const SettingsPanel: React.FC<Props> = ({ isOpen, onClose, onOpenOnboardi
         <div className="settings-scroll-body">
           {/* Active Model Provider Selector */}
           <div className="settings-section">
-            <h3 className="section-label">Active Provider</h3>
-            <div className="provider-card-grid">
+            <h3 className="section-label" id="provider-group-label">Active Provider</h3>
+            <div className="provider-card-grid" role="radiogroup" aria-labelledby="provider-group-label">
               {/* Qwen3-Coder Card (Primary) */}
               <div
+                role="radio"
+                tabIndex={0}
+                aria-checked={activeProvider === 'qwen-coder'}
                 className={`provider-option-card ${
                   activeProvider === 'qwen-coder' ? 'selected' : ''
                 }`}
@@ -181,6 +184,15 @@ export const SettingsPanel: React.FC<Props> = ({ isOpen, onClose, onOpenOnboardi
                   setActiveProvider('qwen-coder');
                   if (!ollamaModel || ollamaModel === 'llama3.2') {
                     setOllamaModel('qwen3-coder');
+                  }
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    setActiveProvider('qwen-coder');
+                    if (!ollamaModel || ollamaModel === 'llama3.2') {
+                      setOllamaModel('qwen3-coder');
+                    }
                   }
                 }}
               >
@@ -198,10 +210,19 @@ export const SettingsPanel: React.FC<Props> = ({ isOpen, onClose, onOpenOnboardi
 
               {/* Ollama Generic Card */}
               <div
+                role="radio"
+                tabIndex={0}
+                aria-checked={activeProvider === 'ollama'}
                 className={`provider-option-card ${
                   activeProvider === 'ollama' ? 'selected' : ''
                 }`}
                 onClick={() => setActiveProvider('ollama')}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    setActiveProvider('ollama');
+                  }
+                }}
               >
                 <div className="provider-option-header">
                   <div className="provider-option-title">
@@ -217,10 +238,19 @@ export const SettingsPanel: React.FC<Props> = ({ isOpen, onClose, onOpenOnboardi
 
               {/* Claude Card */}
               <div
+                role="radio"
+                tabIndex={0}
+                aria-checked={activeProvider === 'claude'}
                 className={`provider-option-card ${
                   activeProvider === 'claude' ? 'selected' : ''
                 }`}
                 onClick={() => setActiveProvider('claude')}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    setActiveProvider('claude');
+                  }
+                }}
               >
                 <div className="provider-option-header">
                   <div className="provider-option-title">
@@ -236,10 +266,19 @@ export const SettingsPanel: React.FC<Props> = ({ isOpen, onClose, onOpenOnboardi
 
               {/* OpenAI Card */}
               <div
+                role="radio"
+                tabIndex={0}
+                aria-checked={activeProvider === 'openai'}
                 className={`provider-option-card ${
                   activeProvider === 'openai' ? 'selected' : ''
                 }`}
                 onClick={() => setActiveProvider('openai')}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    setActiveProvider('openai');
+                  }
+                }}
               >
                 <div className="provider-option-header">
                   <div className="provider-option-title">
@@ -263,6 +302,7 @@ export const SettingsPanel: React.FC<Props> = ({ isOpen, onClose, onOpenOnboardi
                 className="ollama-refresh-btn"
                 onClick={testOllama}
                 disabled={isCheckingOllama}
+                aria-label="Test local model connection"
               >
                 <RefreshCw
                   size={12}
@@ -280,17 +320,19 @@ export const SettingsPanel: React.FC<Props> = ({ isOpen, onClose, onOpenOnboardi
                   value={ollamaModel}
                   onChange={(e) => setOllamaModel(e.target.value)}
                   placeholder="e.g. qwen3-coder, qwen2.5-coder:7b, llama3.2"
+                  aria-label="Local model name or tag"
                 />
               </div>
 
               {/* Quick Model Presets */}
               <div className="hotkey-preset-section" style={{ marginTop: '8px' }}>
                 <span className="field-label" style={{ fontSize: '11px', color: 'var(--aeio-text-muted)' }}>Quick Presets:</span>
-                <div className="preset-buttons-row" style={{ display: 'flex', gap: '6px', marginTop: '4px', flexWrap: 'wrap' }}>
+                <div className="preset-buttons-row" style={{ display: 'flex', gap: '6px', marginTop: '4px', flexWrap: 'wrap' }} role="group" aria-label="Model presets">
                   <button
                     type="button"
                     className={`preset-btn ${ollamaModel === 'qwen3-coder' ? 'active' : ''}`}
                     onClick={() => setOllamaModel('qwen3-coder')}
+                    aria-label="Select qwen3-coder preset"
                   >
                     qwen3-coder
                   </button>
@@ -298,6 +340,7 @@ export const SettingsPanel: React.FC<Props> = ({ isOpen, onClose, onOpenOnboardi
                     type="button"
                     className={`preset-btn ${ollamaModel === 'qwen2.5-coder:7b' ? 'active' : ''}`}
                     onClick={() => setOllamaModel('qwen2.5-coder:7b')}
+                    aria-label="Select qwen2.5-coder:7b preset"
                   >
                     qwen2.5-coder:7b
                   </button>
@@ -305,6 +348,7 @@ export const SettingsPanel: React.FC<Props> = ({ isOpen, onClose, onOpenOnboardi
                     type="button"
                     className={`preset-btn ${ollamaModel === 'qwen2.5-coder:14b' ? 'active' : ''}`}
                     onClick={() => setOllamaModel('qwen2.5-coder:14b')}
+                    aria-label="Select qwen2.5-coder:14b preset"
                   >
                     qwen2.5-coder:14b
                   </button>
@@ -312,6 +356,7 @@ export const SettingsPanel: React.FC<Props> = ({ isOpen, onClose, onOpenOnboardi
                     type="button"
                     className={`preset-btn ${ollamaModel === 'llama3.2' ? 'active' : ''}`}
                     onClick={() => setOllamaModel('llama3.2')}
+                    aria-label="Select llama3.2 preset"
                   >
                     llama3.2
                   </button>
@@ -328,6 +373,7 @@ export const SettingsPanel: React.FC<Props> = ({ isOpen, onClose, onOpenOnboardi
                 className={`ollama-status-badge ${
                   ollamaStatus.startsWith('Online') ? 'online' : 'offline'
                 }`}
+                role="status"
               >
                 <div className="status-dot" />
                 <span>{ollamaStatus}</span>
@@ -373,6 +419,7 @@ export const SettingsPanel: React.FC<Props> = ({ isOpen, onClose, onOpenOnboardi
                   placeholder={hasClaudeStored ? '••••••••••••••••••••••••' : 'sk-ant-...'}
                   value={claudeInput}
                   onChange={(e) => setClaudeInput(e.target.value)}
+                  aria-label="Claude API Key"
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') {
                       e.preventDefault();
@@ -384,6 +431,7 @@ export const SettingsPanel: React.FC<Props> = ({ isOpen, onClose, onOpenOnboardi
                   className="key-save-btn"
                   onClick={handleSaveClaudeKey}
                   disabled={!claudeInput.trim()}
+                  aria-label="Save Claude API key"
                 >
                   Save Key
                 </button>
@@ -392,6 +440,7 @@ export const SettingsPanel: React.FC<Props> = ({ isOpen, onClose, onOpenOnboardi
                     className="key-delete-btn"
                     onClick={handleDeleteClaudeKey}
                     title="Remove key from keychain"
+                    aria-label="Delete Claude API key from keychain"
                   >
                     <Trash2 size={13} />
                   </button>
@@ -418,6 +467,7 @@ export const SettingsPanel: React.FC<Props> = ({ isOpen, onClose, onOpenOnboardi
                   placeholder={hasOpenaiStored ? '••••••••••••••••••••••••' : 'sk-...'}
                   value={openaiInput}
                   onChange={(e) => setOpenaiInput(e.target.value)}
+                  aria-label="OpenAI API Key"
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') {
                       e.preventDefault();
@@ -429,6 +479,7 @@ export const SettingsPanel: React.FC<Props> = ({ isOpen, onClose, onOpenOnboardi
                   className="key-save-btn"
                   onClick={handleSaveOpenaiKey}
                   disabled={!openaiInput.trim()}
+                  aria-label="Save OpenAI API key"
                 >
                   Save Key
                 </button>
@@ -437,6 +488,7 @@ export const SettingsPanel: React.FC<Props> = ({ isOpen, onClose, onOpenOnboardi
                     className="key-delete-btn"
                     onClick={handleDeleteOpenaiKey}
                     title="Remove key from keychain"
+                    aria-label="Delete OpenAI API key from keychain"
                   >
                     <Trash2 size={13} />
                   </button>
@@ -464,9 +516,11 @@ export const SettingsPanel: React.FC<Props> = ({ isOpen, onClose, onOpenOnboardi
                   <span>Strictly opt-in. Aeio never reads window contents or screen pixels without your explicit request.</span>
                 </div>
               </div>
-              <label className="switch-toggle">
+              <label className="switch-toggle" aria-label="Toggle active window context">
                 <input
                   type="checkbox"
+                  role="switch"
+                  aria-checked={activeWindowAwareness}
                   checked={activeWindowAwareness}
                   onChange={(e) => setActiveWindowAwareness(e.target.checked)}
                 />
@@ -494,9 +548,11 @@ export const SettingsPanel: React.FC<Props> = ({ isOpen, onClose, onOpenOnboardi
                   <span>Never runs secretly — a glowing indicator appears in the header. Nudges are 1-click dismissible and never reappear. With toggle off, zero background checks run.</span>
                 </div>
               </div>
-              <label className="switch-toggle">
+              <label className="switch-toggle" aria-label="Toggle ambient intelligence and proactive nudges">
                 <input
                   type="checkbox"
+                  role="switch"
+                  aria-checked={ambientProactive}
                   checked={ambientProactive}
                   onChange={(e) => setAmbientProactive(e.target.checked)}
                 />
@@ -518,7 +574,7 @@ export const SettingsPanel: React.FC<Props> = ({ isOpen, onClose, onOpenOnboardi
 
               <div className="hotkey-preset-section" style={{ marginTop: '12px' }}>
                 <span className="field-label" style={{ fontSize: '11px', color: 'var(--aeio-text-muted)' }}>Quick Presets:</span>
-                <div className="preset-buttons-row" style={{ display: 'flex', gap: '8px', marginTop: '6px' }}>
+                <div className="preset-buttons-row" style={{ display: 'flex', gap: '8px', marginTop: '6px' }} role="group" aria-label="Shortcut presets">
                   <button
                     type="button"
                     className={`preset-btn ${hotkey === 'CommandOrControl+Shift+Space' ? 'active' : ''}`}
@@ -528,6 +584,7 @@ export const SettingsPanel: React.FC<Props> = ({ isOpen, onClose, onOpenOnboardi
                       setHotkeySaved(true);
                       setTimeout(() => setHotkeySaved(false), 1500);
                     }}
+                    aria-label="Set shortcut to Command Shift Space"
                   >
                     ⌘ ⇧ Space
                   </button>
@@ -540,6 +597,7 @@ export const SettingsPanel: React.FC<Props> = ({ isOpen, onClose, onOpenOnboardi
                       setHotkeySaved(true);
                       setTimeout(() => setHotkeySaved(false), 1500);
                     }}
+                    aria-label="Set shortcut to Option Space"
                   >
                     ⌥ Space
                   </button>
@@ -552,6 +610,7 @@ export const SettingsPanel: React.FC<Props> = ({ isOpen, onClose, onOpenOnboardi
                       setHotkeySaved(true);
                       setTimeout(() => setHotkeySaved(false), 1500);
                     }}
+                    aria-label="Set shortcut to Command Space"
                   >
                     ⌘ Space
                   </button>
@@ -576,6 +635,7 @@ export const SettingsPanel: React.FC<Props> = ({ isOpen, onClose, onOpenOnboardi
                     }
                   }}
                   placeholder="e.g. CommandOrControl+Shift+Space"
+                  aria-label="Custom global shortcut"
                 />
                 <button
                   type="button"
@@ -588,6 +648,7 @@ export const SettingsPanel: React.FC<Props> = ({ isOpen, onClose, onOpenOnboardi
                       setTimeout(() => setHotkeySaved(false), 1500);
                     }
                   }}
+                  aria-label="Apply custom shortcut"
                 >
                   {hotkeySaved ? <Check size={12} /> : null}
                   <span>{hotkeySaved ? 'Saved' : 'Apply'}</span>
@@ -610,6 +671,7 @@ export const SettingsPanel: React.FC<Props> = ({ isOpen, onClose, onOpenOnboardi
                   className="action-btn secondary"
                   style={{ padding: '6px 12px', fontSize: '11px', width: 'auto' }}
                   onClick={onOpenOnboarding}
+                  aria-label="Launch first-run onboarding setup guide"
                 >
                   <Sparkles size={12} />
                   <span>Launch Guide</span>

@@ -95,15 +95,18 @@ export const ChatMessageItem: React.FC<Props> = React.memo(({ message }) => {
         {hasRecalled && (
           <div className="recalled-memories-badge-container">
             <button
+              type="button"
               className="recalled-toggle-btn"
               onClick={() => setShowRecalled(!showRecalled)}
+              aria-expanded={showRecalled}
+              aria-label={`Toggle transparent recalled memories (${message.recalledMemories!.length} memories)`}
             >
-              <Brain size={11} className="recalled-icon" />
+              <Brain size={11} className="recalled-icon" aria-hidden="true" />
               <span>
                 Recalled {message.recalledMemories!.length} memor
                 {message.recalledMemories!.length === 1 ? 'y' : 'ies'}
               </span>
-              {showRecalled ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
+              {showRecalled ? <ChevronUp size={11} aria-hidden="true" /> : <ChevronDown size={11} aria-hidden="true" />}
             </button>
 
             {showRecalled && (
@@ -156,13 +159,15 @@ export const ChatMessageItem: React.FC<Props> = React.memo(({ message }) => {
                 className="reasoning-toggle-btn"
                 onClick={() => setShowReasoning(!showReasoning)}
                 title="Toggle internal reasoning chain"
+                aria-expanded={showReasoning}
+                aria-label="Toggle internal model reasoning process"
               >
-                <Cpu size={10} className="reasoning-icon" />
+                <Cpu size={10} className="reasoning-icon" aria-hidden="true" />
                 <span>Thought process</span>
                 <span className="reasoning-wordcount">
                   ({message.reasoning.split(/\s+/).filter(Boolean).length} words)
                 </span>
-                {showReasoning ? <ChevronUp size={10} /> : <ChevronDown size={10} />}
+                {showReasoning ? <ChevronUp size={10} aria-hidden="true" /> : <ChevronDown size={10} aria-hidden="true" />}
               </button>
 
               {showReasoning && (
@@ -203,16 +208,18 @@ export const ChatMessageItem: React.FC<Props> = React.memo(({ message }) => {
               <div key={idx} className={`proposed-memory-card ${prop.isSaved ? 'saved' : ''}`}>
                 <div className="proposed-header">
                   <span className="proposed-tag">
-                    <Plus size={10} />
+                    <Plus size={10} aria-hidden="true" />
                     <span>Proposed Memory ({prop.category})</span>
                   </span>
                   {!prop.isSaved && (
                     <button
+                      type="button"
                       className="dismiss-proposal-btn"
                       onClick={() => dismissMemoryProposal(message.id, idx)}
                       title="Dismiss"
+                      aria-label="Dismiss memory proposal"
                     >
-                      <X size={11} />
+                      <X size={11} aria-hidden="true" />
                     </button>
                   )}
                 </div>
@@ -222,15 +229,17 @@ export const ChatMessageItem: React.FC<Props> = React.memo(({ message }) => {
                 <div className="proposed-actions">
                   {prop.isSaved ? (
                     <span className="saved-indicator">
-                      <Check size={12} />
+                      <Check size={12} aria-hidden="true" />
                       <span>Saved to memory store</span>
                     </span>
                   ) : (
                     <button
+                      type="button"
                       className="save-proposal-btn"
                       onClick={() => confirmMemoryProposal(message.id, idx)}
+                      aria-label={`Approve and save memory: ${prop.content}`}
                     >
-                      <Check size={11} />
+                      <Check size={11} aria-hidden="true" />
                       <span>Approve & Save</span>
                     </button>
                   )}

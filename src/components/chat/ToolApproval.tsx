@@ -98,11 +98,13 @@ export const ToolApprovalCard: React.FC<Props> = ({
 
         {execution.status === 'pending_approval' && (
           <button
+            type="button"
             className="tool-deny-btn-mini"
             onClick={() => onDeny(messageId, index)}
-            title="Deny execution"
+            title="Deny execution (Esc)"
+            aria-label="Deny tool execution"
           >
-            <X size={12} />
+            <X size={12} aria-hidden="true" />
           </button>
         )}
       </div>
@@ -184,17 +186,25 @@ export const ToolApprovalCard: React.FC<Props> = ({
 
           <div className="tool-btn-group">
             <button
+              type="button"
               className="tool-btn-deny"
               onClick={() => onDeny(messageId, index)}
+              aria-label={`Deny execution of ${execution.toolName}`}
             >
-              <X size={12} />
+              <X size={12} aria-hidden="true" />
               <span>Deny</span>
             </button>
             <button
+              type="button"
               className={`tool-btn-approve ${isDestructive ? 'hazard-approve' : ''}`}
               onClick={() => onApprove(messageId, index, alwaysAllow)}
+              aria-label={
+                isDestructive
+                  ? `Authorize destructive action and execute ${execution.toolName}`
+                  : `Approve and execute ${execution.toolName}`
+              }
             >
-              <Check size={12} />
+              <Check size={12} aria-hidden="true" />
               <span>{isDestructive ? 'Authorize & Execute' : 'Approve & Run'}</span>
             </button>
           </div>
@@ -234,11 +244,14 @@ export const ToolApprovalCard: React.FC<Props> = ({
               </span>
             )}
             <button
+              type="button"
               className="output-toggle-btn"
               onClick={() => setIsOutputExpanded(!isOutputExpanded)}
+              aria-expanded={isOutputExpanded}
+              aria-label={isOutputExpanded ? 'Hide command output console' : 'View command output console'}
             >
               <span>{isOutputExpanded ? 'Hide output' : 'View output'}</span>
-              {isOutputExpanded ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
+              {isOutputExpanded ? <ChevronUp size={11} aria-hidden="true" /> : <ChevronDown size={11} aria-hidden="true" />}
             </button>
           </div>
 

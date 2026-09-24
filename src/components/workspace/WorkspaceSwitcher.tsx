@@ -149,6 +149,9 @@ export const WorkspaceSwitcher: React.FC = () => {
         className="workspace-badge-btn"
         onClick={() => setIsOpen(!isOpen)}
         title="Switch workspace"
+        aria-label={`Current workspace: ${activeWorkspace?.name || 'General'}. Click to switch workspace.`}
+        aria-haspopup="dialog"
+        aria-expanded={isOpen}
       >
         <span className="workspace-badge-icon">
           {renderWorkspaceIcon(activeWorkspace?.icon, 11)}
@@ -161,7 +164,7 @@ export const WorkspaceSwitcher: React.FC = () => {
       </button>
 
       {isOpen && (
-        <div className="workspace-dropdown-panel animate-fadeIn">
+        <div className="workspace-dropdown-panel animate-fadeIn" role="dialog" aria-label="Workspace Manager">
           <div className="workspace-dropdown-header">
             <span className="workspace-dropdown-title">Workspaces</span>
             {!isCreating && (
@@ -169,6 +172,7 @@ export const WorkspaceSwitcher: React.FC = () => {
                 type="button"
                 className="workspace-add-btn"
                 onClick={() => setIsCreating(true)}
+                aria-label="Create new workspace"
               >
                 <Plus size={10} />
                 <span>New</span>
@@ -177,22 +181,24 @@ export const WorkspaceSwitcher: React.FC = () => {
           </div>
 
           {isCreating ? (
-            <form onSubmit={handleCreate} className="workspace-create-form">
+            <form onSubmit={handleCreate} className="workspace-create-form" aria-label="Create workspace form">
               <div className="workspace-create-field">
-                <label>Name</label>
+                <label htmlFor="ws-name-input">Name</label>
                 <input
+                  id="ws-name-input"
                   type="text"
                   autoFocus
                   placeholder="e.g. Engine, Client Alpha"
                   value={newName}
                   onChange={(e) => setNewName(e.target.value)}
                   className="workspace-input"
+                  aria-label="New workspace name"
                 />
               </div>
 
               <div className="workspace-create-field">
                 <label>Icon</label>
-                <div className="workspace-icon-picker">
+                <div className="workspace-icon-picker" role="radiogroup" aria-label="Choose workspace icon">
                   {WORKSPACE_ICONS.map((item) => {
                     const IconComp = item.icon;
                     return (
@@ -202,6 +208,8 @@ export const WorkspaceSwitcher: React.FC = () => {
                         className={`workspace-icon-btn ${newIcon === item.id ? 'selected' : ''}`}
                         onClick={() => setNewIcon(item.id)}
                         title={item.id}
+                        aria-label={`Icon ${item.id}`}
+                        aria-pressed={newIcon === item.id}
                       >
                         <IconComp size={12} />
                       </button>
@@ -211,13 +219,15 @@ export const WorkspaceSwitcher: React.FC = () => {
               </div>
 
               <div className="workspace-create-field">
-                <label>Description (optional)</label>
+                <label htmlFor="ws-desc-input">Description (optional)</label>
                 <input
+                  id="ws-desc-input"
                   type="text"
                   placeholder="Scope or goal..."
                   value={newDesc}
                   onChange={(e) => setNewDesc(e.target.value)}
                   className="workspace-input"
+                  aria-label="New workspace description"
                 />
               </div>
 
@@ -226,6 +236,7 @@ export const WorkspaceSwitcher: React.FC = () => {
                   type="button"
                   className="workspace-btn-cancel"
                   onClick={() => setIsCreating(false)}
+                  aria-label="Cancel workspace creation"
                 >
                   Cancel
                 </button>
@@ -233,20 +244,30 @@ export const WorkspaceSwitcher: React.FC = () => {
                   type="submit"
                   disabled={!newName.trim()}
                   className="workspace-btn-submit"
+                  aria-label="Create workspace"
                 >
                   Create
                 </button>
               </div>
             </form>
           ) : (
-            <div className="workspace-list">
+            <div className="workspace-list" role="list" aria-label="Workspaces list">
               {activeList.map((ws) => {
                 const isActive = ws.id === activeWorkspace?.id;
                 return (
                   <div
                     key={ws.id}
+                    role="button"
+                    tabIndex={0}
                     className={`workspace-list-item ${isActive ? 'active' : ''}`}
                     onClick={() => handleSelectWorkspace(ws.id)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        handleSelectWorkspace(ws.id);
+                      }
+                    }}
+                    aria-label={`Switch to workspace ${ws.name}${isActive ? ' (active)' : ''}`}
                   >
                     <span className="ws-item-icon">{renderWorkspaceIcon(ws.icon, 12)}</span>
                     <div className="ws-item-info">
@@ -263,6 +284,7 @@ export const WorkspaceSwitcher: React.FC = () => {
                           type="button"
                           className="ws-archive-btn"
                           title="Archive workspace"
+                          aria-label={`Archive workspace ${ws.name}`}
                           onClick={(e) => handleArchive(e, ws.id)}
                         >
                           <Archive size={11} />
@@ -279,6 +301,8 @@ export const WorkspaceSwitcher: React.FC = () => {
                     type="button"
                     className="ws-archived-toggle"
                     onClick={() => setShowArchived(!showArchived)}
+                    aria-expanded={showArchived}
+                    aria-label={`Toggle archived workspaces (${archivedList.length})`}
                   >
                     <ChevronRight
                       size={11}
@@ -299,6 +323,7 @@ export const WorkspaceSwitcher: React.FC = () => {
                             type="button"
                             className="ws-restore-btn"
                             title="Restore workspace"
+                            aria-label={`Restore workspace ${ws.name}`}
                             onClick={async () => {
                               await archiveWorkspace(ws.id);
                               await loadWorkspaces(true);

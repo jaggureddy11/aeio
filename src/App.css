@@ -7,8 +7,9 @@
   --aeio-primary-subtle: rgba(16, 185, 129, 0.08);
   --aeio-primary-border: rgba(16, 185, 129, 0.2);
 
-  /* Composite Signature Terracotta / Orange Highlight */
+  /* Composite Signature Terracotta / Orange Highlight (WCAG AA/AAA calibrated) */
   --composite-orange: #f05623;
+  --composite-orange-text: #ff6838;
   --composite-orange-subtle: rgba(240, 86, 35, 0.1);
   --composite-orange-border: rgba(240, 86, 35, 0.25);
 
@@ -48,6 +49,21 @@
   user-select: none;
   -webkit-user-select: none;
   -webkit-font-smoothing: antialiased;
+}
+
+/* Universal Accessible Focus Rings (WCAG 2.2 AA compliant) */
+:focus-visible {
+  outline: 2px solid var(--composite-orange-text);
+  outline-offset: 2px;
+}
+
+button:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid var(--composite-orange-text);
+  outline-offset: 1px;
 }
 
 * {

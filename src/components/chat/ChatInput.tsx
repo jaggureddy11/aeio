@@ -50,6 +50,7 @@ export const ChatInput: React.FC<Props> = ({ onSend, isLoading }) => {
       <textarea
         ref={textareaRef}
         className="chat-textarea"
+        aria-label="Message prompt input"
         placeholder="Ask anything or run tools... (Shift+Enter for newline)"
         value={input}
         onChange={(e) => setInput(e.target.value)}
@@ -59,15 +60,17 @@ export const ChatInput: React.FC<Props> = ({ onSend, isLoading }) => {
       />
       <div className="chat-input-actions">
         <button
+          type="button"
           className={`send-button ${input.trim() ? 'has-text' : ''}`}
           onClick={handleSend}
           disabled={!input.trim() || isLoading}
           title="Send message (Enter)"
+          aria-label="Send message"
         >
           {isLoading ? (
-            <Loader2 size={13} className="spinner" />
+            <Loader2 size={13} className="spinner" aria-hidden="true" />
           ) : (
-            <ArrowUp size={13} strokeWidth={2.5} />
+            <ArrowUp size={13} strokeWidth={2.5} aria-hidden="true" />
           )}
         </button>
       </div>

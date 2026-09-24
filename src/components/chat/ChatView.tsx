@@ -165,6 +165,7 @@ export const ChatView: React.FC = () => {
                 className="clear-chat-btn"
                 onClick={clearMessages}
                 title="Clear current workspace conversation"
+                aria-label="Clear current workspace conversation"
               >
                 <Trash2 size={12} />
                 <span>Clear chat</span>
@@ -282,8 +283,9 @@ export const ChatView: React.FC = () => {
                 onClick={() => retryLastMessage()}
                 disabled={isLoading}
                 title="Retry last prompt"
+                aria-label="Retry generating response"
               >
-                <RotateCw size={12} className={isLoading ? 'spinning' : ''} />
+                <RotateCw size={12} className={isLoading ? 'spinning' : ''} aria-hidden="true" />
                 <span>Retry</span>
               </button>
               <button
@@ -291,8 +293,9 @@ export const ChatView: React.FC = () => {
                 className="chat-error-dismiss-btn"
                 onClick={() => setError(null)}
                 title="Dismiss error banner"
+                aria-label="Dismiss error banner"
               >
-                <X size={13} />
+                <X size={13} aria-hidden="true" />
               </button>
             </div>
           </div>
@@ -303,7 +306,7 @@ export const ChatView: React.FC = () => {
       {activeNudge && (
         <div className="proactive-nudge-card animate-fadeIn">
           <div className="nudge-icon">
-            <Sparkles size={13} />
+            <Sparkles size={13} aria-hidden="true" />
           </div>
           <div className="nudge-content">
             <span className="nudge-badge">Aeio Suggestion</span>
@@ -316,6 +319,7 @@ export const ChatView: React.FC = () => {
                 className="nudge-apply-btn"
                 onClick={() => applyNudge(activeNudge)}
                 disabled={isLoading}
+                aria-label="Apply suggestion"
               >
                 Apply
               </button>
@@ -325,8 +329,9 @@ export const ChatView: React.FC = () => {
               className="nudge-dismiss-btn"
               onClick={() => dismissNudge(activeNudge.id)}
               title="Dismiss suggestion"
+              aria-label="Dismiss suggestion"
             >
-              <X size={12} />
+              <X size={12} aria-hidden="true" />
             </button>
           </div>
         </div>

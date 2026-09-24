@@ -41,6 +41,7 @@ export const MemoryItem: React.FC<Props> = ({ memory }) => {
             className="category-select"
             value={category}
             onChange={(e) => setCategory(e.target.value as MemoryCategory)}
+            aria-label="Memory category"
           >
             <option value="fact">Fact</option>
             <option value="preference">Preference</option>
@@ -49,7 +50,7 @@ export const MemoryItem: React.FC<Props> = ({ memory }) => {
           </select>
 
           <div className="edit-actions">
-            <button className="icon-btn save" onClick={handleSave} title="Save changes">
+            <button className="icon-btn save" onClick={handleSave} title="Save changes" aria-label="Save memory changes">
               <Check size={13} />
             </button>
             <button
@@ -60,6 +61,7 @@ export const MemoryItem: React.FC<Props> = ({ memory }) => {
                 setIsEditing(false);
               }}
               title="Cancel"
+              aria-label="Cancel editing memory"
             >
               <X size={13} />
             </button>
@@ -72,6 +74,7 @@ export const MemoryItem: React.FC<Props> = ({ memory }) => {
           onChange={(e) => setContent(e.target.value)}
           rows={3}
           autoFocus
+          aria-label="Edit memory content"
         />
       </div>
     );
@@ -96,6 +99,7 @@ export const MemoryItem: React.FC<Props> = ({ memory }) => {
             className="icon-btn edit"
             onClick={() => setIsEditing(true)}
             title="Edit memory"
+            aria-label="Edit memory"
           >
             <Edit2 size={12} />
           </button>
@@ -103,12 +107,13 @@ export const MemoryItem: React.FC<Props> = ({ memory }) => {
           {isConfirmingDelete ? (
             <div className="delete-confirm-group">
               <span className="confirm-text">Delete?</span>
-              <button className="confirm-yes" onClick={handleDelete}>
+              <button className="confirm-yes" onClick={handleDelete} aria-label="Confirm delete memory">
                 Yes
               </button>
               <button
                 className="confirm-no"
                 onClick={() => setIsConfirmingDelete(false)}
+                aria-label="Cancel delete memory"
               >
                 No
               </button>
@@ -118,6 +123,7 @@ export const MemoryItem: React.FC<Props> = ({ memory }) => {
               className="icon-btn delete"
               onClick={() => setIsConfirmingDelete(true)}
               title="Delete memory"
+              aria-label="Delete memory"
             >
               <Trash2 size={12} />
             </button>

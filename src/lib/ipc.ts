@@ -227,6 +227,10 @@ export async function exportMemories(
   });
 }
 
+export async function ping(): Promise<string> {
+  return invoke<string>('ping');
+}
+
 export async function hideWindow(): Promise<void> {
   try {
     const { getCurrentWebviewWindow } = await import('@tauri-apps/api/webviewWindow');
