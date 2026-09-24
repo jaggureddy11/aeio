@@ -10,11 +10,15 @@ export interface SettingsState {
   ollamaModel: string;
   activeWindowAwareness: boolean;
   ambientProactive: boolean;
+  hasCompletedOnboarding: boolean;
+  hotkey: string;
   setActiveTab: (tab: ActiveTab) => void;
   setActiveProvider: (provider: LLMProviderType) => void;
   setOllamaModel: (model: string) => void;
   setActiveWindowAwareness: (enabled: boolean) => void;
   setAmbientProactive: (enabled: boolean) => void;
+  setHasCompletedOnboarding: (completed: boolean) => void;
+  setHotkey: (hotkey: string) => void;
 }
 
 const getStoredBool = (key: string, defaultVal: boolean): boolean => {
@@ -26,12 +30,23 @@ const getStoredBool = (key: string, defaultVal: boolean): boolean => {
   }
 };
 
+const getStoredString = (key: string, defaultVal: string): string => {
+  try {
+    const val = localStorage.getItem(key);
+    return val && val.trim() ? val.trim() : defaultVal;
+  } catch {
+    return defaultVal;
+  }
+};
+
 export const useSettingsStore = create<SettingsState>((set) => ({
   activeTab: 'chat',
   activeProvider: 'ollama',
   ollamaModel: 'llama3.2',
   activeWindowAwareness: getStoredBool('aeio_active_window_awareness', false),
   ambientProactive: getStoredBool('aeio_ambient_proactive', false),
+  hasCompletedOnboarding: getStoredBool('aeio_first_run_completed', false),
+  hotkey: getStoredString('aeio_global_hotkey', 'CommandOrControl+Shift+Space'),
   setActiveTab: (activeTab) => set({ activeTab }),
   setActiveProvider: (activeProvider) => set({ activeProvider }),
   setOllamaModel: (ollamaModel) => set({ ollamaModel }),
@@ -46,5 +61,18 @@ export const useSettingsStore = create<SettingsState>((set) => ({
       localStorage.setItem('aeio_ambient_proactive', String(enabled));
     } catch {}
     set({ ambientProactive: enabled });
+  },
+  setHasCompletedOnboarding: (completed: boolean) => {
+    try {
+      localStorage.setItem('aeio_first_run_completed', String(completed));
+    } catch {}
+    set({ hasCompletedOnboarding: completed });
+  },
+  setHotkey: (hotkey: string) => {
+    const clean = hotkey.trim() || 'CommandOrControl+Shift+Space';
+    try {
+      localStorage.setItem('aeio_global_hotkey', clean);
+    } catch {}
+    set({ hotkey: clean });
   },
 }));

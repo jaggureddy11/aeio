@@ -1,9 +1,10 @@
-import React from 'react';
+import React, { useState } from 'react';
 import logo from './assets/logo.png';
 import { ChatView } from './components/chat';
 import { MemoryPanel } from './components/memory';
 import { SettingsPanel } from './components/settings';
 import { WorkspaceSwitcher } from './components/workspace/WorkspaceSwitcher';
+import { OnboardingModal } from './components/onboarding';
 import { useSettingsStore } from './stores/settingsStore';
 import { MessageSquare, Brain, Settings } from 'lucide-react';
 import './App.css';
@@ -16,7 +17,11 @@ export const App: React.FC = () => {
     ollamaModel,
     ambientProactive,
     activeWindowAwareness,
+    hasCompletedOnboarding,
+    hotkey,
   } = useSettingsStore();
+
+  const [showOnboarding, setShowOnboarding] = useState(!hasCompletedOnboarding);
 
   return (
     <div className="app-container">
@@ -78,7 +83,9 @@ export const App: React.FC = () => {
       <main className="app-content">
         {activeTab === 'chat' && <ChatView />}
         {activeTab === 'memory' && <MemoryPanel />}
-        {activeTab === 'settings' && <SettingsPanel />}
+        {activeTab === 'settings' && (
+          <SettingsPanel onOpenOnboarding={() => setShowOnboarding(true)} />
+        )}
       </main>
 
       {/* Precision Utility Footer */}
@@ -90,9 +97,7 @@ export const App: React.FC = () => {
         </div>
         <div className="footer-shortcuts">
           <span className="shortcut-item">
-            <kbd className="hotkey-badge">⌘</kbd>
-            <kbd className="hotkey-badge">⇧</kbd>
-            <kbd className="hotkey-badge">Space</kbd>
+            <kbd className="hotkey-badge">{hotkey === 'CommandOrControl+Shift+Space' ? '⌘ ⇧ Space' : hotkey}</kbd>
             <span className="shortcut-label">toggle</span>
           </span>
           <span className="shortcut-item">
@@ -101,6 +106,12 @@ export const App: React.FC = () => {
           </span>
         </div>
       </footer>
+
+      {/* First-Run Onboarding Modal (Shown once, skippable, no account needed) */}
+      <OnboardingModal
+        isOpen={showOnboarding}
+        onClose={() => setShowOnboarding(false)}
+      />
     </div>
   );
 };

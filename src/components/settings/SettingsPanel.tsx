@@ -23,19 +23,25 @@ import {
 interface Props {
   isOpen?: boolean;
   onClose?: () => void;
+  onOpenOnboarding?: () => void;
 }
 
-export const SettingsPanel: React.FC<Props> = ({ isOpen, onClose }) => {
+export const SettingsPanel: React.FC<Props> = ({ isOpen, onClose, onOpenOnboarding }) => {
   const {
     activeProvider,
     ollamaModel,
     activeWindowAwareness,
     ambientProactive,
+    hotkey,
     setActiveProvider,
     setOllamaModel,
     setActiveWindowAwareness,
     setAmbientProactive,
+    setHotkey,
   } = useSettingsStore();
+
+  const [hotkeyInput, setHotkeyInput] = useState(hotkey);
+  const [hotkeySaved, setHotkeySaved] = useState(false);
 
   const [claudeInput, setClaudeInput] = useState('');
   const [openaiInput, setOpenaiInput] = useState('');
@@ -430,15 +436,102 @@ export const SettingsPanel: React.FC<Props> = ({ isOpen, onClose }) => {
             <h3 className="section-label">Global Summon Shortcut</h3>
             <div className="shortcut-box">
               <div className="shortcut-keys">
-                <kbd>Cmd</kbd> + <kbd>Shift</kbd> + <kbd>Space</kbd>
-                <span className="or-label">or</span>
-                <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>Space</kbd>
+                <kbd>{hotkey}</kbd>
               </div>
               <p className="shortcut-desc">
                 Summons Aeio centered on your screen from anywhere in the OS, even over full-screen apps and games. Press again or hit Esc to hide.
               </p>
+
+              <div className="hotkey-preset-section" style={{ marginTop: '12px' }}>
+                <span className="field-label" style={{ fontSize: '11px', color: 'var(--aeio-text-muted)' }}>Quick Presets:</span>
+                <div className="preset-buttons-row" style={{ display: 'flex', gap: '8px', marginTop: '6px' }}>
+                  <button
+                    type="button"
+                    className={`preset-btn ${hotkey === 'CommandOrControl+Shift+Space' ? 'active' : ''}`}
+                    onClick={() => {
+                      setHotkeyInput('CommandOrControl+Shift+Space');
+                      setHotkey('CommandOrControl+Shift+Space');
+                      setHotkeySaved(true);
+                      setTimeout(() => setHotkeySaved(false), 1500);
+                    }}
+                  >
+                    ⌘ ⇧ Space
+                  </button>
+                  <button
+                    type="button"
+                    className={`preset-btn ${hotkey === 'Alt+Space' ? 'active' : ''}`}
+                    onClick={() => {
+                      setHotkeyInput('Alt+Space');
+                      setHotkey('Alt+Space');
+                      setHotkeySaved(true);
+                      setTimeout(() => setHotkeySaved(false), 1500);
+                    }}
+                  >
+                    ⌥ Space
+                  </button>
+                  <button
+                    type="button"
+                    className={`preset-btn ${hotkey === 'CommandOrControl+Space' ? 'active' : ''}`}
+                    onClick={() => {
+                      setHotkeyInput('CommandOrControl+Space');
+                      setHotkey('CommandOrControl+Space');
+                      setHotkeySaved(true);
+                      setTimeout(() => setHotkeySaved(false), 1500);
+                    }}
+                  >
+                    ⌘ Space
+                  </button>
+                </div>
+              </div>
+
+              <div className="custom-hotkey-input-row" style={{ display: 'flex', gap: '8px', marginTop: '10px' }}>
+                <input
+                  type="text"
+                  className="custom-hotkey-input"
+                  value={hotkeyInput}
+                  onChange={(e) => setHotkeyInput(e.target.value)}
+                  placeholder="e.g. CommandOrControl+Shift+Space"
+                />
+                <button
+                  type="button"
+                  className="save-hotkey-btn"
+                  onClick={() => {
+                    const clean = hotkeyInput.trim();
+                    if (clean) {
+                      setHotkey(clean);
+                      setHotkeySaved(true);
+                      setTimeout(() => setHotkeySaved(false), 1500);
+                    }
+                  }}
+                >
+                  {hotkeySaved ? <Check size={12} /> : null}
+                  <span>{hotkeySaved ? 'Saved' : 'Apply'}</span>
+                </button>
+              </div>
             </div>
           </div>
+
+          {/* First-Run Onboarding Guide Replay */}
+          {onOpenOnboarding && (
+            <div className="settings-section">
+              <h3 className="section-label">Onboarding & First-Run</h3>
+              <div className="shortcut-box" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div>
+                  <div style={{ fontSize: '12px', fontWeight: 500, color: 'var(--aeio-text-primary)' }}>First-Run Setup Guide</div>
+                  <div style={{ fontSize: '11px', color: 'var(--aeio-text-muted)' }}>Re-run the initial setup wizard to verify Ollama, rebind hotkeys, or configure models.</div>
+                </div>
+                <button
+                  type="button"
+                  className="action-btn secondary"
+                  style={{ padding: '6px 12px', fontSize: '11px', width: 'auto' }}
+                  onClick={onOpenOnboarding}
+                >
+                  <Sparkles size={12} />
+                  <span>Launch Guide</span>
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     );
