@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { ChatMessage as MessageType, useChatStore } from '../../stores/chatStore';
-import { ClaudeAsterisk } from '../common/ClaudeAsterisk';
+import { AeLogo } from '../common/AeLogo';
 import {
   Brain,
   Check,
@@ -109,7 +109,7 @@ export const ChatMessageItem: React.FC<Props> = React.memo(({ message }) => {
       {/* Claude-style Assistant Avatar */}
       <div className="claude-avatar-column">
         <div className="claude-avatar-frame">
-          <ClaudeAsterisk size={18} color="var(--accent-primary)" />
+          <AeLogo height={14} />
         </div>
       </div>
 

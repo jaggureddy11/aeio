@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { ChevronDown, Check, ArrowUp, Sun, Moon, Laptop, Plus, Trash2, Brain, Settings } from 'lucide-react';
-import { ClaudeAsterisk } from '../common/ClaudeAsterisk';
+import { AeLogo } from '../common/AeLogo';
 import { useSettingsStore, ThemeMode } from '../../stores/settingsStore';
 
 interface Props {
@@ -51,7 +51,7 @@ export const ClaudeTopBar: React.FC<Props> = ({
       {/* Left: Brand mark & Title prompt */}
       <div className="top-bar-left">
         <div className="top-bar-brand">
-          <ClaudeAsterisk size={18} color="var(--accent-primary)" />
+          <AeLogo height={16} />
           <span className="top-bar-title">{title}</span>
         </div>
       </div>
@@ -170,10 +170,10 @@ export const ClaudeTopBar: React.FC<Props> = ({
           )}
         </div>
 
-        {/* Terracotta Action Button (Rounded Square with Upward Arrow) */}
+        {/* Emerald Brand Action Button (Rounded Square with Upward Arrow) */}
         <button
           type="button"
-          className="top-bar-terracotta-btn"
+          className="top-bar-brand-btn"
           onClick={onActionClick || onNewChat}
           title="New Chat or Submit (Return)"
           aria-label="New chat or action"

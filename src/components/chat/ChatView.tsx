@@ -5,7 +5,7 @@ import { useSettingsStore } from '../../stores/settingsStore';
 import { ChatMessageItem } from './ChatMessage';
 import { ChatInput } from './ChatInput';
 import { ClaudeTopBar } from '../layout/ClaudeTopBar';
-import { ClaudeAsterisk } from '../common/ClaudeAsterisk';
+import { AeLogo } from '../common/AeLogo';
 import {
   AlertTriangle,
   RotateCw,
@@ -84,7 +84,7 @@ export const ChatView: React.FC<Props> = ({ onOpenSettings }) => {
           {messages.length === 0 ? (
             <div className="claude-empty-welcome">
               <div className="welcome-avatar-mark">
-                <ClaudeAsterisk size={44} color="var(--accent-primary)" />
+                <AeLogo height={28} />
               </div>
 
               <h1 className="welcome-heading">What can I help with today?</h1>

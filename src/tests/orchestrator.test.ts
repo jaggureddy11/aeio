@@ -38,12 +38,12 @@ describe('Backend AI Orchestrator', () => {
     it('successfully routes with Gemini API key', async () => {
       vi.mocked(ipc.getApiKey).mockImplementation(async (target: string) => {
         if (target === 'gemini') return 'test_gemini_key';
-        return undefined;
+        return '';
       });
 
       // Mock global fetch for Gemini
-      const originalFetch = global.fetch;
-      global.fetch = vi.fn().mockResolvedValue({
+      const originalFetch = globalThis.fetch;
+      globalThis.fetch = vi.fn().mockResolvedValue({
         ok: true,
         json: async () => ({
           candidates: [
@@ -65,7 +65,7 @@ describe('Backend AI Orchestrator', () => {
         expect(result.providerId).toBe('gemini');
         expect(result.isLocal).toBe(false);
       } finally {
-        global.fetch = originalFetch;
+        globalThis.fetch = originalFetch;
       }
     });
   });

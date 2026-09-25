@@ -1,5 +1,5 @@
 import React from 'react';
-import { ClaudeAsterisk } from '../common/ClaudeAsterisk';
+import { AeLogo } from '../common/AeLogo';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { useChatStore } from '../../stores/chatStore';
 import { useWorkspaceStore } from '../../stores/workspaceStore';
@@ -52,7 +52,7 @@ export const Sidebar: React.FC<Props> = ({
           title="Expand sidebar (⌘B)"
           aria-label="Expand sidebar"
         >
-          <ClaudeAsterisk size={18} color="var(--accent-primary)" />
+          <AeLogo height={16} />
         </button>
 
         <div className="sidebar-mini-nav">
@@ -102,7 +102,7 @@ export const Sidebar: React.FC<Props> = ({
       <div className="sidebar-header" data-tauri-drag-region>
         <div className="sidebar-brand-group">
           <div className="brand-badge-frame">
-            <ClaudeAsterisk size={18} color="var(--accent-primary)" />
+            <AeLogo height={14} />
           </div>
           <div className="brand-text-col">
             <span className="sidebar-brand-name">aeio</span>

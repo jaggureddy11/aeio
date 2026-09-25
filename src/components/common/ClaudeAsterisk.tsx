@@ -9,7 +9,7 @@ interface Props {
 export const ClaudeAsterisk: React.FC<Props> = ({
   size = 20,
   className = '',
-  color = '#D97757',
+  color = '#0FA958',
 }) => {
   // Replicates Claude's signature terracotta radiating asterisk/sunburst
   return (
