@@ -18,8 +18,8 @@ export const ChatInput: React.FC<Props> = ({ onSend, isLoading }) => {
   const activeWs = useWorkspaceStore((state) => state.activeWorkspace);
   const wsId = activeWs?.id || 'default';
 
-  const isCloudProvider = activeProvider === 'claude' || activeProvider === 'openai';
-  const cloudProviderName = activeProvider === 'claude' ? 'Claude' : 'OpenAI';
+  const isCloudProvider = activeProvider === 'claude' || activeProvider === 'openai' || activeProvider === 'aeio-free';
+  const cloudProviderName = activeProvider === 'claude' ? 'Claude' : activeProvider === 'openai' ? 'OpenAI' : 'Aeio Free';
 
   useEffect(() => {
     textareaRef.current?.focus();

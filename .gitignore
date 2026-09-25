@@ -25,6 +25,8 @@ dist-ssr
 *.db
 *.db*
 .env*
+.dev.vars*
+.wrangler/
 
 # Model weights & downloaded resources
 src-tauri/resources/models/

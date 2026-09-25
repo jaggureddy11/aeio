@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { ChatMessage as MessageType, useChatStore } from '../../stores/chatStore';
+import { useSettingsStore } from '../../stores/settingsStore';
 import logo from '../../assets/logo.png';
-import { User, Brain, Check, Plus, X, ChevronDown, ChevronUp, Lock, Monitor, Cpu, Copy, ShieldCheck } from 'lucide-react';
+import { User, Brain, Check, Plus, X, ChevronDown, ChevronUp, Lock, Monitor, Cpu, Copy, ShieldCheck, Key } from 'lucide-react';
 import { ToolApprovalCard } from './ToolApproval';
+import { PlanExecutionCard } from './PlanExecutionCard';
 
 interface Props {
   message: MessageType;
@@ -68,7 +70,10 @@ export const ChatMessageItem: React.FC<Props> = React.memo(({ message }) => {
     dismissMemoryProposal,
     approveToolExecution,
     denyToolExecution,
+    approvePlan,
+    cancelPlan,
   } = useChatStore();
+  const { setActiveTab } = useSettingsStore();
   const [showRecalled, setShowRecalled] = useState(false);
   const [showReasoning, setShowReasoning] = useState(false);
 
@@ -192,11 +197,47 @@ export const ChatMessageItem: React.FC<Props> = React.memo(({ message }) => {
             <ReactMarkdown components={{ code: CodeBlock }}>{message.content}</ReactMarkdown>
             {message.isStreaming && <span className="streaming-cursor" aria-hidden="true" />}
           </div>
+
+          {message.content.includes('Daily Free Quota Reached') && (
+            <div style={{ marginTop: '0.75rem' }}>
+              <button
+                type="button"
+                className="btn-byok-redirect"
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.5rem',
+                  padding: '0.45rem 0.85rem',
+                  fontSize: '0.8rem',
+                  fontWeight: 500,
+                  backgroundColor: 'var(--aeio-accent, #2563eb)',
+                  color: '#ffffff',
+                  border: 'none',
+                  borderRadius: '0.375rem',
+                  cursor: 'pointer'
+                }}
+                onClick={() => setActiveTab('settings')}
+              >
+                <Key size={13} />
+                <span>Add Your Own API Key (BYOK)</span>
+              </button>
+            </div>
+          )}
         </div>
 
 
+        {/* Agentic Multi-Step Execution Plan Card */}
+        {message.plan && (
+          <PlanExecutionCard
+            plan={message.plan}
+            messageId={message.id}
+            onApprove={approvePlan}
+            onCancel={cancelPlan}
+          />
+        )}
+
         {/* Tool Execution Cards (Tier 2: Tool Execution with Gatekeeper) */}
-        {hasTools && (
+        {hasTools && !message.plan && (
           <div className="tool-executions-container">
             {message.toolExecutions!.map((exec, idx) => (
               <ToolApprovalCard
@@ -268,6 +309,7 @@ export const ChatMessageItem: React.FC<Props> = React.memo(({ message }) => {
     prev.message.isStreaming === next.message.isStreaming &&
     prev.message.reasoning === next.message.reasoning &&
     prev.message.toolExecutions === next.message.toolExecutions &&
-    prev.message.proposedMemories === next.message.proposedMemories
+    prev.message.proposedMemories === next.message.proposedMemories &&
+    prev.message.plan === next.message.plan
   );
 });

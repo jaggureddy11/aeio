@@ -85,6 +85,23 @@ export const App: React.FC = () => {
   }, []);
 
   useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    import('@tauri-apps/api/event')
+      .then(({ listen }) => {
+        listen('open-settings', () => {
+          setActiveTab('settings');
+        }).then((unsub) => {
+          unlisten = unsub;
+        });
+      })
+      .catch(() => {});
+
+    return () => {
+      if (unlisten) unlisten();
+    };
+  }, [setActiveTab]);
+
+  useEffect(() => {
     const handleGlobalKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         if (showOnboarding) {

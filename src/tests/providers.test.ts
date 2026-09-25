@@ -3,7 +3,10 @@ import { QwenCoderProvider, DEFAULT_QWEN_MODEL } from '../lib/providers/qwenCode
 import { OllamaProvider } from '../lib/providers/ollama';
 import { ClaudeProvider } from '../lib/providers/claude';
 import { OpenAIProvider } from '../lib/providers/openai';
+import { GeminiProvider, DEFAULT_GEMINI_MODEL } from '../lib/providers/gemini';
+import { AeioFreeProvider, RateLimitError } from '../lib/providers/aeioFree';
 import { ProviderMessage } from '../lib/providers/types';
+import { useSettingsStore } from '../stores/settingsStore';
 
 describe('LLM Providers Unit Tests', () => {
   const originalFetch = globalThis.fetch;
@@ -238,6 +241,176 @@ describe('LLM Providers Unit Tests', () => {
       await expect(
         provider.chat([{ role: 'user', content: 'Hi' }], { apiKey: '' })
       ).rejects.toThrow('OpenAI API key required');
+    });
+  });
+
+  describe('GeminiProvider', () => {
+    it('sends correct payload to Google Gemini endpoint and formats response', async () => {
+      const provider = new GeminiProvider();
+      let capturedUrl = '';
+      let capturedBody: any;
+
+      globalThis.fetch = vi.fn().mockImplementation(async (url: string | URL | Request, init?: RequestInit) => {
+        capturedUrl = url.toString();
+        capturedBody = JSON.parse(init?.body as string);
+        return new Response(
+          JSON.stringify({
+            candidates: [
+              {
+                content: {
+                  parts: [{ text: 'Response from Gemini 3.7 Flash' }],
+                },
+              },
+            ],
+          }),
+          { status: 200 }
+        );
+      });
+
+      const messages: ProviderMessage[] = [{ role: 'user', content: 'Explain quantum computing' }];
+      const result = await provider.chat(messages, {
+        apiKey: 'AQ.TestGeminiKey123',
+        model: DEFAULT_GEMINI_MODEL,
+        systemPrompt: 'You are Aeio assistant.',
+      });
+
+      expect(capturedUrl).toContain('generativelanguage.googleapis.com');
+      expect(capturedUrl).toContain(DEFAULT_GEMINI_MODEL);
+      expect(capturedUrl).toContain('AQ.TestGeminiKey123');
+      expect(capturedBody.system_instruction.parts[0].text).toBe('You are Aeio assistant.');
+      expect(capturedBody.contents[0].role).toBe('user');
+      expect(capturedBody.contents[0].parts[0].text).toBe('Explain quantum computing');
+      expect(result).toBe('Response from Gemini 3.7 Flash');
+    });
+
+    it('streams response chunks from Gemini via SSE', async () => {
+      const provider = new GeminiProvider();
+      const chunks = [
+        'data: ' + JSON.stringify({ candidates: [{ content: { parts: [{ text: 'Step 1: ' }] } }] }) + '\n\n',
+        'data: ' + JSON.stringify({ candidates: [{ content: { parts: [{ text: 'Analyze goal' }] } }] }) + '\n\n',
+      ];
+
+      const encoder = new TextEncoder();
+      const readableStream = new ReadableStream({
+        start(controller) {
+          for (const chunk of chunks) {
+            controller.enqueue(encoder.encode(chunk));
+          }
+          controller.close();
+        },
+      });
+
+      globalThis.fetch = vi.fn().mockResolvedValueOnce(
+        new Response(readableStream, {
+          status: 200,
+          headers: { 'Content-Type': 'text/event-stream' },
+        })
+      );
+
+      const received: string[] = [];
+      const result = await provider.chat([{ role: 'user', content: 'Generate plan' }], {
+        apiKey: 'AQ.TestGeminiKey123',
+        onChunk: (c) => received.push(c),
+      });
+
+      expect(received).toEqual(['Step 1: ', 'Analyze goal']);
+      expect(result).toBe('Step 1: Analyze goal');
+    });
+
+    it('throws descriptive error if API key is missing', async () => {
+      const provider = new GeminiProvider();
+      await expect(
+        provider.chat([{ role: 'user', content: 'Hi' }], { apiKey: '' })
+      ).rejects.toThrow('Google Gemini API key required');
+    });
+
+    it('reports health correctly based on API key presence', async () => {
+      const provider = new GeminiProvider();
+      const unconfigured = await provider.checkHealth();
+      expect(unconfigured.ok).toBe(false);
+
+      const configured = await provider.checkHealth({ apiKey: 'AQ.valid' });
+      expect(configured.ok).toBe(true);
+    });
+  });
+
+  describe('AeioFreeProvider', () => {
+    it('fails loudly with clear error when hostedProxyUrl is unconfigured', async () => {
+      const provider = new AeioFreeProvider();
+      useSettingsStore.setState({ hostedProxyUrl: '' });
+
+      const health = await provider.checkHealth();
+      expect(health.ok).toBe(false);
+      expect(health.message).toContain('not configured yet');
+
+      await expect(
+        provider.chat([{ role: 'user', content: 'Hello' }])
+      ).rejects.toThrow('Aeio Free hosted proxy is not configured yet');
+    });
+
+    it('sends request with X-Installation-Id and parses response when configured', async () => {
+      const provider = new AeioFreeProvider();
+      useSettingsStore.setState({ hostedProxyUrl: 'https://aeio-free-proxy.test-account.workers.dev' });
+      let capturedHeaders: Record<string, string> = {};
+      let capturedBody: any;
+      let capturedUrl = '';
+
+      globalThis.fetch = vi.fn().mockImplementation(async (url: string | URL | Request, init?: RequestInit) => {
+        capturedUrl = url.toString();
+        capturedHeaders = init?.headers as Record<string, string>;
+        capturedBody = JSON.parse(init?.body as string);
+        return new Response(
+          JSON.stringify({
+            content: [{ type: 'text', text: 'Hello from Aeio Free proxy' }],
+          }),
+          { status: 200 }
+        );
+      });
+
+      const messages: ProviderMessage[] = [{ role: 'user', content: 'Hello free tier' }];
+      const result = await provider.chat(messages, {
+        systemPrompt: 'System instructions',
+      });
+
+      expect(capturedUrl).toContain('/v1/chat');
+      expect(capturedHeaders['X-Installation-Id']).toBeDefined();
+      expect(capturedBody.model).toBe('claude-3-5-haiku-20241022');
+      expect(capturedBody.messages).toEqual([{ role: 'user', content: 'Hello free tier' }]);
+      expect(result).toBe('Hello from Aeio Free proxy');
+    });
+
+    it('throws RateLimitError on HTTP 429 quota exhaustion', async () => {
+      const provider = new AeioFreeProvider();
+      useSettingsStore.setState({ hostedProxyUrl: 'https://aeio-free-proxy.test-account.workers.dev' });
+
+      globalThis.fetch = vi.fn().mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            error: 'rate_limit_exceeded',
+            message: "You've used today's free messages — add your own API key for unlimited use, or wait until tomorrow.",
+            limit: 30,
+            remaining: 0,
+          }),
+          { status: 429, headers: { 'Content-Type': 'application/json' } }
+        )
+      );
+
+      await expect(
+        provider.chat([{ role: 'user', content: 'Exceed quota' }])
+      ).rejects.toThrow(RateLimitError);
+    });
+
+    it('checks health of hosted proxy endpoint when configured', async () => {
+      const provider = new AeioFreeProvider();
+      useSettingsStore.setState({ hostedProxyUrl: 'https://aeio-free-proxy.test-account.workers.dev' });
+
+      globalThis.fetch = vi.fn().mockResolvedValueOnce(
+        new Response(JSON.stringify({ status: 'healthy', provider: 'aeio-free-proxy' }), { status: 200 })
+      );
+
+      const health = await provider.checkHealth();
+      expect(health.ok).toBe(true);
+      expect(health.message).toContain('Aeio Free proxy online');
     });
   });
 });

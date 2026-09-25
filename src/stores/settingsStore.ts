@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 
-export type LLMProviderType = 'qwen-coder' | 'ollama' | 'claude' | 'openai';
+export type LLMProviderType = 'qwen-coder' | 'ollama' | 'claude' | 'openai' | 'gemini' | 'aeio-free';
 
 export type ActiveTab = 'chat' | 'memory' | 'settings';
 
@@ -14,6 +14,8 @@ export interface SettingsState {
   hotkey: string;
   telemetryOptIn: boolean;
   neverSendMemoriesToCloud: boolean;
+  installationId: string;
+  hostedProxyUrl: string;
   setActiveTab: (tab: ActiveTab) => void;
   setActiveProvider: (provider: LLMProviderType) => void;
   setOllamaModel: (model: string) => void;
@@ -23,6 +25,7 @@ export interface SettingsState {
   setHotkey: (hotkey: string) => void;
   setTelemetryOptIn: (enabled: boolean) => void;
   setNeverSendMemoriesToCloud: (enabled: boolean) => void;
+  setHostedProxyUrl: (url: string) => void;
 }
 
 const getStoredBool = (key: string, defaultVal: boolean): boolean => {
@@ -43,6 +46,18 @@ const getStoredString = (key: string, defaultVal: string): string => {
   }
 };
 
+const getOrGenerateInstallationId = (): string => {
+  try {
+    const existing = localStorage.getItem('aeio_installation_id');
+    if (existing && existing.trim()) return existing.trim();
+    const newId = crypto.randomUUID();
+    localStorage.setItem('aeio_installation_id', newId);
+    return newId;
+  } catch {
+    return 'anon-' + Math.random().toString(36).substring(2, 15);
+  }
+};
+
 export const useSettingsStore = create<SettingsState>((set) => ({
   activeTab: 'chat',
   activeProvider: 'qwen-coder',
@@ -53,6 +68,8 @@ export const useSettingsStore = create<SettingsState>((set) => ({
   hotkey: getStoredString('aeio_global_hotkey', 'CommandOrControl+Shift+Space'),
   telemetryOptIn: getStoredBool('aeio_telemetry_opt_in', false),
   neverSendMemoriesToCloud: getStoredBool('aeio_never_send_memories_to_cloud', false),
+  installationId: getOrGenerateInstallationId(),
+  hostedProxyUrl: getStoredString('aeio_hosted_proxy_url', 'https://aeio-free-proxy.aeio-free.workers.dev'),
   setActiveTab: (activeTab) => set({ activeTab }),
   setActiveProvider: (activeProvider) => set({ activeProvider }),
   setOllamaModel: (ollamaModel) => set({ ollamaModel }),
@@ -92,6 +109,13 @@ export const useSettingsStore = create<SettingsState>((set) => ({
       localStorage.setItem('aeio_never_send_memories_to_cloud', String(enabled));
     } catch {}
     set({ neverSendMemoriesToCloud: enabled });
+  },
+  setHostedProxyUrl: (url: string) => {
+    const clean = url.trim() || 'https://proxy.aeio.internal';
+    try {
+      localStorage.setItem('aeio_hosted_proxy_url', clean);
+    } catch {}
+    set({ hostedProxyUrl: clean });
   },
 }));
 

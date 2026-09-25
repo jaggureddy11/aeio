@@ -28,6 +28,7 @@ import {
   Brain,
   Download,
   Database,
+  AlertTriangle,
 } from 'lucide-react';
 
 interface Props {
@@ -44,22 +45,29 @@ export const SettingsPanel: React.FC<Props> = ({ isOpen, onClose, onOpenOnboardi
     hotkey,
     telemetryOptIn,
     neverSendMemoriesToCloud,
+    installationId,
+    hostedProxyUrl,
     setActiveProvider,
     setOllamaModel,
     setActiveWindowAwareness,
     setHotkey,
     setTelemetryOptIn,
     setNeverSendMemoriesToCloud,
+    setHostedProxyUrl,
   } = useSettingsStore();
 
   const [activeSection, setActiveSection] = useState<'providers' | 'memory' | 'privacy' | 'shortcuts'>('providers');
   const [hotkeyInput, setHotkeyInput] = useState(hotkey);
   const [hotkeySaved, setHotkeySaved] = useState(false);
+  const [copiedInstallId, setCopiedInstallId] = useState(false);
+  const [proxyUrlInput, setProxyUrlInput] = useState(hostedProxyUrl);
 
   const [claudeInput, setClaudeInput] = useState('');
   const [openaiInput, setOpenaiInput] = useState('');
+  const [geminiInput, setGeminiInput] = useState('');
   const [hasClaudeStored, setHasClaudeStored] = useState(false);
   const [hasOpenaiStored, setHasOpenaiStored] = useState(false);
+  const [hasGeminiStored, setHasGeminiStored] = useState(false);
 
   const [ollamaStatus, setOllamaStatus] = useState<string | null>(null);
   const [isCheckingOllama, setIsCheckingOllama] = useState(false);
@@ -81,6 +89,8 @@ export const SettingsPanel: React.FC<Props> = ({ isOpen, onClose, onOpenOnboardi
       setHasClaudeStored(claudeExists);
       const openaiExists = await hasApiKey('openai');
       setHasOpenaiStored(openaiExists);
+      const geminiExists = await hasApiKey('gemini');
+      setHasGeminiStored(geminiExists);
     } catch (err) {
       console.warn('Keychain check failed:', err);
     }
@@ -145,6 +155,29 @@ export const SettingsPanel: React.FC<Props> = ({ isOpen, onClose, onOpenOnboardi
       await deleteApiKey('openai');
       setHasOpenaiStored(false);
       showSuccess('OpenAI API key removed from OS Keychain');
+    } catch (err: unknown) {
+      alert(`Failed to remove key: ${err}`);
+    }
+  };
+
+  const handleSaveGeminiKey = async () => {
+    const trimmed = geminiInput.trim();
+    if (!trimmed) return;
+    try {
+      await setApiKey('gemini', trimmed);
+      setGeminiInput('');
+      setHasGeminiStored(true);
+      showSuccess('Google Gemini API key secured in OS Keychain');
+    } catch (err: unknown) {
+      alert(`Failed to save to Keychain: ${err}`);
+    }
+  };
+
+  const handleDeleteGeminiKey = async () => {
+    try {
+      await deleteApiKey('gemini');
+      setHasGeminiStored(false);
+      showSuccess('Google Gemini API key removed from OS Keychain');
     } catch (err: unknown) {
       alert(`Failed to remove key: ${err}`);
     }
@@ -374,6 +407,34 @@ export const SettingsPanel: React.FC<Props> = ({ isOpen, onClose, onOpenOnboardi
                 </p>
               </div>
 
+              {/* Aeio Free Card */}
+              <div
+                role="radio"
+                tabIndex={0}
+                aria-checked={activeProvider === 'aeio-free'}
+                className={`provider-option-card ${
+                  activeProvider === 'aeio-free' ? 'selected' : ''
+                }`}
+                onClick={() => setActiveProvider('aeio-free')}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    setActiveProvider('aeio-free');
+                  }
+                }}
+              >
+                <div className="provider-option-header">
+                  <div className="provider-option-title">
+                    <Sparkles size={15} />
+                    <span>Aeio Free</span>
+                  </div>
+                  <span className="badge-cloud">30 msg/day</span>
+                </div>
+                <p className="provider-option-desc">
+                  Zero-config hosted proxy with Claude 3.5 Haiku. No local runtime or API key required.
+                </p>
+              </div>
+
               {/* Claude Card */}
               <div
                 role="radio"
@@ -427,6 +488,34 @@ export const SettingsPanel: React.FC<Props> = ({ isOpen, onClose, onOpenOnboardi
                 </div>
                 <p className="provider-option-desc">
                   GPT-4o / o1 high-speed reasoning API.
+                </p>
+              </div>
+
+              {/* Google Gemini Card */}
+              <div
+                role="radio"
+                tabIndex={0}
+                aria-checked={activeProvider === 'gemini'}
+                className={`provider-option-card ${
+                  activeProvider === 'gemini' ? 'selected' : ''
+                }`}
+                onClick={() => setActiveProvider('gemini')}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    setActiveProvider('gemini');
+                  }
+                }}
+              >
+                <div className="provider-option-header">
+                  <div className="provider-option-title">
+                    <Sparkles size={15} />
+                    <span>Gemini</span>
+                  </div>
+                  <span className="badge-cloud">BYOK</span>
+                </div>
+                <p className="provider-option-desc">
+                  Gemini 3.7 Flash ultra-fast reasoning & 1M+ context.
                 </p>
               </div>
             </div>
@@ -632,6 +721,145 @@ export const SettingsPanel: React.FC<Props> = ({ isOpen, onClose, onOpenOnboardi
                   </button>
                 )}
               </div>
+            </div>
+
+            {/* Google Gemini Key */}
+            <div className="key-config-row">
+              <div className="key-info">
+                <span className="key-name">Google Gemini API Key</span>
+                {hasGeminiStored ? (
+                  <span className="key-status-saved">
+                    <ShieldCheck size={12} /> Stored in OS Keychain
+                  </span>
+                ) : (
+                  <span className="key-status-missing">No key configured</span>
+                )}
+              </div>
+
+              <div className="key-input-row">
+                <input
+                  type="password"
+                  placeholder={hasGeminiStored ? '••••••••••••••••••••••••' : 'AIzaSy... / AQ...'}
+                  value={geminiInput}
+                  onChange={(e) => setGeminiInput(e.target.value)}
+                  aria-label="Google Gemini API Key"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleSaveGeminiKey();
+                    }
+                  }}
+                />
+                <button
+                  className="key-save-btn"
+                  onClick={handleSaveGeminiKey}
+                  disabled={!geminiInput.trim()}
+                  aria-label="Save Google Gemini API key"
+                >
+                  Save Key
+                </button>
+                {hasGeminiStored && (
+                  <button
+                    className="key-delete-btn"
+                    onClick={handleDeleteGeminiKey}
+                    title="Remove key from keychain"
+                    aria-label="Delete Google Gemini API key from keychain"
+                  >
+                    <Trash2 size={13} />
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Aeio Free Tier Configuration */}
+          <div className="settings-section">
+            <h3 className="section-label">
+              <div className="label-with-icon">
+                <Sparkles size={14} />
+                <span>Aeio Free (Hosted Tier)</span>
+              </div>
+            </h3>
+
+            <div className="security-notice-box">
+              <ShieldCheck size={16} className="security-icon" />
+              <div className="security-text">
+                <strong>Anonymous Rate Limiting</strong>
+                <p>
+                  Aeio Free provides 30 daily free messages via a privacy-preserving hosted proxy backed by Claude 3.5 Haiku. Requests are metered anonymously using a client-generated installation ID without any personal accounts or tracking.
+                </p>
+              </div>
+            </div>
+
+            <div className="key-config-row">
+              <div className="key-info">
+                <span className="key-name">Anonymous Installation ID</span>
+                <span className="key-status-saved">
+                  <ShieldCheck size={12} /> Stored Locally
+                </span>
+              </div>
+              <div className="key-input-row">
+                <input
+                  type="text"
+                  readOnly
+                  value={installationId}
+                  style={{ fontFamily: 'monospace', fontSize: '11px', opacity: 0.9 }}
+                  aria-label="Anonymous Installation ID"
+                />
+                <button
+                  type="button"
+                  className="key-save-btn"
+                  onClick={() => {
+                    navigator.clipboard.writeText(installationId);
+                    setCopiedInstallId(true);
+                    setTimeout(() => setCopiedInstallId(false), 2000);
+                  }}
+                  aria-label="Copy Installation ID"
+                >
+                  {copiedInstallId ? 'Copied' : 'Copy'}
+                </button>
+              </div>
+            </div>
+
+            <div className="key-config-row">
+              <div className="key-info">
+                <span className="key-name">Hosted Proxy Endpoint</span>
+                {hostedProxyUrl ? (
+                  <span className="key-status-saved">
+                    <Check size={12} /> Configured
+                  </span>
+                ) : (
+                  <span className="key-status-missing" style={{ color: 'var(--aeio-warning, #f59e0b)' }}>
+                    <AlertTriangle size={12} /> Not Configured
+                  </span>
+                )}
+              </div>
+              <div className="key-input-row">
+                <input
+                  type="text"
+                  value={proxyUrlInput}
+                  onChange={(e) => setProxyUrlInput(e.target.value)}
+                  placeholder="https://aeio-free-proxy.<subdomain>.workers.dev"
+                  aria-label="Hosted Proxy Endpoint"
+                />
+                <button
+                  type="button"
+                  className="key-save-btn"
+                  onClick={() => {
+                    setHostedProxyUrl(proxyUrlInput.trim());
+                    showSuccess('Hosted proxy endpoint updated');
+                  }}
+                  disabled={!proxyUrlInput.trim()}
+                  aria-label="Save Proxy URL"
+                >
+                  Save URL
+                </button>
+              </div>
+              {!hostedProxyUrl && (
+                <span className="input-hint" style={{ marginTop: '4px', fontSize: '11px', color: 'var(--aeio-text-muted, #888)' }}>
+                  Deploy the worker with <code>npx wrangler deploy</code> in <code>server/</code> and paste your printed URL here.
+                </span>
+              )}
             </div>
           </div>
         </>

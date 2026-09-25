@@ -19,6 +19,11 @@ import {
   loadChatMessages,
   clearChatHistory,
 } from '../lib/ipc';
+import {
+  ExecutionPlan,
+  parsePlanFromResponse,
+  classifyPlanSafety,
+} from '../lib/agent/plan';
 
 export interface RecalledMemory {
   id: string;
@@ -71,6 +76,7 @@ export interface ChatMessage {
   providerInfo?: ProviderBadgeInfo;
   workspaceId?: string;
   activeWindowContext?: ActiveWindowInfo;
+  plan?: ExecutionPlan;
 }
 
 export interface ChatState {
@@ -82,6 +88,7 @@ export interface ChatState {
   activeNudge: ProactiveNudge | null;
   dismissedNudgeIds: string[];
   consecutiveAgenticRounds: number;
+  activeRunningPlanMessageId: string | null;
   initChatHistory: (workspaceId?: string) => Promise<void>;
   addMessage: (message: Omit<ChatMessage, 'id' | 'timestamp'>) => string;
   updateMessageContent: (
@@ -93,7 +100,8 @@ export interface ChatState {
     tools?: ToolExecution[],
     providerInfo?: ProviderBadgeInfo,
     activeWindowContext?: ActiveWindowInfo,
-    reasoning?: string
+    reasoning?: string,
+    plan?: ExecutionPlan
   ) => void;
   setError: (error: string | null) => void;
   clearMessages: () => void;
@@ -115,6 +123,9 @@ export interface ChatState {
     alwaysAllow?: boolean
   ) => Promise<void>;
   denyToolExecution: (messageId: string, index: number) => void;
+  approvePlan: (messageId: string) => Promise<void>;
+  cancelPlan: (messageId: string) => void;
+  executePlan: (messageId: string) => Promise<void>;
   dismissNudge: (id: string) => void;
   applyNudge: (nudge: ProactiveNudge) => Promise<void>;
   checkForAmbientNudge: () => Promise<void>;
@@ -209,6 +220,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
   activeNudge: null,
   dismissedNudgeIds: [],
   consecutiveAgenticRounds: 0,
+  activeRunningPlanMessageId: null,
 
   initChatHistory: async (workspaceId?: string) => {
     try {
@@ -285,7 +297,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
     tools,
     providerInfo,
     activeWindowContext,
-    reasoning
+    reasoning,
+    plan
   ) => {
     set((state) => {
       const updatedMessages = state.messages.map((m) => {
@@ -301,6 +314,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
             activeWindowContext:
               activeWindowContext !== undefined ? activeWindowContext : m.activeWindowContext,
             reasoning: reasoning !== undefined ? reasoning : m.reasoning,
+            plan: plan !== undefined ? plan : m.plan,
           };
           if (!isStreaming) {
             persistChatMessage(updated);
@@ -560,6 +574,212 @@ export const useChatStore = create<ChatState>((set, get) => ({
     );
   },
 
+  approvePlan: async (messageId: string) => {
+    const message = get().messages.find((m) => m.id === messageId);
+    if (!message || !message.plan) return;
+    const updatedPlan: ExecutionPlan = {
+      ...message.plan,
+      status: 'running',
+    };
+    get().updateMessageContent(
+      messageId,
+      message.content,
+      false,
+      message.recalledMemories,
+      message.proposedMemories,
+      message.toolExecutions,
+      message.providerInfo,
+      message.activeWindowContext,
+      message.reasoning,
+      updatedPlan
+    );
+    await get().executePlan(messageId);
+  },
+
+  cancelPlan: (messageId: string) => {
+    const message = get().messages.find((m) => m.id === messageId);
+    if (!message || !message.plan) return;
+    const cancelledSteps = message.plan.steps.map((s, idx) => {
+      if (idx >= message.plan!.currentStepIndex && s.status !== 'completed') {
+        return { ...s, status: 'cancelled' as const };
+      }
+      return s;
+    });
+    const updatedPlan: ExecutionPlan = {
+      ...message.plan,
+      status: 'cancelled',
+      stoppedReason: 'Execution cancelled by user.',
+      steps: cancelledSteps,
+    };
+    set({ activeRunningPlanMessageId: null });
+    get().updateMessageContent(
+      messageId,
+      message.content,
+      false,
+      message.recalledMemories,
+      message.proposedMemories,
+      message.toolExecutions,
+      message.providerInfo,
+      message.activeWindowContext,
+      message.reasoning,
+      updatedPlan
+    );
+  },
+
+  executePlan: async (messageId: string) => {
+    set({ activeRunningPlanMessageId: messageId });
+    const message = get().messages.find((m) => m.id === messageId);
+    if (!message || !message.plan) return;
+
+    const plan = { ...message.plan, status: 'running' as const };
+    const steps = [...plan.steps];
+    const currentTools: ToolExecution[] = [...(message.toolExecutions || [])];
+
+    let failedStepIndex = -1;
+    let failureError: string | null = null;
+
+    for (let i = 0; i < steps.length; i++) {
+      // Check if cancelled
+      const freshMessage = get().messages.find((m) => m.id === messageId);
+      if (!freshMessage || !freshMessage.plan || freshMessage.plan.status === 'cancelled') {
+        set({ activeRunningPlanMessageId: null });
+        return;
+      }
+
+      steps[i] = { ...steps[i], status: 'running' };
+      plan.currentStepIndex = i;
+      plan.steps = [...steps];
+      get().updateMessageContent(
+        messageId,
+        freshMessage.content,
+        false,
+        freshMessage.recalledMemories,
+        freshMessage.proposedMemories,
+        currentTools,
+        freshMessage.providerInfo,
+        freshMessage.activeWindowContext,
+        freshMessage.reasoning,
+        { ...plan }
+      );
+
+      const step = steps[i];
+      let stepResult: any = null;
+      let isError = false;
+      let errorMsg = '';
+
+      try {
+        switch (step.toolName) {
+          case 'run_shell': {
+            const shellRes = await runShellCommand(step.args.command, step.args.cwd);
+            stepResult = shellRes;
+            if (shellRes.exit_code !== 0) {
+              isError = true;
+              errorMsg = `Command exited with status ${shellRes.exit_code}: ${shellRes.stderr || shellRes.stdout}`;
+            }
+            break;
+          }
+          case 'read_file': {
+            stepResult = await readFile(step.args.path);
+            break;
+          }
+          case 'search_files': {
+            stepResult = await searchFiles(step.args.dir || './', step.args.query || '');
+            break;
+          }
+          case 'read_clipboard': {
+            stepResult = await readClipboard();
+            break;
+          }
+          case 'write_clipboard': {
+            await writeClipboard(step.args.text || '');
+            stepResult = 'Content written to clipboard';
+            break;
+          }
+          case 'open_target': {
+            const target = step.args.target || step.args.path || step.args.url || '';
+            stepResult = await openTarget(target);
+            break;
+          }
+          default:
+            throw new Error(`Unknown tool: ${step.toolName}`);
+        }
+      } catch (err: unknown) {
+        isError = true;
+        errorMsg = err instanceof Error ? err.message : String(err);
+      }
+
+      // Add audit receipt to toolExecutions
+      const toolReceipt: ToolExecution = {
+        id: step.id,
+        toolName: step.toolName,
+        args: step.args,
+        status: isError ? 'error' : 'completed',
+        isDestructive: step.isDestructive,
+        result: stepResult,
+        error: isError ? errorMsg : undefined,
+      };
+      currentTools.push(toolReceipt);
+
+      if (isError) {
+        steps[i] = { ...steps[i], status: 'failed', error: errorMsg, result: stepResult };
+        failedStepIndex = i;
+        failureError = errorMsg;
+        // Mark subsequent steps as cancelled
+        for (let j = i + 1; j < steps.length; j++) {
+          steps[j] = { ...steps[j], status: 'cancelled' };
+        }
+        break;
+      } else {
+        steps[i] = { ...steps[i], status: 'completed', result: stepResult };
+      }
+    }
+
+    set({ activeRunningPlanMessageId: null });
+    const freshMessage = get().messages.find((m) => m.id === messageId);
+    if (!freshMessage) return;
+
+    if (failedStepIndex !== -1) {
+      const stoppedReason = `Step ${failedStepIndex + 1} (${steps[failedStepIndex].description}) failed: ${failureError}. Stopped remaining steps.`;
+      const finalPlan: ExecutionPlan = {
+        ...plan,
+        status: 'failed',
+        steps,
+        stoppedReason,
+      };
+      get().updateMessageContent(
+        messageId,
+        freshMessage.content,
+        false,
+        freshMessage.recalledMemories,
+        freshMessage.proposedMemories,
+        currentTools,
+        freshMessage.providerInfo,
+        freshMessage.activeWindowContext,
+        freshMessage.reasoning,
+        finalPlan
+      );
+    } else {
+      const finalPlan: ExecutionPlan = {
+        ...plan,
+        status: 'completed',
+        steps,
+        summary: `Plan executed successfully: all ${steps.length} steps completed.`,
+      };
+      get().updateMessageContent(
+        messageId,
+        freshMessage.content,
+        false,
+        freshMessage.recalledMemories,
+        freshMessage.proposedMemories,
+        currentTools,
+        freshMessage.providerInfo,
+        freshMessage.activeWindowContext,
+        freshMessage.reasoning,
+        finalPlan
+      );
+    }
+  },
+
   dismissNudge: (id: string) => {
     set((state) => ({
       activeNudge: null,
@@ -694,9 +914,11 @@ export const useChatStore = create<ChatState>((set, get) => ({
         ? settings.ollamaModel || 'llama3.2'
         : providerId === 'claude'
         ? 'claude-3-5-sonnet'
+        : providerId === 'aeio-free'
+        ? 'claude-3-5-haiku'
         : 'gpt-4o';
     const isLocal = providerId === 'qwen-coder' || providerId === 'ollama';
-    const isCloud = providerId === 'claude' || providerId === 'openai';
+    const isCloud = providerId === 'claude' || providerId === 'openai' || providerId === 'aeio-free';
 
     // Tier 3.2: Sensitive-Content Routing Gate
     // If querying an external cloud provider and the privacy lock is enabled, strip memory context completely!
@@ -744,7 +966,13 @@ export const useChatStore = create<ChatState>((set, get) => ({
       '   - open_target: Open file, directory, application, or URL with default OS handler. Arguments: {"target": "..."}\n' +
       '   - read_clipboard: Inspect clipboard text. Arguments: {}\n' +
       '   - write_clipboard: Copy text to clipboard. Arguments: {"text": "..."}\n' +
-      '5. When tool execution outputs are fed back to you, analyze the result and deliver the synthesized answer or next action.';
+      '5. When tool execution outputs are fed back to you, analyze the result and deliver the synthesized answer or next action.\n' +
+      '6. When a user goal requires multiple steps or sequential tool operations, emit a structured plan:\n' +
+      '   <plan title="Descriptive title of the overall plan">\n' +
+      '     <step number="1" tool="run_shell" description="Explanation of step">{"command": "..."}</step>\n' +
+      '     <step number="2" tool="run_shell" description="Explanation of step">{"command": "..."}</step>\n' +
+      '   </plan>\n' +
+      '   Aeio will classify the plan and execute it safely or present it for upfront approval.';
 
     if (activeWs) {
       systemPrompt += `\nCurrent Workspace: "${activeWs.name}". Keep context focused on this workspace.`;
@@ -962,11 +1190,39 @@ export const useChatStore = create<ChatState>((set, get) => ({
         }
       }
 
+      // 10. Check for structured execution plans (<plan>...</plan>)
+      let executionPlan: ExecutionPlan | null = null;
+      const parsedPlanResult = parsePlanFromResponse(rawStreamed);
+      if (parsedPlanResult.plan) {
+        executionPlan = await classifyPlanSafety(parsedPlanResult.plan, checkDestructiveCommand);
+      } else if (tools.length > 1) {
+        // Automatically bundle multiple tools into a multi-step plan
+        const steps = tools.map((t, idx) => ({
+          id: t.id,
+          stepNumber: idx + 1,
+          description: `Execute ${t.toolName} (${t.args.command || t.args.path || JSON.stringify(t.args)})`,
+          toolName: t.toolName,
+          args: t.args,
+          isDestructive: !!t.isDestructive,
+          status: 'pending' as const,
+        }));
+        const hasDestructive = steps.some((s) => s.isDestructive);
+        executionPlan = {
+          id: crypto.randomUUID(),
+          title: 'Multi-Step Execution Plan',
+          steps,
+          status: hasDestructive ? 'pending_approval' : 'running',
+          hasDestructiveSteps: hasDestructive,
+          currentStepIndex: 0,
+        };
+      }
+
       const finalText = rawStreamed
         .replace(THINK_REGEX, '')
         .replace(REMEMBER_REGEX, '')
         .replace(XML_TOOL_CALL_REGEX, '')
         .replace(JSON_TOOL_CALL_REGEX, '')
+        .replace(/<plan(?:\s+title=["'][^"']*["'])?>[\s\S]*?<\/plan>/gi, '')
         .trim();
 
       get().updateMessageContent(
@@ -978,11 +1234,19 @@ export const useChatStore = create<ChatState>((set, get) => ({
         tools,
         providerInfo,
         activeWinInfo,
-        finalReasoning
+        finalReasoning,
+        executionPlan || undefined
       );
 
-      // 11. Auto-execute any non-destructive tools that are already marked "always allow"
-      if (tools.length > 0) {
+      // 11. Handle execution
+      if (executionPlan) {
+        if (!executionPlan.hasDestructiveSteps) {
+          // Autonomous execution for all-safe steps
+          get().executePlan(assistantId);
+        }
+        // If has destructive steps, executionPlan remains in pending_approval until user approves
+      } else if (tools.length > 0) {
+        // Auto-execute any non-destructive tools that are already marked "always allow"
         const allowed = get().alwaysAllowedCommands;
         for (let i = 0; i < tools.length; i++) {
           const t = tools[i];
@@ -1006,7 +1270,14 @@ export const useChatStore = create<ChatState>((set, get) => ({
           : 'Failed to receive response from provider.';
 
       let actionableError = errorMsg;
-      if (
+      const isRateLimit =
+        errorMsg.includes("used today's free messages") ||
+        (err && typeof err === 'object' && (err as any).name === 'RateLimitError');
+
+      if (isRateLimit) {
+        actionableError =
+          "You've used today's free messages — add your own API key for unlimited use, or wait until tomorrow.";
+      } else if (
         errorMsg.includes('Failed to fetch') ||
         errorMsg.includes('ECONNREFUSED') ||
         errorMsg.includes('11434')
@@ -1022,7 +1293,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
       if (!rawStreamed) {
         get().updateMessageContent(
           assistantId,
-          `**Connection Issue**: ${actionableError}`,
+          isRateLimit
+            ? `**Daily Free Quota Reached**: ${actionableError}`
+            : `**Connection Issue**: ${actionableError}`,
           false,
           recalled,
           undefined,

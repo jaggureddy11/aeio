@@ -15,6 +15,7 @@ import {
   ArrowRight,
   ArrowLeft,
   X,
+  Sparkles,
 } from 'lucide-react';
 import logo from '../../assets/logo.png';
 
@@ -25,6 +26,7 @@ interface Props {
 
 export const OnboardingModal: React.FC<Props> = ({ isOpen, onClose }) => {
   const {
+    activeProvider,
     ollamaModel,
     hotkey,
     setActiveProvider,
@@ -291,7 +293,18 @@ export const OnboardingModal: React.FC<Props> = ({ isOpen, onClose }) => {
                       </button>
                       <button
                         type="button"
-                        className={`skip-local-toggle ${skippedLocalMode ? 'active' : ''}`}
+                        className={`skip-local-toggle ${skippedLocalMode && activeProvider === 'aeio-free' ? 'active' : ''}`}
+                        onClick={() => {
+                          setSkippedLocalMode(true);
+                          setActiveProvider('aeio-free');
+                        }}
+                      >
+                        <Sparkles size={12} />
+                        <span>Use Aeio Free (Zero setup, 30 msgs/day)</span>
+                      </button>
+                      <button
+                        type="button"
+                        className={`skip-local-toggle ${skippedLocalMode && activeProvider === 'claude' ? 'active' : ''}`}
                         onClick={() => {
                           setSkippedLocalMode(true);
                           setActiveProvider('claude');
@@ -306,7 +319,7 @@ export const OnboardingModal: React.FC<Props> = ({ isOpen, onClose }) => {
 
               {!ollamaHealthy && !skippedLocalMode && (
                 <div className="step-block-notice">
-                  Local mode requires Ollama. Start Ollama above, or click "Skip local mode" to continue with Claude or OpenAI.
+                  Local mode requires Ollama. Start Ollama above, or choose "Use Aeio Free" / "Skip local mode" to continue immediately.
                 </div>
               )}
             </div>
@@ -456,6 +469,34 @@ export const OnboardingModal: React.FC<Props> = ({ isOpen, onClose }) => {
               </p>
 
               <div className="step-card">
+                {/* Aeio Free Tier Option */}
+                <div className="provider-input-group" style={{ marginBottom: '16px', paddingBottom: '14px', borderBottom: '1px solid var(--aeio-border, #333)' }}>
+                  <div className="provider-header-row">
+                    <span className="provider-title" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <Sparkles size={13} />
+                      <span>Aeio Free (Hosted Tier)</span>
+                    </span>
+                    {activeProvider === 'aeio-free' ? (
+                      <span className="stored-badge">
+                        <Check size={11} />
+                        <span>Active Provider</span>
+                      </span>
+                    ) : (
+                      <button
+                        type="button"
+                        className="save-key-btn"
+                        style={{ padding: '3px 8px', fontSize: '11px' }}
+                        onClick={() => setActiveProvider('aeio-free')}
+                      >
+                        Set as Active
+                      </button>
+                    )}
+                  </div>
+                  <p style={{ margin: '4px 0 0 0', fontSize: '11px', color: 'var(--aeio-text-muted, #888)' }}>
+                    30 free messages/day proxying Claude 3.5 Haiku. No API key or Ollama required.
+                  </p>
+                </div>
+
                 <div className="provider-input-group">
                   <div className="provider-header-row">
                     <span className="provider-title">Anthropic Claude API Key</span>

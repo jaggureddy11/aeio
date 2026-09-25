@@ -3,6 +3,8 @@ import { qwenCoderProvider } from './qwenCoder';
 import { ollamaProvider } from './ollama';
 import { claudeProvider } from './claude';
 import { openAIProvider } from './openai';
+import { geminiProvider } from './gemini';
+import { aeioFreeProvider } from './aeioFree';
 import { LLMProviderType, useSettingsStore } from '../../stores/settingsStore';
 
 export const providers: Record<LLMProviderType, LLMProvider> = {
@@ -10,6 +12,8 @@ export const providers: Record<LLMProviderType, LLMProvider> = {
   ollama: ollamaProvider,
   claude: claudeProvider,
   openai: openAIProvider,
+  gemini: geminiProvider,
+  'aeio-free': aeioFreeProvider,
 };
 
 export function getProvider(type: LLMProviderType): LLMProvider {
@@ -41,6 +45,12 @@ export async function chatWithActiveProvider(
     } else if (provider.id === 'openai') {
       try {
         resolvedApiKey = await getApiKey('openai');
+      } catch {
+        // not found in keychain
+      }
+    } else if (provider.id === 'gemini') {
+      try {
+        resolvedApiKey = await getApiKey('gemini');
       } catch {
         // not found in keychain
       }
