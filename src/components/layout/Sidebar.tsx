@@ -1,5 +1,5 @@
 import React from 'react';
-import logo from '../../assets/logo.png';
+import { ClaudeAsterisk } from '../common/ClaudeAsterisk';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { useChatStore } from '../../stores/chatStore';
 import { useWorkspaceStore } from '../../stores/workspaceStore';
@@ -11,7 +11,7 @@ import {
   PanelLeftClose,
   ShieldCheck,
   Cpu,
-  Sparkles,
+  Bot,
   Layers,
   Trash2,
 } from 'lucide-react';
@@ -52,7 +52,7 @@ export const Sidebar: React.FC<Props> = ({
           title="Expand sidebar (⌘B)"
           aria-label="Expand sidebar"
         >
-          <img src={logo} alt="Aeio logo" className="sidebar-logo-mini" />
+          <ClaudeAsterisk size={18} color="var(--accent-primary)" />
         </button>
 
         <div className="sidebar-mini-nav">
@@ -102,7 +102,7 @@ export const Sidebar: React.FC<Props> = ({
       <div className="sidebar-header" data-tauri-drag-region>
         <div className="sidebar-brand-group">
           <div className="brand-badge-frame">
-            <img src={logo} alt="Aeio logo" className="sidebar-logo" />
+            <ClaudeAsterisk size={18} color="var(--accent-primary)" />
           </div>
           <div className="brand-text-col">
             <span className="sidebar-brand-name">aeio</span>
@@ -219,18 +219,10 @@ export const Sidebar: React.FC<Props> = ({
             {activeProvider === 'qwen-coder' || activeProvider === 'ollama' ? (
               <Cpu size={12} />
             ) : (
-              <Sparkles size={12} />
+              <Bot size={12} />
             )}
             <span className="engine-name">
-              {activeProvider === 'gemini'
-                ? 'Gemini 3.7 Flash'
-                : activeProvider === 'aeio-free'
-                ? 'Claude Haiku Free'
-                : activeProvider === 'claude'
-                ? 'Claude 3.5 Sonnet'
-                : activeProvider === 'openai'
-                ? 'GPT-4o'
-                : 'Qwen 2.5 Coder'}
+              Auto Orchestrator
             </span>
           </div>
           <span className="engine-manage-link">Edit</span>

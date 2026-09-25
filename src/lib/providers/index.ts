@@ -5,3 +5,4 @@ export * from './openai';
 export * from './gemini';
 export * from './aeioFree';
 export * from './providerRegistry';
+export * from './orchestrator';

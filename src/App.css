@@ -1,6 +1,7 @@
-:root {
+:root,
+[data-theme="dark"] {
   /* ==========================================================================
-     Phase 2 Design System Tokens — Minimal, Calm, Content-First
+     Anthropic Claude Dark Espresso Palette (Default / System Dark)
      ========================================================================== */
 
   /* 1. TYPOGRAPHY */
@@ -21,7 +22,6 @@
   --leading-relaxed: 1.6; /* Body and chat reading comfort */
 
   /* 2. COLOR PALETTE */
-  /* Claude Warm Neutral & Terracotta Palette */
   --bg-app: #181715;          /* Warm espresso background */
   --bg-sidebar: #1E1D1A;      /* Warm stone sidebar */
   --bg-surface: #24221E;      /* Main reading card surface */
@@ -88,7 +88,58 @@
   --shadow-window: 0 20px 48px -12px rgba(0, 0, 0, 0.85), 0 0 0 1px var(--border-default);
   --shadow-menu: 0 12px 28px -6px rgba(0, 0, 0, 0.75), 0 0 0 1px var(--border-default);
   --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
 
+[data-theme="light"] {
+  /* ==========================================================================
+     Anthropic Claude Light Warm Paper / Linen Palette
+     ========================================================================== */
+  --bg-app: #FAF9F5;          /* Signature Claude warm linen */
+  --bg-sidebar: #F3F1EB;      /* Warm stone/sand sidebar */
+  --bg-surface: #FFFFFF;      /* Clean card surface */
+  --bg-card: #FFFFFF;         /* Crisp message & card surface */
+  --bg-card-hover: #F0ECE1;   /* Card hover state */
+  --bg-input: #F3F0E8;        /* Input background */
+  --bg-overlay: rgba(31, 30, 27, 0.45); /* Modal backdrop */
+
+  /* Neutral Reading Typography Hierarchy */
+  --text-primary: #1F1E1B;    /* Deep warm charcoal/black */
+  --text-secondary: #6F6B63;  /* Warm stone secondary text */
+  --text-muted: #8F8B83;      /* De-emphasized timestamps & helpers */
+  --text-faint: #B5B1A8;      /* Placeholders & disabled states */
+
+  /* Hairline Precision Borders */
+  --border-subtle: rgba(0, 0, 0, 0.06);
+  --border-default: rgba(0, 0, 0, 0.09);
+  --border-hover: rgba(0, 0, 0, 0.16);
+  --border-focus: rgba(204, 102, 68, 0.45);
+
+  /* Signature Anthropic Terracotta Accent */
+  --accent-primary: #CC6644;
+  --accent-hover: #B95837;
+  --accent-active: #A44B2C;
+  --accent-text: #B95837;
+  --accent-subtle: rgba(204, 102, 68, 0.10);
+  --accent-border: rgba(204, 102, 68, 0.22);
+
+  /* Functional Status Colors */
+  --status-success: #059669;
+  --status-success-subtle: rgba(5, 150, 105, 0.10);
+  --status-warning: #d97706;
+  --status-warning-subtle: rgba(217, 119, 6, 0.10);
+  --status-danger: #dc2626;
+  --status-danger-subtle: rgba(220, 38, 38, 0.10);
+
+  /* Shadows for light mode */
+  --shadow-window: 0 20px 48px -12px rgba(0, 0, 0, 0.14), 0 0 0 1px var(--border-default);
+  --shadow-menu: 0 12px 28px -6px rgba(0, 0, 0, 0.12), 0 0 0 1px var(--border-default);
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.05), 0 0 0 1px var(--border-subtle);
+
+  --aeio-bg-glass: rgba(250, 249, 245, 0.94);
+  --aeio-text-inverse: #FFFFFF;
+}
+
+:root {
   /* ==========================================================================
      Backward-Compatible Aliases for Existing Selectors
      ========================================================================== */
@@ -4832,7 +4883,7 @@ html, body, #root {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  background: #181715;
+  background: var(--bg-app);
 }
 
 .claude-chat-layout {
@@ -4844,51 +4895,239 @@ html, body, #root {
   position: relative;
 }
 
-/* --- Top Header Bar --- */
+/* --- Claude Top Bar & Window Drag Capsule --- */
 .claude-top-bar {
   height: 52px;
   min-height: 52px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 24px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-  background: rgba(24, 23, 21, 0.85);
+  padding: 0 18px 0 84px; /* 84px left padding so macOS traffic lights have clear breathing space */
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--bg-surface);
   backdrop-filter: blur(16px);
-  z-index: 10;
+  -webkit-backdrop-filter: blur(16px);
+  z-index: 100;
+  cursor: default;
+  -webkit-app-region: drag;
+  user-select: none;
 }
 
 .top-bar-left {
   display: flex;
   align-items: center;
   gap: 12px;
+  -webkit-app-region: no-drag;
+}
+
+.top-bar-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.top-bar-title {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-primary);
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+}
+
+.top-bar-center {
+  flex: 1;
+  height: 100%;
+  -webkit-app-region: drag;
 }
 
 .top-bar-right {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
+  -webkit-app-region: no-drag;
 }
 
-.top-bar-action-btn {
+.top-bar-menu-wrapper {
+  position: relative;
+  -webkit-app-region: no-drag;
+}
+
+.top-bar-capsule-btn {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 6px 10px;
+  padding: 6px 12px;
   border-radius: 8px;
   background: transparent;
-  border: 1px solid rgba(255, 255, 255, 0.07);
-  color: #A39E96;
-  font-size: 12px;
+  border: 1px solid var(--border-default);
+  color: var(--text-secondary);
+  font-size: 13px;
   font-weight: 500;
   cursor: pointer;
   transition: all 0.15s ease;
+  -webkit-app-region: no-drag !important;
 }
 
-.top-bar-action-btn:hover {
-  background: rgba(255, 255, 255, 0.06);
-  color: #ECEAE5;
-  border-color: rgba(255, 255, 255, 0.12);
+.top-bar-capsule-btn:hover,
+.top-bar-capsule-btn.active {
+  background: var(--bg-card-hover);
+  color: var(--text-primary);
+  border-color: var(--border-hover);
+}
+
+.top-bar-capsule-btn .chevron-icon {
+  transition: transform 0.15s ease;
+  color: var(--text-muted);
+}
+
+.top-bar-capsule-btn .chevron-icon.open {
+  transform: rotate(180deg);
+}
+
+/* Terracotta Action Button (Rounded Square with Upward Arrow) */
+.top-bar-terracotta-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: var(--accent-primary);
+  border: none;
+  color: #FFFFFF;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  -webkit-app-region: no-drag !important;
+}
+
+.top-bar-terracotta-btn:hover {
+  background: var(--accent-hover);
+  transform: translateY(-1px);
+  box-shadow: 0 3px 8px rgba(217, 119, 87, 0.35);
+}
+
+.top-bar-terracotta-btn:active {
+  background: var(--accent-active);
+  transform: translateY(0);
+}
+
+/* Claude Top Bar Dropdown */
+.top-bar-dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  width: 220px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-default);
+  border-radius: 12px;
+  padding: 6px;
+  box-shadow: var(--shadow-menu);
+  z-index: 1000;
+  animation: fadeInDown 0.12s ease-out;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  -webkit-app-region: no-drag !important;
+}
+
+.dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: transparent;
+  border: none;
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 450;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.12s ease;
+  -webkit-app-region: no-drag !important;
+}
+
+.dropdown-item:hover {
+  background: var(--bg-card-hover);
+}
+
+.dropdown-item.danger {
+  color: var(--status-danger);
+}
+
+.dropdown-item.danger:hover {
+  background: var(--status-danger-subtle);
+}
+
+.dropdown-item.selected {
+  font-weight: 550;
+  color: var(--accent-primary);
+}
+
+.dropdown-item-icon {
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+
+.dropdown-item:hover .dropdown-item-icon {
+  color: var(--text-primary);
+}
+
+.dropdown-item-label {
+  flex: 1;
+}
+
+.dropdown-shortcut {
+  font-size: 11px;
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+  background: var(--bg-input);
+  padding: 1px 5px;
+  border-radius: 4px;
+  border: 1px solid var(--border-subtle);
+}
+
+.dropdown-check-icon {
+  color: var(--accent-primary);
+}
+
+.dropdown-divider {
+  height: 1px;
+  background: var(--border-subtle);
+  margin: 4px 6px;
+}
+
+.dropdown-section-title {
+  padding: 4px 10px 2px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  text-transform: uppercase;
+}
+
+/* Composer Agent Badge */
+.composer-agent-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: var(--accent-subtle);
+  border: 1px solid var(--accent-border);
+  color: var(--accent-text);
+  font-size: 11px;
+  font-weight: 550;
+}
+
+.agent-status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent-primary);
+  box-shadow: 0 0 6px var(--accent-primary);
 }
 
 /* --- Model Selector Dropdown --- */

@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { chatWithActiveProvider, ProviderMessage } from '../lib/providers';
+import { orchestrateChat, ProviderMessage, TaskType } from '../lib/providers';
 import { useSettingsStore } from './settingsStore';
 import { useWorkspaceStore } from './workspaceStore';
 import {
@@ -1048,8 +1048,15 @@ export const useChatStore = create<ChatState>((set, get) => ({
       }, 12000);
     }
 
+    let orchestrationResult = {
+      providerId: providerId as string,
+      modelName,
+      isLocal,
+      taskType: 'conversational' as TaskType,
+    };
+
     try {
-      await chatWithActiveProvider(conversation, {
+      const result = await orchestrateChat(conversation, {
         systemPrompt,
         onChunk: (chunk) => {
           if (slowNoticeTimer) {
@@ -1098,6 +1105,13 @@ export const useChatStore = create<ChatState>((set, get) => ({
           });
         },
       });
+
+      orchestrationResult = {
+        providerId: result.providerId,
+        modelName: result.modelName,
+        isLocal: result.isLocal,
+        taskType: result.taskType,
+      };
 
       // Synchronously flush any pending streamed tokens immediately
       streamThrottle.flush();
@@ -1225,6 +1239,14 @@ export const useChatStore = create<ChatState>((set, get) => ({
         .replace(/<plan(?:\s+title=["'][^"']*["'])?>[\s\S]*?<\/plan>/gi, '')
         .trim();
 
+      const finalProviderInfo: ProviderBadgeInfo = {
+        providerId: orchestrationResult.providerId,
+        modelName: orchestrationResult.modelName,
+        isLocal: orchestrationResult.isLocal,
+        isPrivacyProtected: orchestrationResult.isLocal || memoriesWithheldCount > 0,
+        memoriesWithheld: memoriesWithheldCount > 0 ? memoriesWithheldCount : undefined,
+      };
+
       get().updateMessageContent(
         assistantId,
         finalText || rawStreamed,
@@ -1232,7 +1254,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         recalled,
         proposed,
         tools,
-        providerInfo,
+        finalProviderInfo,
         activeWinInfo,
         finalReasoning,
         executionPlan || undefined

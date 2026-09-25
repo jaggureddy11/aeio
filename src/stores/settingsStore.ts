@@ -4,9 +4,12 @@ export type LLMProviderType = 'qwen-coder' | 'ollama' | 'claude' | 'openai' | 'g
 
 export type ActiveTab = 'chat' | 'memory' | 'settings';
 
+export type ThemeMode = 'system' | 'light' | 'dark';
+
 export interface SettingsState {
   activeTab: ActiveTab;
   activeProvider: LLMProviderType;
+  theme: ThemeMode;
   ollamaModel: string;
   activeWindowAwareness: boolean;
   ambientProactive: boolean;
@@ -18,6 +21,7 @@ export interface SettingsState {
   hostedProxyUrl: string;
   setActiveTab: (tab: ActiveTab) => void;
   setActiveProvider: (provider: LLMProviderType) => void;
+  setTheme: (theme: ThemeMode) => void;
   setOllamaModel: (model: string) => void;
   setActiveWindowAwareness: (enabled: boolean) => void;
   setAmbientProactive: (enabled: boolean) => void;
@@ -60,7 +64,8 @@ const getOrGenerateInstallationId = (): string => {
 
 export const useSettingsStore = create<SettingsState>((set) => ({
   activeTab: 'chat',
-  activeProvider: 'qwen-coder',
+  activeProvider: 'gemini',
+  theme: (getStoredString('aeio_theme_mode', 'system') as ThemeMode) || 'system',
   ollamaModel: 'qwen3-coder',
   activeWindowAwareness: getStoredBool('aeio_active_window_awareness', false),
   ambientProactive: getStoredBool('aeio_ambient_proactive', false),
@@ -72,6 +77,12 @@ export const useSettingsStore = create<SettingsState>((set) => ({
   hostedProxyUrl: getStoredString('aeio_hosted_proxy_url', 'https://aeio-free-proxy.aeio-free.workers.dev'),
   setActiveTab: (activeTab) => set({ activeTab }),
   setActiveProvider: (activeProvider) => set({ activeProvider }),
+  setTheme: (theme: ThemeMode) => {
+    try {
+      localStorage.setItem('aeio_theme_mode', theme);
+    } catch {}
+    set({ theme });
+  },
   setOllamaModel: (ollamaModel) => set({ ollamaModel }),
   setActiveWindowAwareness: (enabled) => {
     try {

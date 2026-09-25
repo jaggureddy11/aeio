@@ -4,15 +4,14 @@ import { useWorkspaceStore } from '../../stores/workspaceStore';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { ChatMessageItem } from './ChatMessage';
 import { ChatInput } from './ChatInput';
-import { ModelSelector } from './ModelSelector';
-import logo from '../../assets/logo.png';
+import { ClaudeTopBar } from '../layout/ClaudeTopBar';
+import { ClaudeAsterisk } from '../common/ClaudeAsterisk';
 import {
-  Trash2,
   AlertTriangle,
   RotateCw,
   X,
   FileSearch,
-  Sparkles,
+  Workflow,
   Cpu,
   Brain,
   ArrowRight,
@@ -35,7 +34,7 @@ export const ChatView: React.FC<Props> = ({ onOpenSettings }) => {
     initChatHistory,
   } = useChatStore();
 
-  const { activeProvider, setActiveTab } = useSettingsStore();
+  const { setActiveTab, activeProvider } = useSettingsStore();
   const activeWorkspace = useWorkspaceStore((s) => s.activeWorkspace);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const isUserNearBottom = useRef(true);
@@ -61,40 +60,23 @@ export const ChatView: React.FC<Props> = ({ onOpenSettings }) => {
     }
   }, [messages, isLoading]);
 
+  const topBarTitle =
+    messages.length === 0
+      ? 'What can I help you with today?'
+      : activeWorkspace?.name || 'Aeio Assistant';
+
   return (
     <div className="claude-chat-layout">
-      {/* Top Header Bar */}
-      <header className="claude-top-bar" data-tauri-drag-region>
-        <div className="top-bar-left">
-          <ModelSelector onOpenSettings={onOpenSettings} />
-        </div>
-
-        <div className="top-bar-right">
-          {messages.length > 0 && (
-            <button
-              type="button"
-              className="top-bar-action-btn"
-              onClick={clearMessages}
-              title="Clear conversation"
-              aria-label="Clear conversation"
-            >
-              <Trash2 size={14} />
-              <span>Clear</span>
-            </button>
-          )}
-
-          <button
-            type="button"
-            className="top-bar-action-btn"
-            onClick={() => setActiveTab('memory')}
-            title="Open memory vault"
-            aria-label="Open memory vault"
-          >
-            <Brain size={14} />
-            <span>Memories</span>
-          </button>
-        </div>
-      </header>
+      {/* Top Header Bar matching Claude Spotlight */}
+      <ClaudeTopBar
+        title={topBarTitle}
+        hasMessages={messages.length > 0}
+        onNewChat={clearMessages}
+        onClearChat={clearMessages}
+        onOpenSettings={onOpenSettings}
+        onOpenMemory={() => setActiveTab('memory')}
+        onActionClick={clearMessages}
+      />
 
       {/* Messages Scroll Canvas */}
       <div className="claude-scroll-canvas" ref={scrollAreaRef} onScroll={handleScroll}>
@@ -102,7 +84,7 @@ export const ChatView: React.FC<Props> = ({ onOpenSettings }) => {
           {messages.length === 0 ? (
             <div className="claude-empty-welcome">
               <div className="welcome-avatar-mark">
-                <img src={logo} alt="Aeio logo" className="welcome-logo-img" />
+                <ClaudeAsterisk size={44} color="var(--accent-primary)" />
               </div>
 
               <h1 className="welcome-heading">What can I help with today?</h1>
@@ -147,7 +129,7 @@ export const ChatView: React.FC<Props> = ({ onOpenSettings }) => {
                   onClick={() => handleSend('Create a multi-step plan to organize my project workflows')}
                 >
                   <div className="prompt-card-icon">
-                    <Sparkles size={16} />
+                    <Workflow size={16} />
                   </div>
                   <div className="prompt-card-content">
                     <span className="prompt-card-title">Autonomous Agent Plan</span>

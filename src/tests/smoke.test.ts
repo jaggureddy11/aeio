@@ -32,6 +32,7 @@ vi.mock('../lib/ipc', () => ({
 
 vi.mock('../lib/providers', () => ({
   chatWithActiveProvider: vi.fn(),
+  orchestrateChat: vi.fn(),
   getProvider: vi.fn(),
   getActiveProviderInfo: vi.fn().mockReturnValue({
     providerId: 'ollama',
@@ -92,13 +93,19 @@ describe('End-to-End Smoke Test: Core Interactive Loop', () => {
 
   it('runs complete lifecycle: send message -> stream response -> propose tool -> approve -> verify output', async () => {
     // 1. Mock streaming response from LLM proposing a tool
-    vi.mocked(providers.chatWithActiveProvider).mockImplementation(async (_messages, options) => {
+    vi.mocked(providers.orchestrateChat).mockImplementation(async (_messages, options) => {
       // Simulate streaming chunks
       if (options?.onChunk) {
         options.onChunk('I will check the directory contents.');
         options.onChunk('\n\n<tool_call name="search_files">{"dir": "./src", "query": "App"}</tool_call>');
       }
-      return 'I will check the directory contents.\n\n<tool_call name="search_files">{"dir": "./src", "query": "App"}</tool_call>';
+      return {
+        content: 'I will check the directory contents.\n\n<tool_call name="search_files">{"dir": "./src", "query": "App"}</tool_call>',
+        providerId: 'qwen-coder',
+        modelName: 'qwen2.5-coder',
+        isLocal: true,
+        taskType: 'code',
+      };
     });
 
     // 2. Send message

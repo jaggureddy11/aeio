@@ -15,6 +15,7 @@ export const App: React.FC = () => {
     activeTab,
     setActiveTab,
     hasCompletedOnboarding,
+    theme,
   } = useSettingsStore();
 
   const { clearMessages } = useChatStore();
@@ -22,6 +23,32 @@ export const App: React.FC = () => {
   const [showOnboarding, setShowOnboarding] = useState(!hasCompletedOnboarding);
   const [isInitializing, setIsInitializing] = useState(true);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+
+  // Synchronize System / Light / Dark Theme Mode
+  useEffect(() => {
+    const applyTheme = (mode: string) => {
+      let resolved = mode;
+      if (mode === 'system') {
+        const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        resolved = prefersDark ? 'dark' : 'light';
+      }
+      document.documentElement.setAttribute('data-theme', resolved);
+      document.body.setAttribute('data-theme', resolved);
+    };
+
+    applyTheme(theme);
+
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    const handleMediaChange = () => {
+      const currentTheme = useSettingsStore.getState().theme;
+      if (currentTheme === 'system') {
+        applyTheme('system');
+      }
+    };
+
+    mediaQuery.addEventListener('change', handleMediaChange);
+    return () => mediaQuery.removeEventListener('change', handleMediaChange);
+  }, [theme]);
 
   // Global error & unhandled rejection listener for privacy-safe local logging and opt-in telemetry
   useEffect(() => {

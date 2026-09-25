@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { ChatMessage as MessageType, useChatStore } from '../../stores/chatStore';
-import logo from '../../assets/logo.png';
+import { ClaudeAsterisk } from '../common/ClaudeAsterisk';
 import {
   Brain,
   Check,
@@ -9,7 +9,7 @@ import {
   ChevronUp,
   Cpu,
   Copy,
-  Sparkles,
+  Bot,
 } from 'lucide-react';
 import { ToolApprovalCard } from './ToolApproval';
 import { PlanExecutionCard } from './PlanExecutionCard';
@@ -109,7 +109,7 @@ export const ChatMessageItem: React.FC<Props> = React.memo(({ message }) => {
       {/* Claude-style Assistant Avatar */}
       <div className="claude-avatar-column">
         <div className="claude-avatar-frame">
-          <img src={logo} alt="Aeio mark" className="claude-avatar-mark" />
+          <ClaudeAsterisk size={18} color="var(--accent-primary)" />
         </div>
       </div>
 
@@ -126,7 +126,7 @@ export const ChatMessageItem: React.FC<Props> = React.memo(({ message }) => {
               {message.providerInfo.isLocal ? (
                 <Cpu size={10} className="chip-icon" />
               ) : (
-                <Sparkles size={10} className="chip-icon" />
+                <Bot size={10} className="chip-icon" />
               )}
               <span>{message.providerInfo.modelName}</span>
             </span>

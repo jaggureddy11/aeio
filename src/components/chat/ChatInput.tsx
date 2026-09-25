@@ -3,7 +3,6 @@ import { ArrowUp, Loader2, ShieldCheck, AlertTriangle } from 'lucide-react';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { useWorkspaceStore } from '../../stores/workspaceStore';
 import { searchMemories } from '../../lib/ipc';
-import { ModelSelector } from './ModelSelector';
 
 interface Props {
   onSend: (text: string) => void;
@@ -11,7 +10,7 @@ interface Props {
   onOpenSettings?: () => void;
 }
 
-export const ChatInput: React.FC<Props> = ({ onSend, isLoading, onOpenSettings }) => {
+export const ChatInput: React.FC<Props> = ({ onSend, isLoading }) => {
   const [input, setInput] = useState('');
   const [matchedMemoriesCount, setMatchedMemoriesCount] = useState(0);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -132,8 +131,11 @@ export const ChatInput: React.FC<Props> = ({ onSend, isLoading, onOpenSettings }
         {/* Bottom Toolbar inside the Composer */}
         <div className="claude-composer-toolbar">
           <div className="composer-toolbar-left">
-            <ModelSelector compact onOpenSettings={onOpenSettings} />
-            <span className="composer-workspace-indicator">{activeWs?.name || 'General'}</span>
+            <span className="composer-agent-badge">
+              <span className="agent-status-dot" />
+              <span>Aeio Agent</span>
+            </span>
+            <span className="composer-workspace-indicator">{activeWs?.name || 'Workspace'}</span>
           </div>
 
           <div className="composer-toolbar-right">
