@@ -3,26 +3,25 @@ import logo from './assets/logo.png';
 import { ChatView } from './components/chat';
 import { MemoryPanel } from './components/memory';
 import { SettingsPanel } from './components/settings';
-import { WorkspaceSwitcher } from './components/workspace/WorkspaceSwitcher';
+import { Sidebar } from './components/layout/Sidebar';
 import { OnboardingModal } from './components/onboarding';
 import { useSettingsStore } from './stores/settingsStore';
+import { useChatStore } from './stores/chatStore';
 import { hideWindow, ping, recordError } from './lib/ipc';
-import { MessageSquare, Brain, Settings } from 'lucide-react';
 import './App.css';
 
 export const App: React.FC = () => {
   const {
     activeTab,
     setActiveTab,
-    activeProvider,
-    ollamaModel,
-    activeWindowAwareness,
     hasCompletedOnboarding,
-    hotkey,
   } = useSettingsStore();
+
+  const { clearMessages } = useChatStore();
 
   const [showOnboarding, setShowOnboarding] = useState(!hasCompletedOnboarding);
   const [isInitializing, setIsInitializing] = useState(true);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   // Global error & unhandled rejection listener for privacy-safe local logging and opt-in telemetry
   useEffect(() => {
@@ -122,19 +121,26 @@ export const App: React.FC = () => {
         } else if (e.key === '3') {
           e.preventDefault();
           setActiveTab('settings');
+        } else if (e.key.toLowerCase() === 'b') {
+          e.preventDefault();
+          setSidebarCollapsed((prev) => !prev);
+        } else if (e.key.toLowerCase() === 'k') {
+          e.preventDefault();
+          setActiveTab('chat');
+          clearMessages();
         }
       }
     };
     window.addEventListener('keydown', handleGlobalKeyDown);
     return () => window.removeEventListener('keydown', handleGlobalKeyDown);
-  }, [showOnboarding, setActiveTab]);
+  }, [showOnboarding, setActiveTab, clearMessages]);
 
   if (isInitializing) {
     return (
-      <div className="app-container" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', background: '#090a0c' }}>
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '14px' }}>
-          <img src={logo} alt="Aeio logo" style={{ width: '40px', height: '40px', opacity: 0.8, animation: 'pulse 1.8s infinite ease-in-out' }} />
-          <span style={{ fontSize: '12px', color: 'rgba(255, 255, 255, 0.45)', fontFamily: 'Inter, monospace', letterSpacing: '0.04em' }}>
+      <div className="claude-init-container">
+        <div className="claude-init-content">
+          <img src={logo} alt="Aeio logo" className="claude-init-logo" />
+          <span className="claude-init-text">
             Initializing local memory vault...
           </span>
         </div>
@@ -143,91 +149,24 @@ export const App: React.FC = () => {
   }
 
   return (
-    <div className="app-container">
-      {/* Draggable Utility Header */}
-      <header className="app-header" data-tauri-drag-region role="banner">
-        <div className="brand-section">
-          <div className="brand-logo-frame">
-            <img src={logo} alt="Aeio logo" className="brand-logo-img" />
-          </div>
-          <span className="brand-title">aeio</span>
-          <div className="header-divider" />
-          <WorkspaceSwitcher />
-          <div className="status-badge" title="Active model status" aria-label={`Active model: ${activeProvider === 'ollama' ? ollamaModel : activeProvider}`}>
-            <span className="status-dot"></span>
-            <span className="status-label">{activeProvider === 'ollama' ? ollamaModel : activeProvider}</span>
-          </div>
-          {activeWindowAwareness && (
-            <span className="host-aware-badge" title="Active window awareness enabled (Tier 2 opt-in)" aria-label="Active window awareness enabled">
-              window aware
-            </span>
-          )}
-        </div>
+    <div className="claude-app-shell">
+      {/* Left Collapsible Sidebar */}
+      <Sidebar
+        collapsed={sidebarCollapsed}
+        onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
+        onOpenSettings={() => setActiveTab('settings')}
+      />
 
-        <nav className="header-nav" role="tablist" aria-label="Main Navigation">
-          <button
-            role="tab"
-            aria-selected={activeTab === 'chat'}
-            aria-label="Chat view (⌘1)"
-            className={`nav-tab ${activeTab === 'chat' ? 'active' : ''}`}
-            onClick={() => setActiveTab('chat')}
-            title="Chat view (⌘1)"
-          >
-            <MessageSquare size={12} />
-            <span>Chat</span>
-          </button>
-          <button
-            role="tab"
-            aria-selected={activeTab === 'memory'}
-            aria-label="Memory store (⌘2)"
-            className={`nav-tab ${activeTab === 'memory' ? 'active' : ''}`}
-            onClick={() => setActiveTab('memory')}
-            title="Memory store (⌘2)"
-          >
-            <Brain size={12} />
-            <span>Memory</span>
-          </button>
-          <button
-            role="tab"
-            aria-selected={activeTab === 'settings'}
-            aria-label="Settings panel (⌘3)"
-            className={`nav-tab ${activeTab === 'settings' ? 'active' : ''}`}
-            onClick={() => setActiveTab('settings')}
-            title="Settings (⌘3)"
-          >
-            <Settings size={12} />
-            <span>Settings</span>
-          </button>
-        </nav>
-      </header>
-
-      {/* Main Panel Content */}
-      <main className="app-content">
-        {activeTab === 'chat' && <ChatView />}
+      {/* Main Workspace Canvas */}
+      <main className="claude-main-canvas">
+        {activeTab === 'chat' && (
+          <ChatView onOpenSettings={() => setActiveTab('settings')} />
+        )}
         {activeTab === 'memory' && <MemoryPanel />}
         {activeTab === 'settings' && (
           <SettingsPanel onOpenOnboarding={() => setShowOnboarding(true)} />
         )}
       </main>
-
-      {/* Precision Utility Footer */}
-      <footer className="app-footer">
-        <div className="footer-left">
-          <span className="footer-tag">local-first</span>
-          <span className="footer-dot">·</span>
-          <span className="footer-model">{activeProvider === 'ollama' ? 'offline' : 'cloud'}</span>
-        </div>
-        <div className="footer-shortcuts">
-          <span className="shortcut-item">
-            <kbd className="hotkey-badge">{hotkey === 'CommandOrControl+Shift+Space' ? '⌘ ⇧ Space' : hotkey}</kbd>
-            <span className="shortcut-label">toggle</span>
-          </span>
-          <span className="shortcut-item">
-            <kbd className="hotkey-badge">Esc</kbd>
-            <span className="shortcut-label">hide</span>
-          </span>
-        </div>
-      </footer>
 
       {/* First-Run Onboarding Modal (Shown once, skippable, no account needed) */}
       <OnboardingModal

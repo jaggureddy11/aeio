@@ -1,29 +1,28 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { useChatStore } from '../../stores/chatStore';
 import { useWorkspaceStore } from '../../stores/workspaceStore';
 import { useSettingsStore } from '../../stores/settingsStore';
-import { openTarget } from '../../lib/ipc';
 import { ChatMessageItem } from './ChatMessage';
 import { ChatInput } from './ChatInput';
+import { ModelSelector } from './ModelSelector';
 import logo from '../../assets/logo.png';
 import {
   Trash2,
   AlertTriangle,
   RotateCw,
   X,
-  Brain,
-  Layers,
-  ArrowUpRight,
   FileSearch,
-  Clipboard,
-  AppWindow,
-  ExternalLink,
-  Settings as SettingsIcon,
-  Terminal,
-  Check,
+  Sparkles,
+  Cpu,
+  Brain,
+  ArrowRight,
 } from 'lucide-react';
 
-export const ChatView: React.FC = () => {
+interface Props {
+  onOpenSettings?: () => void;
+}
+
+export const ChatView: React.FC<Props> = ({ onOpenSettings }) => {
   const {
     messages,
     isLoading,
@@ -37,11 +36,8 @@ export const ChatView: React.FC = () => {
   } = useChatStore();
 
   const { activeProvider, setActiveTab } = useSettingsStore();
-  const [copiedOllamaCmd, setCopiedOllamaCmd] = useState(false);
-
   const activeWorkspace = useWorkspaceStore((s) => s.activeWorkspace);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
   const isUserNearBottom = useRef(true);
 
   useEffect(() => {
@@ -51,7 +47,7 @@ export const ChatView: React.FC = () => {
   const handleScroll = () => {
     if (!scrollAreaRef.current) return;
     const { scrollTop, scrollHeight, clientHeight } = scrollAreaRef.current;
-    isUserNearBottom.current = scrollHeight - (scrollTop + clientHeight) < 80;
+    isUserNearBottom.current = scrollHeight - (scrollTop + clientHeight) < 100;
   };
 
   const handleSend = (text: string) => {
@@ -63,248 +59,188 @@ export const ChatView: React.FC = () => {
     if (isUserNearBottom.current && scrollAreaRef.current) {
       scrollAreaRef.current.scrollTop = scrollAreaRef.current.scrollHeight;
     }
-  }, [messages]);
+  }, [messages, isLoading]);
 
   return (
-    <div className="chat-container">
-      {/* Messages Scroll Area */}
-      <div className="messages-area" ref={scrollAreaRef} onScroll={handleScroll}>
-        {messages.length === 0 ? (
-          <div className="chat-empty-state">
-            <div className="empty-brand-badge">
-              <img src={logo} alt="Aeio logo" className="empty-logo-mark" />
-              <span className="empty-brand-tag">aeio</span>
-            </div>
-            <h2 className="empty-headline">An assistant embedded in your computer that knows you and acts for you.</h2>
-            <p className="empty-description">
-              Local-first on your desktop. Persistent second-brain memory across conversations. Real OS actions executed on your machine with your permission.
-            </p>
+    <div className="claude-chat-layout">
+      {/* Top Header Bar */}
+      <header className="claude-top-bar" data-tauri-drag-region>
+        <div className="top-bar-left">
+          <ModelSelector onOpenSettings={onOpenSettings} />
+        </div>
 
-            <div className="quick-action-grid">
-              <button
-                type="button"
-                className="quick-action-card"
-                onClick={() => handleSend('Find recent files or documents I saved on my machine')}
-              >
-                <div className="action-icon-frame">
-                  <FileSearch size={14} />
-                </div>
-                <div className="action-text-content">
-                  <div className="action-title">
-                    <span>Find files on machine</span>
-                    <ArrowUpRight size={12} className="action-arrow" />
-                  </div>
-                  <span className="action-desc">Search documents, PDFs, or folders</span>
-                </div>
-              </button>
+        <div className="top-bar-right">
+          {messages.length > 0 && (
+            <button
+              type="button"
+              className="top-bar-action-btn"
+              onClick={clearMessages}
+              title="Clear conversation"
+              aria-label="Clear conversation"
+            >
+              <Trash2 size={14} />
+              <span>Clear</span>
+            </button>
+          )}
 
-              <button
-                type="button"
-                className="quick-action-card"
-                onClick={() => handleSend('Read my clipboard and summarize what is on it')}
-              >
-                <div className="action-icon-frame">
-                  <Clipboard size={14} />
-                </div>
-                <div className="action-text-content">
-                  <div className="action-title">
-                    <span>Summarize clipboard</span>
-                    <ArrowUpRight size={12} className="action-arrow" />
-                  </div>
-                  <span className="action-desc">Inspect and analyze copied clipboard text</span>
-                </div>
-              </button>
+          <button
+            type="button"
+            className="top-bar-action-btn"
+            onClick={() => setActiveTab('memory')}
+            title="Open memory vault"
+            aria-label="Open memory vault"
+          >
+            <Brain size={14} />
+            <span>Memories</span>
+          </button>
+        </div>
+      </header>
 
-              <button
-                type="button"
-                className="quick-action-card"
-                onClick={() => handleSend('What memories do you have saved about me, my projects, or preferences?')}
-              >
-                <div className="action-icon-frame">
-                  <Brain size={14} />
-                </div>
-                <div className="action-text-content">
-                  <div className="action-title">
-                    <span>Inspect second brain</span>
-                    <ArrowUpRight size={12} className="action-arrow" />
-                  </div>
-                  <span className="action-desc">Query saved facts, preferences & context</span>
-                </div>
-              </button>
-
-              <button
-                type="button"
-                className="quick-action-card"
-                onClick={() => handleSend('What is my frontmost active application and window title?')}
-              >
-                <div className="action-icon-frame">
-                  <AppWindow size={14} />
-                </div>
-                <div className="action-text-content">
-                  <div className="action-title">
-                    <span>Inspect active workflow</span>
-                    <ArrowUpRight size={12} className="action-arrow" />
-                  </div>
-                  <span className="action-desc">Read frontmost app and window context</span>
-                </div>
-              </button>
-            </div>
-          </div>
-        ) : (
-          <div className="messages-list">
-            <div className="messages-header-actions">
-              <div className="current-workspace-pill">
-                <Layers size={11} className="ws-pill-icon" />
-                <span>{activeWorkspace?.name || 'General'}</span>
+      {/* Messages Scroll Canvas */}
+      <div className="claude-scroll-canvas" ref={scrollAreaRef} onScroll={handleScroll}>
+        <div className="claude-reading-column">
+          {messages.length === 0 ? (
+            <div className="claude-empty-welcome">
+              <div className="welcome-avatar-mark">
+                <img src={logo} alt="Aeio logo" className="welcome-logo-img" />
               </div>
-              <button
-                className="clear-chat-btn"
-                onClick={clearMessages}
-                title="Clear current workspace conversation"
-                aria-label="Clear current workspace conversation"
-              >
-                <Trash2 size={12} />
-                <span>Clear chat</span>
-              </button>
-            </div>
-            {messages.map((msg) => (
-              <ChatMessageItem key={msg.id} message={msg} />
-            ))}
-            <div ref={messagesEndRef} />
-          </div>
-        )}
 
-        {/* Actionable Error Banner (Tier 3: Graceful Degradation & Resilience) */}
-        {error && (
-          <div className="chat-error-banner animate-fadeIn">
-            <div className="chat-error-icon">
-              <AlertTriangle size={15} />
-            </div>
-            <div className="chat-error-body">
-              <div className="chat-error-title">
-                {error.includes('Ollama is offline')
-                  ? 'Local Model Offline'
-                  : error.toLowerCase().includes('api key')
-                  ? 'Authentication Required'
-                  : error.toLowerCase().includes('network') || error.toLowerCase().includes('offline')
-                  ? 'Network Connection Offline'
-                  : 'Connection Issue'}
+              <h1 className="welcome-heading">What can I help with today?</h1>
+              <p className="welcome-subheading">
+                Aeio is your desktop assistant with persistent local memory, multi-step agent planning, and private OS-level tools.
+              </p>
+
+              <div className="claude-prompt-grid">
+                <button
+                  type="button"
+                  className="claude-prompt-card"
+                  onClick={() => handleSend('Search local documents and summarize key files in this directory')}
+                >
+                  <div className="prompt-card-icon">
+                    <FileSearch size={16} />
+                  </div>
+                  <div className="prompt-card-content">
+                    <span className="prompt-card-title">Search & Summarize Files</span>
+                    <span className="prompt-card-desc">Find local files and extract key insights</span>
+                  </div>
+                  <ArrowRight size={14} className="prompt-card-arrow" />
+                </button>
+
+                <button
+                  type="button"
+                  className="claude-prompt-card"
+                  onClick={() => handleSend('What memories and preferences do you remember about me so far?')}
+                >
+                  <div className="prompt-card-icon">
+                    <Brain size={16} />
+                  </div>
+                  <div className="prompt-card-content">
+                    <span className="prompt-card-title">Inspect Second Brain</span>
+                    <span className="prompt-card-desc">Review persistent facts and active context</span>
+                  </div>
+                  <ArrowRight size={14} className="prompt-card-arrow" />
+                </button>
+
+                <button
+                  type="button"
+                  className="claude-prompt-card"
+                  onClick={() => handleSend('Create a multi-step plan to organize my project workflows')}
+                >
+                  <div className="prompt-card-icon">
+                    <Sparkles size={16} />
+                  </div>
+                  <div className="prompt-card-content">
+                    <span className="prompt-card-title">Autonomous Agent Plan</span>
+                    <span className="prompt-card-desc">Break down complex goals with approval gates</span>
+                  </div>
+                  <ArrowRight size={14} className="prompt-card-arrow" />
+                </button>
+
+                <button
+                  type="button"
+                  className="claude-prompt-card"
+                  onClick={() => handleSend('Check my model provider health and diagnostic status')}
+                >
+                  <div className="prompt-card-icon">
+                    <Cpu size={16} />
+                  </div>
+                  <div className="prompt-card-content">
+                    <span className="prompt-card-title">Provider & System Status</span>
+                    <span className="prompt-card-desc">Verify local Ollama and cloud BYOK keys</span>
+                  </div>
+                  <ArrowRight size={14} className="prompt-card-arrow" />
+                </button>
               </div>
-              <div className="chat-error-msg">{error}</div>
+            </div>
+          ) : (
+            <div className="claude-messages-list">
+              {messages.map((message) => (
+                <ChatMessageItem key={message.id} message={message} />
+              ))}
+            </div>
+          )}
 
-              {/* Actionable Resolution Links & Buttons */}
-              <div className="chat-error-remediation-row">
-                {/* 1. Ollama Offline: terminal cmd & download link */}
-                {(error.includes('Ollama is offline') || error.includes('11434')) && (
-                  <>
-                    <button
-                      type="button"
-                      className="error-action-link-btn"
-                      onClick={() => {
-                        navigator.clipboard.writeText('ollama serve');
-                        setCopiedOllamaCmd(true);
-                        setTimeout(() => setCopiedOllamaCmd(false), 2000);
-                      }}
-                      title="Copy start command"
-                    >
-                      <Terminal size={11} />
-                      <span>{copiedOllamaCmd ? 'Copied `ollama serve`' : 'Copy `ollama serve`'}</span>
-                      {copiedOllamaCmd && <Check size={11} />}
-                    </button>
+          {/* Graceful Error Notification */}
+          {error && (
+            <div className="claude-error-banner" role="alert">
+              <div className="error-banner-top">
+                <div className="error-banner-label">
+                  <AlertTriangle size={15} className="error-icon" />
+                  <span>Connection Issue</span>
+                </div>
+                <button
+                  type="button"
+                  className="error-dismiss-btn"
+                  onClick={() => setError(null)}
+                  aria-label="Dismiss error"
+                >
+                  <X size={14} />
+                </button>
+              </div>
 
-                    <button
-                      type="button"
-                      className="error-action-link-btn"
-                      onClick={() => openTarget('https://ollama.com')}
-                      title="Open Ollama installation page"
-                    >
-                      <ExternalLink size={11} />
-                      <span>Install / Docs</span>
-                    </button>
-                  </>
-                )}
+              <p className="error-message-text">{error}</p>
 
-                {/* 2. Invalid or missing API key: button to open Settings */}
-                {(error.toLowerCase().includes('api key') || error.includes('401') || error.includes('403')) && (
+              <div className="error-actions-row">
+                <button
+                  type="button"
+                  className="error-btn retry"
+                  onClick={retryLastMessage}
+                >
+                  <RotateCw size={13} />
+                  <span>Retry</span>
+                </button>
+
+                {activeProvider !== 'qwen-coder' && activeProvider !== 'ollama' && (
                   <button
                     type="button"
-                    className="error-action-link-btn primary"
-                    onClick={() => {
-                      setError(null);
-                      setActiveTab('settings');
-                    }}
+                    className="error-btn fallback"
+                    onClick={switchToLocalAndRetry}
                   >
-                    <SettingsIcon size={11} />
-                    <span>Configure Key in Settings</span>
+                    <Cpu size={13} />
+                    <span>Switch to Local Qwen</span>
                   </button>
                 )}
 
-                {/* 3. Cloud Provider Network Offline: 1-click fallback to Local Ollama */}
-                {activeProvider !== 'ollama' &&
-                  (error.toLowerCase().includes('network') ||
-                    error.toLowerCase().includes('offline') ||
-                    error.toLowerCase().includes('failed to fetch')) && (
-                    <button
-                      type="button"
-                      className="error-action-link-btn primary"
-                      onClick={() => switchToLocalAndRetry()}
-                      disabled={isLoading}
-                    >
-                      <Brain size={11} />
-                      <span>Switch to Local Ollama & Retry</span>
-                    </button>
-                  )}
-
-                {/* 4. Memory Persistence Issue */}
-                {error.toLowerCase().includes('memory') && (
-                  <button
-                    type="button"
-                    className="error-action-link-btn"
-                    onClick={() => {
-                      setError(null);
-                      setActiveTab('memory');
-                    }}
-                  >
-                    <Brain size={11} />
-                    <span>Open Memory Panel</span>
-                  </button>
-                )}
+                <button
+                  type="button"
+                  className="error-btn settings"
+                  onClick={() => {
+                    setError(null);
+                    if (onOpenSettings) onOpenSettings();
+                  }}
+                >
+                  <span>Configure Keys</span>
+                </button>
               </div>
             </div>
-
-            <div className="chat-error-actions">
-              <button
-                type="button"
-                className="chat-error-retry-btn"
-                onClick={() => retryLastMessage()}
-                disabled={isLoading}
-                title="Retry last prompt"
-                aria-label="Retry generating response"
-              >
-                <RotateCw size={12} className={isLoading ? 'spinning' : ''} aria-hidden="true" />
-                <span>Retry</span>
-              </button>
-              <button
-                type="button"
-                className="chat-error-dismiss-btn"
-                onClick={() => setError(null)}
-                title="Dismiss error banner"
-                aria-label="Dismiss error banner"
-              >
-                <X size={13} aria-hidden="true" />
-              </button>
-            </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
-      {/* Input Bar */}
-      <div className="chat-input-bar">
-        <ChatInput onSend={handleSend} isLoading={isLoading} />
-      </div>
+      {/* Floating Bottom Composer */}
+      <footer className="claude-bottom-section">
+        <ChatInput onSend={handleSend} isLoading={isLoading} onOpenSettings={onOpenSettings} />
+      </footer>
     </div>
   );
 };
-
-export default ChatView;
-

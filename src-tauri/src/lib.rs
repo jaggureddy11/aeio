@@ -19,6 +19,7 @@ fn greet(name: &str) -> String {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    let _ = dotenvy::dotenv();
     let global_shortcut_plugin = GlobalShortcutBuilder::new()
         .with_shortcut("CmdOrCtrl+Shift+Space")
         .expect("Failed to parse shortcut CmdOrCtrl+Shift+Space")

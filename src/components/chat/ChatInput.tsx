@@ -3,13 +3,15 @@ import { ArrowUp, Loader2, ShieldCheck, AlertTriangle } from 'lucide-react';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { useWorkspaceStore } from '../../stores/workspaceStore';
 import { searchMemories } from '../../lib/ipc';
+import { ModelSelector } from './ModelSelector';
 
 interface Props {
   onSend: (text: string) => void;
   isLoading: boolean;
+  onOpenSettings?: () => void;
 }
 
-export const ChatInput: React.FC<Props> = ({ onSend, isLoading }) => {
+export const ChatInput: React.FC<Props> = ({ onSend, isLoading, onOpenSettings }) => {
   const [input, setInput] = useState('');
   const [matchedMemoriesCount, setMatchedMemoriesCount] = useState(0);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -18,8 +20,15 @@ export const ChatInput: React.FC<Props> = ({ onSend, isLoading }) => {
   const activeWs = useWorkspaceStore((state) => state.activeWorkspace);
   const wsId = activeWs?.id || 'default';
 
-  const isCloudProvider = activeProvider === 'claude' || activeProvider === 'openai' || activeProvider === 'aeio-free';
-  const cloudProviderName = activeProvider === 'claude' ? 'Claude' : activeProvider === 'openai' ? 'OpenAI' : 'Aeio Free';
+  const isCloudProvider = activeProvider === 'claude' || activeProvider === 'openai' || activeProvider === 'aeio-free' || activeProvider === 'gemini';
+  const cloudProviderName =
+    activeProvider === 'claude'
+      ? 'Claude'
+      : activeProvider === 'openai'
+      ? 'OpenAI'
+      : activeProvider === 'gemini'
+      ? 'Gemini'
+      : 'Aeio Free';
 
   useEffect(() => {
     textareaRef.current?.focus();
@@ -35,7 +44,7 @@ export const ChatInput: React.FC<Props> = ({ onSend, isLoading }) => {
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
       const scrollH = textareaRef.current.scrollHeight;
-      textareaRef.current.style.height = `${Math.min(Math.max(scrollH, 36), 140)}px`;
+      textareaRef.current.style.height = `${Math.min(Math.max(scrollH, 44), 160)}px`;
     }
   }, [input]);
 
@@ -74,67 +83,80 @@ export const ChatInput: React.FC<Props> = ({ onSend, isLoading }) => {
     setInput('');
     setMatchedMemoriesCount(0);
     if (textareaRef.current) {
-      textareaRef.current.style.height = '36px';
+      textareaRef.current.style.height = '44px';
     }
   };
 
+  const hasContent = input.trim().length > 0;
+
   return (
-    <div className="chat-input-container">
-      {/* Pre-Send Informed Consent Notice for Cloud Providers */}
+    <div className="claude-composer-wrapper">
+      {/* Pre-Send Privacy Banner for Cloud Providers */}
       {isCloudProvider && matchedMemoriesCount > 0 && (
         <div
-          className={`cloud-memory-consent-banner ${neverSendMemoriesToCloud ? 'privacy-safe' : 'cloud-warning'}`}
+          className={`claude-consent-pill ${neverSendMemoriesToCloud ? 'privacy-locked' : 'cloud-warning'}`}
           role={neverSendMemoriesToCloud ? 'status' : 'alert'}
           aria-live="polite"
         >
           {neverSendMemoriesToCloud ? (
             <>
-              <ShieldCheck size={12} className="consent-icon" aria-hidden="true" />
+              <ShieldCheck size={13} className="consent-icon" aria-hidden="true" />
               <span>
-                <strong>Privacy Lock Active:</strong> {matchedMemoriesCount} matching {matchedMemoriesCount === 1 ? 'memory' : 'memories'} will be <strong>withheld</strong> from {cloudProviderName}.
+                <strong>Privacy lock:</strong> {matchedMemoriesCount} {matchedMemoriesCount === 1 ? 'memory' : 'memories'} withheld from {cloudProviderName}.
               </span>
             </>
           ) : (
             <>
-              <AlertTriangle size={12} className="consent-icon" aria-hidden="true" />
+              <AlertTriangle size={13} className="consent-icon" aria-hidden="true" />
               <span>
-                <strong>Notice:</strong> This message includes {matchedMemoriesCount} recalled {matchedMemoriesCount === 1 ? 'memory' : 'memories'} that will be sent to <strong>{cloudProviderName}</strong>.
+                {matchedMemoriesCount} relevant {matchedMemoriesCount === 1 ? 'memory' : 'memories'} will be included as context for {cloudProviderName}.
               </span>
             </>
           )}
         </div>
       )}
 
-      <div className="chat-input-wrapper">
+      {/* Claude-style Floating Input Card */}
+      <div className={`claude-composer-box ${hasContent ? 'has-text' : ''} ${isLoading ? 'is-loading' : ''}`}>
         <textarea
           ref={textareaRef}
-          className="chat-textarea"
-          aria-label="Message prompt input"
-          placeholder="Ask anything or run tools... (Shift+Enter for newline)"
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
+          placeholder="Ask Aeio anything, run tools, or plan tasks..."
+          className="claude-composer-textarea"
           rows={1}
           disabled={isLoading}
         />
-        <div className="chat-input-actions">
-          <button
-            type="button"
-            className={`send-button ${input.trim() ? 'has-text' : ''}`}
-            onClick={handleSend}
-            disabled={!input.trim() || isLoading}
-            title="Send message (Enter)"
-            aria-label="Send message"
-          >
-            {isLoading ? (
-              <Loader2 size={13} className="spinner" aria-hidden="true" />
-            ) : (
-              <ArrowUp size={13} strokeWidth={2.5} aria-hidden="true" />
-            )}
-          </button>
+
+        {/* Bottom Toolbar inside the Composer */}
+        <div className="claude-composer-toolbar">
+          <div className="composer-toolbar-left">
+            <ModelSelector compact onOpenSettings={onOpenSettings} />
+            <span className="composer-workspace-indicator">{activeWs?.name || 'General'}</span>
+          </div>
+
+          <div className="composer-toolbar-right">
+            <button
+              type="button"
+              className={`claude-send-btn ${hasContent && !isLoading ? 'active' : ''}`}
+              onClick={handleSend}
+              disabled={!hasContent || isLoading}
+              aria-label="Send message"
+            >
+              {isLoading ? (
+                <Loader2 size={16} className="send-spinner" />
+              ) : (
+                <ArrowUp size={16} className="send-arrow" />
+              )}
+            </button>
+          </div>
         </div>
+      </div>
+
+      <div className="claude-composer-subtext">
+        <span>Aeio runs locally with persistent long-term memory. Return to send · Shift+Return for new line</span>
       </div>
     </div>
   );
 };
-

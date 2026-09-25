@@ -13,12 +13,14 @@
     "windows": [
       {
         "label": "main",
-        "title": "aeio",
-        "width": 640,
-        "height": 480,
+        "title": "Aeio",
+        "width": 1160,
+        "height": 780,
+        "minWidth": 860,
+        "minHeight": 580,
         "visible": true,
-        "decorations": false,
-        "alwaysOnTop": true,
+        "decorations": true,
+        "alwaysOnTop": false,
         "center": true,
         "resizable": true,
         "shadow": true
