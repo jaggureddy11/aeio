@@ -68,7 +68,7 @@ export const PlanExecutionCard: React.FC<Props> = ({
           {plan.hasDestructiveSteps ? (
             <ShieldAlert size={16} color="#ef4444" />
           ) : (
-            <Terminal size={16} color="var(--aeio-accent, #3b82f6)" />
+            <Terminal size={16} color="#0FA958" />
           )}
           <span style={{ fontWeight: 600, fontSize: '0.9rem' }}>{plan.title}</span>
           <span
@@ -79,7 +79,7 @@ export const PlanExecutionCard: React.FC<Props> = ({
               backgroundColor: isPendingApproval
                 ? '#7f1d1d'
                 : isRunning
-                ? '#1e3a8a'
+                ? 'rgba(15, 169, 88, 0.25)'
                 : isCompleted
                 ? '#064e3b'
                 : isFailed
@@ -267,8 +267,12 @@ export const PlanExecutionCard: React.FC<Props> = ({
                 </div>
 
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', flexShrink: 0 }}>
-                  <code style={{ fontSize: '0.7rem', color: '#9ca3af', padding: '0.1rem 0.3rem', background: 'rgba(0,0,0,0.3)', borderRadius: '0.2rem' }}>
-                    {step.toolName === 'run_shell' ? step.args.command : step.toolName}
+                  <code style={{ fontSize: '0.7rem', color: '#9ca3af', padding: '0.15rem 0.35rem', background: 'rgba(0,0,0,0.4)', borderRadius: '0.25rem', border: '1px solid rgba(255,255,255,0.06)' }}>
+                    {step.toolName === 'run_shell' ? (
+                      step.args.command
+                    ) : (
+                      step.toolName
+                    )}
                   </code>
 
                   {step.result && (
@@ -331,15 +335,16 @@ export const PlanExecutionCard: React.FC<Props> = ({
               padding: '0.45rem 0.85rem',
               fontSize: '0.8rem',
               fontWeight: 600,
-              backgroundColor: plan.hasDestructiveSteps ? '#dc2626' : '#2563eb',
+              backgroundColor: plan.hasDestructiveSteps ? '#dc2626' : '#0FA958',
               color: '#ffffff',
               border: 'none',
               borderRadius: '0.375rem',
               cursor: 'pointer',
+              transition: 'background-color 0.15s ease',
             }}
             onClick={() => onApprove(messageId)}
           >
-            <Play size={12} />
+            <Play size={12} fill="#ffffff" />
             <span>Approve & Execute Entire Plan</span>
           </button>
           <button

@@ -123,8 +123,9 @@ export async function orchestrateChat(
 
   const candidates: ProviderCandidate[] = [];
 
-  // 1. If task is coding/scripts: prefer Claude 3.5 Sonnet or Gemini 2.5/2.0 Flash
+  // 1. Coding & planning
   if (taskType === 'code' || taskType === 'planning') {
+    // 2. Coding & planning
     if (keys.claudeKey) {
       candidates.push({
         provider: claudeProvider,
@@ -190,10 +191,13 @@ export async function orchestrateChat(
   // Try candidates in order with automatic failover
   for (const candidate of candidates) {
     try {
+      const systemPrompt = options?.systemPrompt || '';
+
       const mergedOptions: ChatOptions = {
         ...options,
         apiKey: candidate.apiKey,
         model: candidate.model,
+        systemPrompt: systemPrompt || undefined,
       };
 
       const content = await candidate.provider.chat(messages, mergedOptions);
