@@ -8,6 +8,7 @@ import {
   getTelemetryLogs,
   clearLocalLogs,
   recordError,
+  exportMemories,
 } from '../../lib/ipc';
 import { ollamaProvider } from '../../lib/providers/ollama';
 import { qwenCoderProvider } from '../../lib/providers/qwenCoder';
@@ -22,9 +23,11 @@ import {
   RefreshCw,
   Sliders,
   AppWindow,
-  Compass,
   Activity,
   FileText,
+  Brain,
+  Download,
+  Database,
 } from 'lucide-react';
 
 interface Props {
@@ -38,17 +41,18 @@ export const SettingsPanel: React.FC<Props> = ({ isOpen, onClose, onOpenOnboardi
     activeProvider,
     ollamaModel,
     activeWindowAwareness,
-    ambientProactive,
     hotkey,
     telemetryOptIn,
+    neverSendMemoriesToCloud,
     setActiveProvider,
     setOllamaModel,
     setActiveWindowAwareness,
-    setAmbientProactive,
     setHotkey,
     setTelemetryOptIn,
+    setNeverSendMemoriesToCloud,
   } = useSettingsStore();
 
+  const [activeSection, setActiveSection] = useState<'providers' | 'memory' | 'privacy' | 'shortcuts'>('providers');
   const [hotkeyInput, setHotkeyInput] = useState(hotkey);
   const [hotkeySaved, setHotkeySaved] = useState(false);
 
@@ -255,9 +259,55 @@ export const SettingsPanel: React.FC<Props> = ({ isOpen, onClose, onOpenOnboardi
         </div>
       )}
 
-        <div className="settings-scroll-body">
-          {/* Active Model Provider Selector */}
-          <div className="settings-section">
+      {/* Logical Section Tabs: Providers, Memory, Privacy, Shortcuts */}
+      <div className="settings-nav-tabs" role="tablist" aria-label="Settings sections">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={activeSection === 'providers'}
+          className={`settings-nav-tab ${activeSection === 'providers' ? 'active' : ''}`}
+          onClick={() => setActiveSection('providers')}
+        >
+          <Cpu size={13} aria-hidden="true" />
+          <span>Providers</span>
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={activeSection === 'memory'}
+          className={`settings-nav-tab ${activeSection === 'memory' ? 'active' : ''}`}
+          onClick={() => setActiveSection('memory')}
+        >
+          <Brain size={13} aria-hidden="true" />
+          <span>Memory</span>
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={activeSection === 'privacy'}
+          className={`settings-nav-tab ${activeSection === 'privacy' ? 'active' : ''}`}
+          onClick={() => setActiveSection('privacy')}
+        >
+          <ShieldCheck size={13} aria-hidden="true" />
+          <span>Privacy</span>
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={activeSection === 'shortcuts'}
+          className={`settings-nav-tab ${activeSection === 'shortcuts' ? 'active' : ''}`}
+          onClick={() => setActiveSection('shortcuts')}
+        >
+          <Sliders size={13} aria-hidden="true" />
+          <span>Shortcuts</span>
+        </button>
+      </div>
+
+      <div className="settings-scroll-body">
+        {activeSection === 'providers' && (
+          <>
+            {/* Active Model Provider Selector */}
+            <div className="settings-section">
             <h3 className="section-label" id="provider-group-label">Active Provider</h3>
             <div className="provider-card-grid" role="radiogroup" aria-labelledby="provider-group-label">
               {/* Qwen3-Coder Card (Primary) */}
@@ -584,6 +634,153 @@ export const SettingsPanel: React.FC<Props> = ({ isOpen, onClose, onOpenOnboardi
               </div>
             </div>
           </div>
+        </>
+      )}
+
+      {/* Memory Section */}
+      {activeSection === 'memory' && (
+        <>
+          <div className="settings-section">
+            <h3 className="section-label">
+              <div className="label-with-icon">
+                <Database size={14} />
+                <span>Memory Store Architecture (Tier 1)</span>
+              </div>
+            </h3>
+            <div className="toggle-setting-card">
+              <div className="toggle-text-block">
+                <strong>Local SQLite WAL + sqlite-vec Hybrid Index</strong>
+                <p>
+                  Memories are stored locally at <code>~/.aeio/memory.db</code> with WAL crash recovery. Retrieval combines 384-dimension all-MiniLM-L6-v2 vector embeddings with FTS exact-term ranking so names and paths are never missed.
+                </p>
+                <div className="privacy-callout">
+                  <ShieldCheck size={12} />
+                  <span>Zero memory contents are ever transmitted to third-party logging or cloud vectors.</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="settings-section">
+            <h3 className="section-label">
+              <div className="label-with-icon">
+                <Brain size={14} />
+                <span>Workspace Isolation & Scoping (Tier 4)</span>
+              </div>
+            </h3>
+            <div className="toggle-setting-card">
+              <div className="toggle-text-block">
+                <strong>Strict Project Boundary Enforcement</strong>
+                <p>
+                  Each workspace maintains an isolated memory scope. Queries performed in one workspace cannot recall or leak memories from another workspace unless Cross-Workspace Search is explicitly toggled in the memory panel.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="settings-section">
+            <h3 className="section-label">
+              <div className="label-with-icon">
+                <Download size={14} />
+                <span>Data Portability & Export (Non-Negotiable Constraint)</span>
+              </div>
+            </h3>
+            <div className="shortcut-box" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div>
+                <div style={{ fontSize: '12px', fontWeight: 500, color: 'var(--aeio-text-primary)' }}>
+                  Plain JSON & Markdown Export
+                </div>
+                <div style={{ fontSize: '11px', color: 'var(--aeio-text-muted)', marginTop: '2px' }}>
+                  Export all stored memories into portable formats. Your knowledge is never locked in.
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  onClick={async () => {
+                    try {
+                      const data = await exportMemories('markdown');
+                      const blob = new Blob([data], { type: 'text/markdown' });
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement('a');
+                      a.href = url;
+                      a.download = `aeio_all_memories_${new Date().toISOString().slice(0, 10)}.md`;
+                      a.click();
+                      URL.revokeObjectURL(url);
+                      showSuccess('Exported memories to Markdown');
+                    } catch (err) {
+                      alert(`Export failed: ${err}`);
+                    }
+                  }}
+                  aria-label="Export all memories to Markdown"
+                >
+                  <Download size={12} />
+                  <span>Export .md</span>
+                </button>
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  onClick={async () => {
+                    try {
+                      const data = await exportMemories('json');
+                      const blob = new Blob([data], { type: 'application/json' });
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement('a');
+                      a.href = url;
+                      a.download = `aeio_all_memories_${new Date().toISOString().slice(0, 10)}.json`;
+                      a.click();
+                      URL.revokeObjectURL(url);
+                      showSuccess('Exported memories to JSON');
+                    } catch (err) {
+                      alert(`Export failed: ${err}`);
+                    }
+                  }}
+                  aria-label="Export all memories to JSON"
+                >
+                  <Download size={12} />
+                  <span>Export .json</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Privacy Section */}
+      {activeSection === 'privacy' && (
+        <>
+          {/* Cloud Provider Memory Privacy (Tier 3.2 Gate) */}
+          <div className="settings-section">
+            <h3 className="section-label">
+              <div className="label-with-icon">
+                <ShieldCheck size={14} />
+                <span>Cloud Provider Memory Privacy</span>
+              </div>
+            </h3>
+            <div className="toggle-setting-card">
+              <div className="toggle-text-block">
+                <strong>Never send memory context to cloud providers</strong>
+                <p>
+                  When enabled, recalled memories and stored context from your second brain are strictly withheld whenever querying external cloud models (Claude or OpenAI). Cloud requests will contain only your prompt, preserving privacy.
+                </p>
+                <div className="privacy-callout">
+                  <ShieldCheck size={12} />
+                  <span>With toggle ON, memory contents are stripped before reaching the network, and an in-chat notice informs you that context was withheld for privacy.</span>
+                </div>
+              </div>
+              <label className="switch-toggle" aria-label="Never send memory context to cloud providers">
+                <input
+                  type="checkbox"
+                  role="switch"
+                  aria-checked={neverSendMemoriesToCloud}
+                  checked={neverSendMemoriesToCloud}
+                  onChange={(e) => setNeverSendMemoriesToCloud(e.target.checked)}
+                />
+                <span className="slider-round" />
+              </label>
+            </div>
+          </div>
 
           {/* OS Integration & Active Window Context (Tier 2 Opt-in) */}
           <div className="settings-section">
@@ -611,38 +808,6 @@ export const SettingsPanel: React.FC<Props> = ({ isOpen, onClose, onOpenOnboardi
                   aria-checked={activeWindowAwareness}
                   checked={activeWindowAwareness}
                   onChange={(e) => setActiveWindowAwareness(e.target.checked)}
-                />
-                <span className="slider-round" />
-              </label>
-            </div>
-          </div>
-
-          {/* Ambient & Proactive Intelligence (Tier 5 Opt-in) */}
-          <div className="settings-section">
-            <h3 className="section-label">
-              <div className="label-with-icon">
-                <Compass size={14} />
-                <span>Ambient Intelligence & Proactive Nudges (Tier 5 Opt-in)</span>
-              </div>
-            </h3>
-            <div className="toggle-setting-card">
-              <div className="toggle-text-block">
-                <strong>Pattern Noticing & Workspace Suggestions</strong>
-                <p>
-                  Lightweight checks for repeated queries and relevant workspace notes to suggest helpful actions without waiting to be asked.
-                </p>
-                <div className="privacy-callout">
-                  <ShieldCheck size={12} />
-                  <span>Never runs secretly — a glowing indicator appears in the header. Nudges are 1-click dismissible and never reappear. With toggle off, zero background checks run.</span>
-                </div>
-              </div>
-              <label className="switch-toggle" aria-label="Toggle ambient intelligence and proactive nudges">
-                <input
-                  type="checkbox"
-                  role="switch"
-                  aria-checked={ambientProactive}
-                  checked={ambientProactive}
-                  onChange={(e) => setAmbientProactive(e.target.checked)}
                 />
                 <span className="slider-round" />
               </label>
@@ -814,8 +979,12 @@ export const SettingsPanel: React.FC<Props> = ({ isOpen, onClose, onOpenOnboardi
               )}
             </div>
           </div>
+        </>
+      )}
 
-          {/* Shortcuts & App Info */}
+      {/* Shortcuts & App Info */}
+      {activeSection === 'shortcuts' && (
+        <>
           <div className="settings-section">
             <h3 className="section-label">Global Summon Shortcut</h3>
             <div className="shortcut-box">
@@ -933,7 +1102,9 @@ export const SettingsPanel: React.FC<Props> = ({ isOpen, onClose, onOpenOnboardi
               </div>
             </div>
           )}
-        </div>
+        </>
+      )}
+    </div>
       </div>
     );
 

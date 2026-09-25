@@ -1556,5 +1556,52 @@ mod tests {
         assert_eq!(matched_id, "test-1");
         assert!(distance < 0.001, "Exact match should have distance near 0");
     }
+
+    #[test]
+    fn test_old_memory_exact_and_hybrid_retrieval_without_decay_deletion() {
+        let test_dir = std::env::temp_dir().join(format!("aeio_decay_audit_{}", Uuid::new_v4()));
+        let db = MemoryDb::init(&test_dir).expect("Failed to initialize test db");
+
+        // 1. Add a sensitive / timeless memory
+        let content = "Critical recovery seed phrase: ocean river mountain apple zebra";
+        let mem = db
+            .add_memory(content, "fact", Some("default"), None)
+            .expect("Failed to insert memory");
+
+        // 2. Simulate aging: backdate the timestamp by 5 years (approx 157,680,000,000 ms)
+        let five_years_ago = Utc::now().timestamp_millis() - (5 * 365 * 24 * 60 * 60 * 1000);
+        {
+            let conn = db.conn.lock().unwrap();
+            conn.execute(
+                "UPDATE memories SET created_at = ?1, updated_at = ?1 WHERE id = ?2",
+                params![five_years_ago, &mem.id],
+            )
+            .expect("Failed to backdate memory");
+        }
+
+        // 3. Exact keyword search must find the memory with zero degradation
+        let keyword_hits = db
+            .search_memories("ocean river", Some("default"), false, 10)
+            .expect("Keyword search failed");
+        assert!(
+            keyword_hits.iter().any(|h| h.memory.id == mem.id),
+            "Old memory was hidden or missed in exact keyword search!"
+        );
+
+        // 4. Hybrid search must also discover the memory
+        let hybrid_hits = db
+            .search_memories_hybrid("recovery seed phrase", None, Some("default"), false, 10)
+            .expect("Hybrid search failed");
+        assert!(
+            hybrid_hits.iter().any(|h| h.memory.id == mem.id),
+            "Old memory was hidden or missed in hybrid search!"
+        );
+
+        // 5. Verify the backdated memory is intact and still fully exportable
+        let list = db.list_memories(None, Some("default")).expect("List failed");
+        assert!(list.iter().any(|m| m.id == mem.id && m.created_at == five_years_ago));
+
+        let _ = fs::remove_dir_all(test_dir);
+    }
 }
 

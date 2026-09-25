@@ -47,6 +47,7 @@ export interface ProviderBadgeInfo {
   modelName: string;
   isLocal: boolean;
   isPrivacyProtected?: boolean;
+  memoriesWithheld?: number;
 }
 
 export interface ProactiveNudge {
@@ -695,11 +696,22 @@ export const useChatStore = create<ChatState>((set, get) => ({
         ? 'claude-3-5-sonnet'
         : 'gpt-4o';
     const isLocal = providerId === 'qwen-coder' || providerId === 'ollama';
+    const isCloud = providerId === 'claude' || providerId === 'openai';
+
+    // Tier 3.2: Sensitive-Content Routing Gate
+    // If querying an external cloud provider and the privacy lock is enabled, strip memory context completely!
+    let memoriesWithheldCount = 0;
+    if (isCloud && settings.neverSendMemoriesToCloud && recalled.length > 0) {
+      memoriesWithheldCount = recalled.length;
+      recalled = [];
+    }
+
     const providerInfo: ProviderBadgeInfo = {
       providerId,
       modelName,
       isLocal,
-      isPrivacyProtected: isLocal || recalled.length > 0,
+      isPrivacyProtected: isLocal || memoriesWithheldCount > 0,
+      memoriesWithheld: memoriesWithheldCount > 0 ? memoriesWithheldCount : undefined,
     };
 
     // 4. Active Window Awareness (Tier 2 Opt-in)
@@ -986,9 +998,6 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
       // Success: clear last failed prompt
       set({ lastFailedPrompt: null });
-
-      // Trigger ambient nudge check if opt-in enabled
-      get().checkForAmbientNudge();
     } catch (err: unknown) {
       streamThrottle.flush();
       const errorMsg =

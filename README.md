@@ -1,6 +1,6 @@
 # Aeio
 
-Aeio is a local-first personal AI assistant that lives on your desktop instead of inside a browser tab. It combines persistent, transparently editable long-term memory with real OS-level tool execution—allowing you to search local files, read or write clipboards, execute shell scripts with explicit approval gates, and maintain contextual knowledge across months of work. Powered natively by local open-weight models (such as Qwen3-Coder via Ollama) with zero data leakage, Aeio also provides optional Bring-Your-Own-Key (BYOK) cloud provider support (Anthropic Claude, OpenAI) stored securely in your OS keychain.
+Aeio is a local-first personal AI assistant that lives on your desktop instead of inside a browser tab. It combines persistent, transparently editable long-term memory with real OS-level tool execution—allowing you to search local files, read or write clipboards, execute shell scripts with explicit approval gates, and maintain contextual knowledge across months of work. Powered natively by local open-weight models (such as Qwen3-Coder or DeepSeek running locally via Ollama) with zero data leakage, Aeio also provides optional Bring-Your-Own-Key (BYOK) cloud provider support (Anthropic Claude, OpenAI) stored securely in your OS keychain.
 
 ---
 
@@ -9,7 +9,7 @@ Aeio is a local-first personal AI assistant that lives on your desktop instead o
 - **Global Hotkey Access**: Summon Aeio from any application (`Cmd+Shift+Space` on macOS, `Ctrl+Shift+Space` on Windows/Linux) without switching contexts or opening browser tabs.
 - **Transparent, Editable Memory**: Auto-proposes and persists facts, preferences, projects, and contacts with BM25 keyword search, FTS5 full-text indexing, and cosine similarity vector retrieval.
 - **Agentic OS Execution**: Inspects frontmost application context, executes terminal commands, reads/searches files, and manipulates clipboard with strict human-in-the-loop confirmation for destructive actions.
-- **Local-First & Offline**: Powered primarily by Qwen3-Coder running on local Ollama inference, ensuring private files, prompt history, and system interactions never leave your machine.
+- **Local-First & Offline**: Powered primarily by open-weight models (such as Qwen3-Coder or DeepSeek) running strictly locally via Ollama inference, ensuring private files, prompt history, and system interactions never leave your machine. DeepSeek is supported as a local model via Ollama, never as a cloud BYOK service.
 - **Workspace Scoping**: Organize memories, conversations, and context into isolated project workspaces with zero cross-project leakage.
 - **Composite Design Aesthetic**: Dark obsidian palette (`#090a0c`, `#0f1115`), hairline borders, terracotta `#f05623` accents, and zero distracting emojis.
 
@@ -109,6 +109,13 @@ To completely remove Aeio and purge all traces of your data:
    - **Windows**: Remove `%APPDATA%\com.aeio.desktop`
    - **Linux**: `rm -rf "$HOME/.local/share/com.aeio.desktop"`
 3. Remove stored API keys from OS keychain (e.g. search for `aeio` in macOS Keychain Access or Windows Credential Manager).
+
+### 4. Memory Context & Cloud Providers
+Aeio is completely private by default when querying local models (Ollama)—prompts, recalled long-term memories, and system interactions remain strictly on your local machine with zero network egress.
+
+When using external cloud providers (Anthropic Claude or OpenAI), recalled memories relevant to your prompt are transmitted in the context window to enable informed responses. Aeio provides two explicit layers of protection for this:
+- **Pre-Send Consent Warning**: Whenever a message will transmit recalled memories to a cloud provider, an explicit amber consent banner is displayed directly above the input box before you send.
+- **Privacy Opt-Out Toggle**: Under **Settings -> Privacy**, you can enable **"Never send memory context to cloud providers"**. When enabled, Aeio automatically strips all recalled memories from the outbound request payload at the network level and displays an in-chat notice that context was withheld for privacy.
 
 ---
 

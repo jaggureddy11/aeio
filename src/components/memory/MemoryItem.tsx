@@ -8,10 +8,10 @@ interface Props {
 }
 
 const CATEGORY_COLORS: Record<MemoryCategory, { bg: string; text: string; border: string }> = {
-  fact: { bg: 'rgba(59, 130, 246, 0.12)', text: '#60a5fa', border: 'rgba(59, 130, 246, 0.3)' },
-  preference: { bg: 'rgba(245, 158, 11, 0.12)', text: '#fbbf24', border: 'rgba(245, 158, 11, 0.3)' },
-  project: { bg: 'rgba(16, 185, 129, 0.12)', text: '#34d399', border: 'rgba(16, 185, 129, 0.3)' },
-  person: { bg: 'rgba(168, 85, 247, 0.12)', text: '#c084fc', border: 'rgba(168, 85, 247, 0.3)' },
+  fact: { bg: 'rgba(255, 255, 255, 0.04)', text: '#d4d4d8', border: 'rgba(255, 255, 255, 0.08)' },
+  preference: { bg: 'rgba(240, 86, 35, 0.08)', text: '#ff6838', border: 'rgba(240, 86, 35, 0.22)' },
+  project: { bg: 'rgba(255, 255, 255, 0.04)', text: '#a1a1aa', border: 'rgba(255, 255, 255, 0.08)' },
+  person: { bg: 'rgba(255, 255, 255, 0.04)', text: '#a1a1aa', border: 'rgba(255, 255, 255, 0.08)' },
 };
 
 export const MemoryItem: React.FC<Props> = ({ memory }) => {
@@ -94,7 +94,7 @@ export const MemoryItem: React.FC<Props> = ({ memory }) => {
           {memory.category}
         </span>
 
-        <div className="memory-card-actions">
+        <div className={`memory-card-actions ${isConfirmingDelete ? 'confirming' : ''}`}>
           <button
             className="icon-btn edit"
             onClick={() => setIsEditing(true)}

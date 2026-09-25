@@ -13,6 +13,7 @@ export interface SettingsState {
   hasCompletedOnboarding: boolean;
   hotkey: string;
   telemetryOptIn: boolean;
+  neverSendMemoriesToCloud: boolean;
   setActiveTab: (tab: ActiveTab) => void;
   setActiveProvider: (provider: LLMProviderType) => void;
   setOllamaModel: (model: string) => void;
@@ -21,6 +22,7 @@ export interface SettingsState {
   setHasCompletedOnboarding: (completed: boolean) => void;
   setHotkey: (hotkey: string) => void;
   setTelemetryOptIn: (enabled: boolean) => void;
+  setNeverSendMemoriesToCloud: (enabled: boolean) => void;
 }
 
 const getStoredBool = (key: string, defaultVal: boolean): boolean => {
@@ -50,6 +52,7 @@ export const useSettingsStore = create<SettingsState>((set) => ({
   hasCompletedOnboarding: getStoredBool('aeio_first_run_completed', false),
   hotkey: getStoredString('aeio_global_hotkey', 'CommandOrControl+Shift+Space'),
   telemetryOptIn: getStoredBool('aeio_telemetry_opt_in', false),
+  neverSendMemoriesToCloud: getStoredBool('aeio_never_send_memories_to_cloud', false),
   setActiveTab: (activeTab) => set({ activeTab }),
   setActiveProvider: (activeProvider) => set({ activeProvider }),
   setOllamaModel: (ollamaModel) => set({ ollamaModel }),
@@ -83,6 +86,12 @@ export const useSettingsStore = create<SettingsState>((set) => ({
       localStorage.setItem('aeio_telemetry_opt_in', String(enabled));
     } catch {}
     set({ telemetryOptIn: enabled });
+  },
+  setNeverSendMemoriesToCloud: (enabled: boolean) => {
+    try {
+      localStorage.setItem('aeio_never_send_memories_to_cloud', String(enabled));
+    } catch {}
+    set({ neverSendMemoriesToCloud: enabled });
   },
 }));
 

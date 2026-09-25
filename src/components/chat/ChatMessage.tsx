@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { ChatMessage as MessageType, useChatStore } from '../../stores/chatStore';
 import logo from '../../assets/logo.png';
-import { User, Brain, Check, Plus, X, ChevronDown, ChevronUp, Lock, Monitor, Cpu, Copy } from 'lucide-react';
+import { User, Brain, Check, Plus, X, ChevronDown, ChevronUp, Lock, Monitor, Cpu, Copy, ShieldCheck } from 'lucide-react';
 import { ToolApprovalCard } from './ToolApproval';
 
 interface Props {
@@ -148,6 +148,16 @@ export const ChatMessageItem: React.FC<Props> = React.memo(({ message }) => {
                   <span>{message.activeWindowContext.app_name}</span>
                 </span>
               )}
+            </div>
+          )}
+
+          {/* Privacy Protection: Recalled Context Withheld Notice */}
+          {!isUser && message.providerInfo?.memoriesWithheld && (
+            <div className="privacy-withheld-notice" role="status">
+              <ShieldCheck size={11} className="withheld-icon" aria-hidden="true" />
+              <span>
+                <strong>Privacy Protected:</strong> {message.providerInfo.memoriesWithheld} recalled {message.providerInfo.memoriesWithheld === 1 ? 'memory was' : 'memories were'} withheld from {message.providerInfo.providerId === 'claude' ? 'Claude' : 'OpenAI'} because "Never send memory context to cloud providers" is enabled.
+              </span>
             </div>
           )}
 

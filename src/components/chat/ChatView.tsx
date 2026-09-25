@@ -11,7 +11,6 @@ import {
   AlertTriangle,
   RotateCw,
   X,
-  Sparkles,
   Brain,
   Layers,
   ArrowUpRight,
@@ -29,9 +28,6 @@ export const ChatView: React.FC = () => {
     messages,
     isLoading,
     error,
-    activeNudge,
-    dismissNudge,
-    applyNudge,
     setError,
     sendMessage,
     retryLastMessage,
@@ -301,41 +297,6 @@ export const ChatView: React.FC = () => {
           </div>
         )}
       </div>
-
-      {/* Tier 5 Proactive Ambient Nudge (1-click dismiss, non-blocking) */}
-      {activeNudge && (
-        <div className="proactive-nudge-card animate-fadeIn">
-          <div className="nudge-icon">
-            <Sparkles size={13} aria-hidden="true" />
-          </div>
-          <div className="nudge-content">
-            <span className="nudge-badge">Aeio Suggestion</span>
-            <p className="nudge-text">{activeNudge.suggestion}</p>
-          </div>
-          <div className="nudge-actions">
-            {activeNudge.actionPrompt && (
-              <button
-                type="button"
-                className="nudge-apply-btn"
-                onClick={() => applyNudge(activeNudge)}
-                disabled={isLoading}
-                aria-label="Apply suggestion"
-              >
-                Apply
-              </button>
-            )}
-            <button
-              type="button"
-              className="nudge-dismiss-btn"
-              onClick={() => dismissNudge(activeNudge.id)}
-              title="Dismiss suggestion"
-              aria-label="Dismiss suggestion"
-            >
-              <X size={12} aria-hidden="true" />
-            </button>
-          </div>
-        </div>
-      )}
 
       {/* Input Bar */}
       <div className="chat-input-bar">

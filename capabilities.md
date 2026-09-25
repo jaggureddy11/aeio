@@ -45,8 +45,8 @@ This document defines what Aeio can do, organized by maturity tier. Use it as th
 
 | Capability | Description | Acceptance test |
 |---|---|---|
-| Multi-provider routing | Automatically picks local vs. cloud model based on task complexity/sensitivity | A quick factual question stays local; a long coding task offers to switch to a cloud model, with user confirmation |
-| Sensitive-content routing | Anything touching memory content or file contents defaults to the local model unless user overrides | Verify via network monitor: no outbound calls when only local model is selected |
+| Multi-provider routing | [Not yet implemented — planned] Automatically picks local vs. cloud model based on task complexity/sensitivity. In v1.0.0, provider selection is manual via the status bar / settings dropdown. | Roadmap item: manual provider switching preserves full conversation context across models. |
+| Sensitive-content routing | [Minimum viable version implemented] Explicit pre-send warning in input area whenever recalled memories will be transmitted to a cloud provider (Claude/OpenAI), plus a "Never send memory context to cloud providers" toggle in Settings -> Privacy that strips memories and informs the user. Fuller automated classifier is deferred. | Network-level automated test confirms outbound cloud request body contains zero memory content when toggle is active; visible warning banner renders prior to message transmission. |
 | Streaming responses | Tokens stream in, not a blocking wait | No UI freeze on long responses |
 | Graceful degradation | If Ollama isn't running or a cloud key is invalid, the app explains clearly and offers a fix, never silently fails | Kill Ollama mid-session, send a message, get an actionable error not a spinner forever |
 

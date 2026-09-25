@@ -16,7 +16,6 @@ export const App: React.FC = () => {
     setActiveTab,
     activeProvider,
     ollamaModel,
-    ambientProactive,
     activeWindowAwareness,
     hasCompletedOnboarding,
     hotkey,
@@ -141,12 +140,6 @@ export const App: React.FC = () => {
             <span className="status-dot"></span>
             <span className="status-label">{activeProvider === 'ollama' ? ollamaModel : activeProvider}</span>
           </div>
-          {ambientProactive && (
-            <span className="ambient-active-badge" title="Ambient pattern noticing is enabled (Tier 5 opt-in)" aria-label="Ambient noticing active">
-              <span className="ambient-pulse-dot" />
-              ambient
-            </span>
-          )}
           {activeWindowAwareness && (
             <span className="host-aware-badge" title="Active window awareness enabled (Tier 2 opt-in)" aria-label="Active window awareness enabled">
               window aware
