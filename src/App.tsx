@@ -8,6 +8,10 @@ import { OnboardingModal } from './components/onboarding';
 import { useSettingsStore } from './stores/settingsStore';
 import { useChatStore } from './stores/chatStore';
 import { hideWindow, ping, recordError } from './lib/ipc';
+import { getKillSwitchState, listenToKillSwitch } from './lib/safety/killSwitch';
+import { getControlOverlayState, listenToOverlayState } from './lib/safety/overlay';
+import { ActiveControlHud } from './components/safety/ActiveControlHud';
+import { GuiActionApprovalModal } from './components/safety/GuiActionApprovalModal';
 import './App.css';
 
 export const App: React.FC = () => {
@@ -16,6 +20,10 @@ export const App: React.FC = () => {
     setActiveTab,
     hasCompletedOnboarding,
     theme,
+    killSwitchTripped,
+    setKillSwitchTripped,
+    overlayState,
+    setOverlayState,
   } = useSettingsStore();
 
   const { clearMessages } = useChatStore();
@@ -23,6 +31,9 @@ export const App: React.FC = () => {
   const [showOnboarding, setShowOnboarding] = useState(!hasCompletedOnboarding);
   const [isInitializing, setIsInitializing] = useState(true);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+
+  const isOverlayWindow =
+    typeof window !== 'undefined' && window.location.search.includes('overlay=true');
 
   // Synchronize System / Light / Dark Theme Mode
   useEffect(() => {
@@ -127,6 +138,50 @@ export const App: React.FC = () => {
     };
   }, [setActiveTab]);
 
+  // Synchronize Kill Switch state with Rust native background thread
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    getKillSwitchState()
+      .then((halted) => {
+        if (halted) setKillSwitchTripped(true, 'Escape held for >= 300ms');
+      })
+      .catch(() => {});
+
+    listenToKillSwitch((event) => {
+      setKillSwitchTripped(event.halted, event.reason);
+    })
+      .then((fn) => {
+        unlisten = fn;
+      })
+      .catch(() => {});
+
+    return () => {
+      if (unlisten) unlisten();
+    };
+  }, [setKillSwitchTripped]);
+
+  // Synchronize Active Control Overlay state
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    getControlOverlayState()
+      .then((state) => {
+        if (state) setOverlayState(state);
+      })
+      .catch(() => {});
+
+    listenToOverlayState((state) => {
+      setOverlayState(state);
+    })
+      .then((fn) => {
+        unlisten = fn;
+      })
+      .catch(() => {});
+
+    return () => {
+      if (unlisten) unlisten();
+    };
+  }, [setOverlayState]);
+
   useEffect(() => {
     const handleGlobalKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
@@ -162,6 +217,14 @@ export const App: React.FC = () => {
     return () => window.removeEventListener('keydown', handleGlobalKeyDown);
   }, [showOnboarding, setActiveTab, clearMessages]);
 
+  if (isOverlayWindow) {
+    return (
+      <div style={{ background: 'transparent', width: '100vw', height: '100vh', overflow: 'hidden' }}>
+        <ActiveControlHud isStandalone={true} />
+      </div>
+    );
+  }
+
   if (isInitializing) {
     return (
       <div className="claude-init-container">
@@ -175,8 +238,13 @@ export const App: React.FC = () => {
     );
   }
 
+  const isHudVisible = killSwitchTripped || overlayState?.isActive;
+
   return (
     <div className="claude-app-shell">
+      {/* Active Screen Control HUD & Emergency Stop Banner */}
+      <ActiveControlHud />
+
       {/* Left Collapsible Sidebar */}
       <Sidebar
         collapsed={sidebarCollapsed}
@@ -185,7 +253,7 @@ export const App: React.FC = () => {
       />
 
       {/* Main Workspace Canvas */}
-      <main className="claude-main-canvas">
+      <main className="claude-main-canvas" style={{ paddingTop: isHudVisible ? '42px' : 0 }}>
         {activeTab === 'chat' && (
           <ChatView onOpenSettings={() => setActiveTab('settings')} />
         )}
@@ -200,6 +268,9 @@ export const App: React.FC = () => {
         isOpen={showOnboarding}
         onClose={() => setShowOnboarding(false)}
       />
+
+      {/* GUI Action Approval Modal (Pillar 1 Human-In-The-Loop Gate) */}
+      <GuiActionApprovalModal />
     </div>
   );
 };

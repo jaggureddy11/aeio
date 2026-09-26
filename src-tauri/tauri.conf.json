@@ -26,6 +26,19 @@
         "center": true,
         "resizable": true,
         "shadow": true
+      },
+      {
+        "label": "overlay",
+        "title": "Aeio Screen Control HUD",
+        "url": "index.html?overlay=true",
+        "width": 1050,
+        "height": 56,
+        "visible": false,
+        "decorations": false,
+        "transparent": true,
+        "alwaysOnTop": true,
+        "resizable": false,
+        "shadow": false
       }
     ],
     "security": {

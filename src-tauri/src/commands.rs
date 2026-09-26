@@ -244,4 +244,153 @@ pub fn clear_local_logs(
     state.clear_logs()
 }
 
+// Computer Control Safety Commands (Phase 1-2: Allowlist & Risk Classification only)
+#[tauri::command]
+pub fn get_computer_control_settings() -> crate::safety::ComputerControlConfig {
+    crate::safety::get_config()
+}
+
+#[tauri::command]
+pub fn set_computer_control_enabled(enabled: bool) -> Result<(), String> {
+    crate::safety::set_master_toggle(enabled);
+    Ok(())
+}
+
+#[tauri::command]
+pub fn add_to_computer_control_allowlist(
+    bundle_id: String,
+) -> Result<crate::safety::BundleValidationResult, String> {
+    crate::safety::add_bundle_to_allowlist(&bundle_id)
+}
+
+#[tauri::command]
+pub fn remove_from_computer_control_allowlist(bundle_id: String) -> Result<(), String> {
+    crate::safety::remove_bundle_from_allowlist(&bundle_id);
+    Ok(())
+}
+
+#[tauri::command]
+pub fn classify_action_intent(
+    intent: crate::safety::ActionIntent,
+) -> Result<crate::safety::RiskLevel, String> {
+    Ok(crate::safety::classify_action_risk(&intent))
+}
+
+// Kill Switch Commands (Phase 3: Emergency Stop)
+#[tauri::command]
+pub fn get_kill_switch_state() -> bool {
+    crate::safety::is_halt_triggered()
+}
+
+#[tauri::command]
+pub fn trigger_kill_switch(reason: Option<String>) -> Result<(), String> {
+    crate::safety::trigger_kill_switch(&reason.unwrap_or_else(|| "Manual trigger from UI".to_string()));
+    Ok(())
+}
+
+#[tauri::command]
+pub fn reset_kill_switch() -> Result<(), String> {
+    crate::safety::reset_kill_switch();
+    Ok(())
+}
+
+// Active Overlay HUD Commands (Phase 4: Visible Active-Control HUD)
+#[tauri::command]
+pub fn show_control_overlay(
+    app: tauri::AppHandle,
+    target_app_name: String,
+    target_app_bundle_id: String,
+    declared_intent: String,
+    current_step: u32,
+    total_steps: u32,
+) -> Result<crate::safety::ControlOverlayState, String> {
+    Ok(crate::safety::show_overlay(
+        Some(&app),
+        &target_app_name,
+        &target_app_bundle_id,
+        &declared_intent,
+        current_step,
+        total_steps,
+    ))
+}
+
+#[tauri::command]
+pub fn update_control_overlay(
+    app: tauri::AppHandle,
+    target_app_name: Option<String>,
+    declared_intent: Option<String>,
+    current_step: Option<u32>,
+    total_steps: Option<u32>,
+) -> Result<crate::safety::ControlOverlayState, String> {
+    Ok(crate::safety::update_overlay(
+        Some(&app),
+        target_app_name,
+        declared_intent,
+        current_step,
+        total_steps,
+    ))
+}
+
+#[tauri::command]
+pub fn hide_control_overlay(
+    app: tauri::AppHandle,
+) -> Result<crate::safety::ControlOverlayState, String> {
+    Ok(crate::safety::hide_overlay(Some(&app)))
+}
+
+#[tauri::command]
+pub fn get_control_overlay_state() -> Result<crate::safety::ControlOverlayState, String> {
+    Ok(crate::safety::get_overlay_state())
+}
+
+// Native Input Simulation Commands (Phase 5: In-process native driver via enigo)
+#[tauri::command]
+pub fn execute_computer_action(
+    app: tauri::AppHandle,
+    request: crate::safety::SimulatedActionRequest,
+) -> Result<crate::safety::ActionResult, String> {
+    crate::safety::execute_guarded_action(Some(&app), &request)
+}
+
+#[tauri::command]
+pub fn capture_screen(output_path: String) -> Result<String, String> {
+    crate::safety::capture_native_screenshot(std::path::Path::new(&output_path))
+        .map(|p| p.to_string_lossy().to_string())
+}
+
+// Visual Audit Trail Commands (Phase 6: Full Visual Audit Trail & Immutable Receipts)
+#[tauri::command]
+pub fn execute_computer_action_with_audit(
+    app: tauri::AppHandle,
+    request: crate::safety::SimulatedActionRequest,
+    session_id: String,
+    window_title: Option<String>,
+    grounding: Option<crate::safety::AuditGrounding>,
+) -> Result<crate::safety::AuditReceipt, String> {
+    crate::safety::execute_action_with_visual_audit(
+        Some(&app),
+        &request,
+        &session_id,
+        window_title,
+        grounding,
+    )
+}
+
+#[tauri::command]
+pub fn list_audit_receipts(
+    app: tauri::AppHandle,
+    limit: Option<usize>,
+) -> Result<Vec<crate::safety::AuditReceipt>, String> {
+    let audit_dir = crate::safety::get_audit_dir(Some(&app));
+    crate::safety::list_audit_receipts(&audit_dir, limit)
+}
+
+#[tauri::command]
+pub fn get_audit_receipt(
+    app: tauri::AppHandle,
+    audit_id: String,
+) -> Result<crate::safety::AuditReceipt, String> {
+    let audit_dir = crate::safety::get_audit_dir(Some(&app));
+    crate::safety::get_audit_receipt(&audit_dir, &audit_id)
+}
 

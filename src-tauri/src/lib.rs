@@ -9,6 +9,7 @@ pub mod commands;
 pub mod keychain;
 pub mod memory;
 pub mod observability;
+pub mod safety;
 pub mod tools;
 
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
@@ -121,6 +122,10 @@ pub fn run() {
                 let _ = window.set_focus();
             }
 
+            // Register kill switch app handle and start native background listener
+            crate::safety::register_kill_switch_app_handle(app.handle().clone());
+            crate::safety::start_kill_switch_listener();
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -157,6 +162,23 @@ pub fn run() {
             commands::get_local_logs,
             commands::get_telemetry_logs,
             commands::clear_local_logs,
+            commands::get_computer_control_settings,
+            commands::set_computer_control_enabled,
+            commands::add_to_computer_control_allowlist,
+            commands::remove_from_computer_control_allowlist,
+            commands::classify_action_intent,
+            commands::get_kill_switch_state,
+            commands::trigger_kill_switch,
+            commands::reset_kill_switch,
+            commands::show_control_overlay,
+            commands::update_control_overlay,
+            commands::hide_control_overlay,
+            commands::get_control_overlay_state,
+            commands::execute_computer_action,
+            commands::capture_screen,
+            commands::execute_computer_action_with_audit,
+            commands::list_audit_receipts,
+            commands::get_audit_receipt,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

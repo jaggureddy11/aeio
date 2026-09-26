@@ -29,7 +29,12 @@ import {
   Download,
   Database,
   AlertTriangle,
+  ShieldAlert,
+  Ban,
+  PowerOff,
+  Eye,
 } from 'lucide-react';
+import { VisualAuditLogViewer } from '../safety/VisualAuditLogViewer';
 
 interface Props {
   isOpen?: boolean;
@@ -54,9 +59,26 @@ export const SettingsPanel: React.FC<Props> = ({ isOpen, onClose, onOpenOnboardi
     setTelemetryOptIn,
     setNeverSendMemoriesToCloud,
     setHostedProxyUrl,
+    computerControlEnabled,
+    computerControlAllowlist,
+    setComputerControlEnabled,
+    addToComputerControlAllowlist,
+    removeFromComputerControlAllowlist,
+    killSwitchTripped,
+    killSwitchReason,
+    resetKillSwitchAction,
+    setKillSwitchTripped,
+    groundingEndpointUrl,
+    groundingModelType,
+    setGroundingEndpointUrl,
+    setGroundingModelType,
   } = useSettingsStore();
 
-  const [activeSection, setActiveSection] = useState<'providers' | 'memory' | 'privacy' | 'shortcuts'>('providers');
+  const [activeSection, setActiveSection] = useState<'providers' | 'memory' | 'privacy' | 'shortcuts' | 'computerControl'>('providers');
+  const [newAppInput, setNewAppInput] = useState('');
+  const [allowlistError, setAllowlistError] = useState<string | null>(null);
+  const [pendingBrowserBundle, setPendingBrowserBundle] = useState<string | null>(null);
+  const [pendingBrowserWarning, setPendingBrowserWarning] = useState<string | null>(null);
   const [hotkeyInput, setHotkeyInput] = useState(hotkey);
   const [hotkeySaved, setHotkeySaved] = useState(false);
   const [copiedInstallId, setCopiedInstallId] = useState(false);
@@ -69,12 +91,19 @@ export const SettingsPanel: React.FC<Props> = ({ isOpen, onClose, onOpenOnboardi
   const [hasOpenaiStored, setHasOpenaiStored] = useState(false);
   const [hasGeminiStored, setHasGeminiStored] = useState(false);
 
+  const [groundingEndpointInput, setGroundingEndpointInput] = useState(groundingEndpointUrl);
+  const [groundingKeyInput, setGroundingKeyInput] = useState('');
+  const [hasGroundingStored, setHasGroundingStored] = useState(false);
+  const [isTestingGrounding, setIsTestingGrounding] = useState(false);
+  const [groundingTestStatus, setGroundingTestStatus] = useState<string | null>(null);
+
   const [ollamaStatus, setOllamaStatus] = useState<string | null>(null);
   const [isCheckingOllama, setIsCheckingOllama] = useState(false);
   const [saveSuccessMsg, setSaveSuccessMsg] = useState<string | null>(null);
 
   const [localLogs, setLocalLogs] = useState<string | null>(null);
   const [isViewingLogs, setIsViewingLogs] = useState(false);
+  const [isAuditViewerOpen, setIsAuditViewerOpen] = useState(false);
 
   useEffect(() => {
     if (isOpen === undefined || isOpen === true) {
@@ -91,6 +120,8 @@ export const SettingsPanel: React.FC<Props> = ({ isOpen, onClose, onOpenOnboardi
       setHasOpenaiStored(openaiExists);
       const geminiExists = await hasApiKey('gemini');
       setHasGeminiStored(geminiExists);
+      const groundingExists = await hasApiKey('grounding');
+      setHasGroundingStored(groundingExists);
     } catch (err) {
       console.warn('Keychain check failed:', err);
     }
@@ -183,6 +214,64 @@ export const SettingsPanel: React.FC<Props> = ({ isOpen, onClose, onOpenOnboardi
     }
   };
 
+  const handleSaveGroundingKey = async () => {
+    const trimmed = groundingKeyInput.trim();
+    if (!trimmed) return;
+    try {
+      await setApiKey('grounding', trimmed);
+      setGroundingKeyInput('');
+      setHasGroundingStored(true);
+      showSuccess('Grounding API key secured in OS Keychain');
+    } catch (err: unknown) {
+      alert(`Failed to save to Keychain: ${err}`);
+    }
+  };
+
+  const handleDeleteGroundingKey = async () => {
+    try {
+      await deleteApiKey('grounding');
+      setHasGroundingStored(false);
+      showSuccess('Grounding API key removed from OS Keychain');
+    } catch (err: unknown) {
+      alert(`Failed to remove key: ${err}`);
+    }
+  };
+
+  const handleSaveGroundingEndpoint = () => {
+    const clean = groundingEndpointInput.trim();
+    setGroundingEndpointUrl(clean);
+    showSuccess('Grounding endpoint URL updated');
+  };
+
+  const handleTestGroundingEndpoint = async () => {
+    const url = groundingEndpointInput.trim();
+    if (!url) {
+      setGroundingTestStatus('Error: Please enter an endpoint URL first.');
+      return;
+    }
+    setIsTestingGrounding(true);
+    setGroundingTestStatus(null);
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ping: true }),
+      }).catch(async () => {
+        return await fetch(url, { method: 'GET' });
+      });
+
+      if (response && response.status < 500) {
+        setGroundingTestStatus(`Reachable (HTTP ${response.status}) — Endpoint online`);
+      } else {
+        setGroundingTestStatus(`Offline or unreachable (${response ? 'HTTP ' + response.status : 'Network error'})`);
+      }
+    } catch (err: unknown) {
+      setGroundingTestStatus(`Connection error: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setIsTestingGrounding(false);
+    }
+  };
+
   const handleToggleLogs = async () => {
     if (!isViewingLogs) {
       try {
@@ -265,6 +354,27 @@ export const SettingsPanel: React.FC<Props> = ({ isOpen, onClose, onOpenOnboardi
     setTimeout(() => setSaveSuccessMsg(null), 3000);
   };
 
+  const handleAddApp = (confirmBrowser = false) => {
+    const target = confirmBrowser ? pendingBrowserBundle : newAppInput.trim();
+    if (!target) return;
+    setAllowlistError(null);
+
+    const res = addToComputerControlAllowlist(target, confirmBrowser);
+    if (!res.success) {
+      if (res.requiresBrowserConfirm) {
+        setPendingBrowserBundle(target);
+        setPendingBrowserWarning(res.warning || null);
+      } else if (res.error) {
+        setAllowlistError(res.error);
+      }
+    } else {
+      setNewAppInput('');
+      setPendingBrowserBundle(null);
+      setPendingBrowserWarning(null);
+      showSuccess(`Added '${target}' to allowlist`);
+    }
+  };
+
   if (isOpen === false) return null;
 
   const cardContent = (
@@ -333,6 +443,16 @@ export const SettingsPanel: React.FC<Props> = ({ isOpen, onClose, onOpenOnboardi
         >
           <Sliders size={13} aria-hidden="true" />
           <span>Shortcuts</span>
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={activeSection === 'computerControl'}
+          className={`settings-nav-tab ${activeSection === 'computerControl' ? 'active' : ''}`}
+          onClick={() => setActiveSection('computerControl')}
+        >
+          <ShieldAlert size={13} aria-hidden="true" />
+          <span>Computer Control</span>
         </button>
       </div>
 
@@ -1327,6 +1447,613 @@ export const SettingsPanel: React.FC<Props> = ({ isOpen, onClose, onOpenOnboardi
                   <Sparkles size={12} />
                   <span>Launch Guide</span>
                 </button>
+              </div>
+            </div>
+          )}
+        </>
+      )}
+
+      {activeSection === 'computerControl' && (
+        <>
+          <div className="settings-section">
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
+              <div>
+                <h3 className="section-label" style={{ margin: 0 }}>Advanced: Computer Control (Experimental)</h3>
+                <div style={{ fontSize: '11px', color: 'var(--aeio-text-muted)', marginTop: '2px' }}>
+                  Safety-first, intent-gated desktop interaction engine.
+                </div>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={computerControlEnabled}
+                onClick={() => setComputerControlEnabled(!computerControlEnabled)}
+                className={`model-badge ${computerControlEnabled ? 'online' : 'offline'}`}
+                style={{
+                  cursor: 'pointer',
+                  padding: '6px 14px',
+                  borderRadius: '16px',
+                  fontSize: '12px',
+                  fontWeight: 600,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  border: computerControlEnabled ? '1px solid #0FA958' : '1px solid rgba(255,255,255,0.15)',
+                  background: computerControlEnabled ? 'rgba(15, 169, 88, 0.18)' : 'rgba(255,255,255,0.05)',
+                  color: computerControlEnabled ? '#34d399' : '#9ca3af',
+                  transition: 'all 0.15s ease',
+                }}
+              >
+                <span
+                  style={{
+                    width: '7px',
+                    height: '7px',
+                    borderRadius: '50%',
+                    backgroundColor: computerControlEnabled ? '#0FA958' : '#6b7280',
+                  }}
+                />
+                <span>{computerControlEnabled ? 'ENABLED' : 'DISABLED (Default)'}</span>
+              </button>
+            </div>
+
+            {/* Status callout */}
+            <div
+              style={{
+                padding: '10px 14px',
+                borderRadius: '8px',
+                backgroundColor: computerControlEnabled ? 'rgba(15, 169, 88, 0.1)' : 'rgba(255, 255, 255, 0.04)',
+                border: `1px solid ${computerControlEnabled ? 'rgba(15, 169, 88, 0.3)' : 'rgba(255, 255, 255, 0.08)'}`,
+                marginBottom: '16px',
+                fontSize: '12px',
+                color: computerControlEnabled ? '#34d399' : '#9ca3af',
+                lineHeight: 1.4,
+              }}
+            >
+              {computerControlEnabled
+                ? 'Computer Control master switch is ON. Actions are strictly gated by the allowlist below, intent verification, and kill switch.'
+                : 'Master switch is OFF (Default). The allowlist below is completely inert, and any action classification evaluates as High risk.'}
+            </div>
+
+            {/* Hard Security Notice */}
+            <div
+              style={{
+                padding: '12px 14px',
+                borderRadius: '8px',
+                backgroundColor: 'rgba(245, 158, 11, 0.08)',
+                border: '1px solid rgba(245, 158, 11, 0.25)',
+                marginBottom: '18px',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#f59e0b', fontWeight: 600, fontSize: '12px' }}>
+                <ShieldAlert size={14} />
+                <span>Zero-Trust GUI Boundary & Absolute Blocklist</span>
+              </div>
+              <p style={{ margin: '6px 0 0 0', fontSize: '11px', color: 'var(--aeio-text-muted)', lineHeight: 1.45 }}>
+                Only applications explicitly added to your per-application allowlist below can ever be targeted.
+                {' '}<strong>System Settings, Password Managers, Terminals, and Code Editors with integrated terminals (VS Code, Cursor, Terminal, etc.) are hard-coded blocked</strong> at the safety state layer and can never be added under any circumstance.
+              </p>
+            </div>
+
+            {/* Hardware Kill Switch Status (Pillar 4) */}
+            <div
+              style={{
+                padding: '14px 16px',
+                borderRadius: '8px',
+                backgroundColor: killSwitchTripped ? 'rgba(185, 28, 28, 0.12)' : 'rgba(15, 169, 88, 0.08)',
+                border: `1px solid ${killSwitchTripped ? 'rgba(185, 28, 28, 0.35)' : 'rgba(15, 169, 88, 0.25)'}`,
+                marginBottom: '18px',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', fontWeight: 600, color: killSwitchTripped ? '#f87171' : '#34d399' }}>
+                  <PowerOff size={14} />
+                  <span>Hardware Emergency Kill Switch (Pillar 4)</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span
+                    style={{
+                      padding: '2px 8px',
+                      borderRadius: '4px',
+                      fontSize: '10px',
+                      fontWeight: 700,
+                      backgroundColor: killSwitchTripped ? '#dc2626' : 'rgba(15, 169, 88, 0.2)',
+                      color: killSwitchTripped ? '#ffffff' : '#34d399',
+                    }}
+                  >
+                    {killSwitchTripped ? 'EMERGENCY STOPPED' : 'ARMED (Hold Esc >= 300ms)'}
+                  </span>
+                  {killSwitchTripped ? (
+                    <button
+                      type="button"
+                      onClick={resetKillSwitchAction}
+                      style={{
+                        padding: '4px 10px',
+                        fontSize: '10px',
+                        fontWeight: 600,
+                        backgroundColor: '#ffffff',
+                        color: '#dc2626',
+                        border: 'none',
+                        borderRadius: '4px',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      Reset Switch
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        const { triggerKillSwitch } = await import('../../lib/safety/killSwitch');
+                        await triggerKillSwitch('Manual test trigger from settings');
+                        setKillSwitchTripped(true, 'Manual test trigger from settings');
+                      }}
+                      style={{
+                        padding: '4px 8px',
+                        fontSize: '10px',
+                        background: 'rgba(255, 255, 255, 0.08)',
+                        border: '1px solid rgba(255, 255, 255, 0.15)',
+                        borderRadius: '4px',
+                        color: 'var(--aeio-text-muted)',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      Test Trigger
+                    </button>
+                  )}
+                </div>
+              </div>
+              <p style={{ margin: 0, fontSize: '11px', color: 'var(--aeio-text-muted)', lineHeight: 1.45 }}>
+                A native low-level OS event hook runs on a dedicated thread independent of UI rendering. Holding the <strong>Escape key for &ge; 300ms</strong> trips the atomic halt flag (<code>EMERGENCY_HALT</code>) and terminates any in-flight computer control action loop immediately before the next step can execute.
+              </p>
+              {killSwitchTripped && killSwitchReason && (
+                <div style={{ marginTop: '8px', fontSize: '11px', color: '#f87171', fontWeight: 500 }}>
+                  Reason: {killSwitchReason}
+                </div>
+              )}
+            </div>
+
+            {/* Allowlist Manager */}
+            <div>
+              <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--aeio-text-primary)', marginBottom: '4px' }}>
+                Per-Application Allowlist ({computerControlAllowlist.length})
+              </div>
+              <div style={{ fontSize: '11px', color: 'var(--aeio-text-muted)', marginBottom: '10px' }}>
+                Specify application bundle identifiers allowed for automated interaction.
+              </div>
+
+              {/* Input Row */}
+              <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
+                <input
+                  type="text"
+                  value={newAppInput}
+                  onChange={(e) => {
+                    setNewAppInput(e.target.value);
+                    setAllowlistError(null);
+                  }}
+                  onKeyDown={(e) => e.key === 'Enter' && handleAddApp(false)}
+                  placeholder="e.g. com.apple.calculator or com.apple.TextEdit"
+                  className="shortcut-input"
+                  style={{ flex: 1, margin: 0, padding: '8px 12px', fontSize: '12px' }}
+                />
+                <button
+                  type="button"
+                  className="action-btn primary"
+                  onClick={() => handleAddApp(false)}
+                  disabled={!newAppInput.trim()}
+                  style={{
+                    padding: '8px 14px',
+                    fontSize: '12px',
+                    fontWeight: 600,
+                    width: 'auto',
+                    backgroundColor: '#0FA958',
+                    color: '#ffffff',
+                    opacity: newAppInput.trim() ? 1 : 0.5,
+                    cursor: newAppInput.trim() ? 'pointer' : 'not-allowed',
+                  }}
+                >
+                  Add App
+                </button>
+              </div>
+
+              {/* Error banner if rejected by blocklist */}
+              {allowlistError && (
+                <div
+                  style={{
+                    padding: '8px 12px',
+                    borderRadius: '6px',
+                    backgroundColor: 'rgba(239, 68, 68, 0.12)',
+                    border: '1px solid rgba(239, 68, 68, 0.35)',
+                    color: '#f87171',
+                    fontSize: '11px',
+                    marginBottom: '10px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                  }}
+                >
+                  <Ban size={14} />
+                  <span>{allowlistError}</span>
+                </div>
+              )}
+
+              {/* Bundle suggestions */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', marginBottom: '12px' }}>
+                <span style={{ fontSize: '10px', color: 'var(--aeio-text-muted)' }}>Suggestions:</span>
+                {['com.apple.calculator', 'com.apple.TextEdit', 'com.apple.Notes'].map((sug) => (
+                  <button
+                    key={sug}
+                    type="button"
+                    onClick={() => {
+                      setNewAppInput(sug);
+                      setAllowlistError(null);
+                    }}
+                    style={{
+                      padding: '3px 8px',
+                      fontSize: '10px',
+                      background: 'rgba(255,255,255,0.06)',
+                      border: '1px solid rgba(255,255,255,0.1)',
+                      borderRadius: '4px',
+                      color: 'var(--aeio-text-muted)',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {sug}
+                  </button>
+                ))}
+              </div>
+
+              {/* Active list */}
+              {computerControlAllowlist.length === 0 ? (
+                <div
+                  style={{
+                    padding: '20px',
+                    textAlign: 'center',
+                    backgroundColor: 'rgba(0,0,0,0.15)',
+                    border: '1px dashed rgba(255,255,255,0.1)',
+                    borderRadius: '8px',
+                    color: 'var(--aeio-text-muted)',
+                    fontSize: '11px',
+                  }}
+                >
+                  No applications allowlisted yet. Computer control cannot interact with any application.
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  {computerControlAllowlist.map((app) => (
+                    <div
+                      key={app}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        padding: '8px 12px',
+                        backgroundColor: 'rgba(255,255,255,0.04)',
+                        border: '1px solid rgba(255,255,255,0.08)',
+                        borderRadius: '6px',
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span
+                          style={{
+                            width: '6px',
+                            height: '6px',
+                            borderRadius: '50%',
+                            backgroundColor: computerControlEnabled ? '#0FA958' : '#6b7280',
+                          }}
+                        />
+                        <code style={{ fontSize: '11px', color: 'var(--aeio-text-primary)' }}>{app}</code>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => removeFromComputerControlAllowlist(app)}
+                        title="Remove from allowlist"
+                        style={{
+                          background: 'transparent',
+                          border: 'none',
+                          color: 'var(--aeio-text-muted)',
+                          cursor: 'pointer',
+                          padding: '4px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          borderRadius: '4px',
+                        }}
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* BYO Grounding Model Endpoint (UI-TARS / Qwen2-VL) */}
+            <div
+              style={{
+                marginTop: '24px',
+                padding: '16px',
+                backgroundColor: 'rgba(255, 255, 255, 0.03)',
+                border: '1px solid rgba(255, 255, 255, 0.08)',
+                borderRadius: '8px',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <Cpu size={15} style={{ color: '#0FA958' }} />
+                  <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--aeio-text-primary)' }}>
+                    BYO Visual Grounding Endpoint (UI-TARS / Qwen2-VL)
+                  </span>
+                </div>
+                <span
+                  style={{
+                    fontSize: '10px',
+                    fontWeight: 600,
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.5px',
+                    padding: '2px 8px',
+                    borderRadius: '12px',
+                    backgroundColor: groundingEndpointUrl ? 'rgba(15, 169, 88, 0.15)' : 'rgba(255, 255, 255, 0.06)',
+                    color: groundingEndpointUrl ? '#34d399' : 'var(--aeio-text-muted)',
+                    border: `1px solid ${groundingEndpointUrl ? 'rgba(15, 169, 88, 0.3)' : 'rgba(255, 255, 255, 0.1)'}`,
+                  }}
+                >
+                  {groundingEndpointUrl ? 'Configured' : 'Unconfigured'}
+                </span>
+              </div>
+
+              <p style={{ margin: '0 0 14px', fontSize: '11px', color: 'var(--aeio-text-muted)', lineHeight: 1.45 }}>
+                Visual grounding models translate natural language into screen coordinates. To prevent financial liability from multi-gigabyte GPU instances, Aeio connects to your self-hosted vLLM, RunPod, or local Ollama multimodal endpoint.
+              </p>
+
+              {/* Endpoint URL Input */}
+              <div style={{ marginBottom: '12px' }}>
+                <label style={{ display: 'block', fontSize: '11px', fontWeight: 500, color: 'var(--aeio-text-secondary)', marginBottom: '4px' }}>
+                  Endpoint URL
+                </label>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <input
+                    type="text"
+                    value={groundingEndpointInput}
+                    onChange={(e) => setGroundingEndpointInput(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleSaveGroundingEndpoint()}
+                    placeholder="e.g. http://localhost:8000/v1 or https://api.runpod.ai/v2/..."
+                    className="shortcut-input"
+                    style={{ flex: 1, margin: 0, padding: '8px 12px', fontSize: '12px' }}
+                  />
+                  <button
+                    type="button"
+                    className="action-btn primary"
+                    onClick={handleSaveGroundingEndpoint}
+                    style={{ margin: 0, padding: '8px 14px', fontSize: '12px', minWidth: '70px' }}
+                  >
+                    Save
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleTestGroundingEndpoint}
+                    disabled={isTestingGrounding}
+                    style={{
+                      padding: '8px 12px',
+                      fontSize: '12px',
+                      background: 'rgba(255, 255, 255, 0.08)',
+                      border: '1px solid rgba(255, 255, 255, 0.15)',
+                      borderRadius: '6px',
+                      color: 'var(--aeio-text-primary)',
+                      cursor: isTestingGrounding ? 'not-allowed' : 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                    }}
+                  >
+                    {isTestingGrounding ? <RefreshCw size={12} className="spinning" /> : null}
+                    <span>{isTestingGrounding ? 'Testing...' : 'Test'}</span>
+                  </button>
+                </div>
+                {groundingTestStatus && (
+                  <div
+                    style={{
+                      marginTop: '6px',
+                      fontSize: '11px',
+                      color: groundingTestStatus.startsWith('Reachable') ? '#34d399' : '#f87171',
+                    }}
+                  >
+                    {groundingTestStatus}
+                  </div>
+                )}
+              </div>
+
+              {/* Model Type Selector */}
+              <div style={{ marginBottom: '12px' }}>
+                <label style={{ display: 'block', fontSize: '11px', fontWeight: 500, color: 'var(--aeio-text-secondary)', marginBottom: '4px' }}>
+                  Model Format & Architecture
+                </label>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  {(['ui-tars', 'qwen2-vl', 'custom'] as const).map((type) => (
+                    <button
+                      key={type}
+                      type="button"
+                      onClick={() => setGroundingModelType(type)}
+                      style={{
+                        padding: '6px 12px',
+                        fontSize: '11px',
+                        fontWeight: 500,
+                        borderRadius: '6px',
+                        border: groundingModelType === type ? '1px solid #0FA958' : '1px solid rgba(255, 255, 255, 0.1)',
+                        backgroundColor: groundingModelType === type ? 'rgba(15, 169, 88, 0.15)' : 'rgba(255, 255, 255, 0.04)',
+                        color: groundingModelType === type ? '#34d399' : 'var(--aeio-text-muted)',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      {type === 'ui-tars' ? 'UI-TARS (Recommended)' : type === 'qwen2-vl' ? 'Qwen2-VL' : 'Custom / JSON'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Grounding API Token (OS Keychain) */}
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
+                  <label style={{ fontSize: '11px', fontWeight: 500, color: 'var(--aeio-text-secondary)' }}>
+                    Endpoint Bearer Token (Optional)
+                  </label>
+                  {hasGroundingStored ? (
+                    <span style={{ fontSize: '10px', color: '#34d399', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <ShieldCheck size={11} /> Stored in OS Keychain
+                    </span>
+                  ) : (
+                    <span style={{ fontSize: '10px', color: 'var(--aeio-text-muted)' }}>No token saved</span>
+                  )}
+                </div>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <input
+                    type="password"
+                    placeholder={hasGroundingStored ? '••••••••••••••••••••••••' : 'Bearer token (if required)'}
+                    value={groundingKeyInput}
+                    onChange={(e) => setGroundingKeyInput(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleSaveGroundingKey()}
+                    className="shortcut-input"
+                    style={{ flex: 1, margin: 0, padding: '8px 12px', fontSize: '12px' }}
+                  />
+                  <button
+                    type="button"
+                    className="action-btn primary"
+                    onClick={handleSaveGroundingKey}
+                    disabled={!groundingKeyInput.trim()}
+                    style={{ margin: 0, padding: '8px 14px', fontSize: '12px' }}
+                  >
+                    Save Token
+                  </button>
+                  {hasGroundingStored && (
+                    <button
+                      type="button"
+                      onClick={handleDeleteGroundingKey}
+                      title="Remove token from keychain"
+                      style={{
+                        background: 'transparent',
+                        border: '1px solid rgba(239, 68, 68, 0.3)',
+                        color: '#f87171',
+                        borderRadius: '6px',
+                        padding: '0 10px',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Visual Audit Trail Section */}
+            <div
+              style={{
+                marginTop: '24px',
+                paddingTop: '16px',
+                borderTop: '1px solid rgba(255, 255, 255, 0.08)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+              }}
+            >
+              <div>
+                <h4 style={{ margin: 0, fontSize: '13px', fontWeight: 600, color: '#e5e7eb' }}>
+                  Visual Audit Trail & Receipts
+                </h4>
+                <p style={{ margin: '4px 0 0', fontSize: '11px', color: '#9ca3af' }}>
+                  Inspect immutable cryptographic receipts and before/after screenshots for all GUI actions.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setIsAuditViewerOpen(true)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  backgroundColor: 'rgba(15, 169, 88, 0.15)',
+                  border: '1px solid rgba(15, 169, 88, 0.4)',
+                  borderRadius: '6px',
+                  color: '#34d399',
+                  padding: '7px 14px',
+                  fontSize: '12px',
+                  fontWeight: 500,
+                  cursor: 'pointer',
+                }}
+              >
+                <Eye size={14} />
+                <span>View Visual Receipts</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Visual Audit Log Viewer Modal */}
+          <VisualAuditLogViewer
+            isOpen={isAuditViewerOpen}
+            onClose={() => setIsAuditViewerOpen(false)}
+          />
+
+          {/* Browser Warning Confirmation Modal */}
+          {pendingBrowserBundle && (
+            <div
+              style={{
+                position: 'fixed',
+                inset: 0,
+                backgroundColor: 'rgba(0,0,0,0.7)',
+                backdropFilter: 'blur(4px)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                zIndex: 9999,
+              }}
+            >
+              <div
+                style={{
+                  maxWidth: '420px',
+                  padding: '20px',
+                  backgroundColor: '#18181b',
+                  border: '1px solid rgba(245, 158, 11, 0.4)',
+                  borderRadius: '10px',
+                  boxShadow: '0 12px 30px rgba(0,0,0,0.5)',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#f59e0b', marginBottom: '10px' }}>
+                  <AlertTriangle size={20} />
+                  <h4 style={{ margin: 0, fontSize: '14px', fontWeight: 600 }}>Web Browser Warning</h4>
+                </div>
+                <p style={{ fontSize: '12px', color: '#d1d5db', lineHeight: 1.45, margin: '0 0 16px 0' }}>
+                  {pendingBrowserWarning}
+                </p>
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+                  <button
+                    type="button"
+                    className="action-btn secondary"
+                    onClick={() => {
+                      setPendingBrowserBundle(null);
+                      setPendingBrowserWarning(null);
+                    }}
+                    style={{ padding: '6px 12px', fontSize: '11px', width: 'auto' }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    className="action-btn primary"
+                    onClick={() => handleAddApp(true)}
+                    style={{
+                      padding: '6px 12px',
+                      fontSize: '11px',
+                      width: 'auto',
+                      backgroundColor: '#f59e0b',
+                      color: '#000000',
+                      fontWeight: 600,
+                    }}
+                  >
+                    I Understand, Allow Browser
+                  </button>
+                </div>
               </div>
             </div>
           )}

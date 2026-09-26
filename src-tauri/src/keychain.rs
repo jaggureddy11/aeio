@@ -8,6 +8,7 @@ fn get_env_fallback(target: &str) -> Option<String> {
         "openai" => vec!["OPENAI_API_KEY"],
         "gemini" | "google" => vec!["GEMINI_API_KEY", "GOOGLE_API_KEY"],
         "hf" | "huggingface" => vec!["HF_TOKEN", "HUGGING_FACE_HUB_TOKEN"],
+        "grounding" | "uitars" => vec!["GROUNDING_API_KEY", "HF_TOKEN", "HUGGING_FACE_HUB_TOKEN"],
         _ => vec![],
     };
     for key in keys {
