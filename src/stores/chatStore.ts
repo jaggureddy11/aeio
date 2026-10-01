@@ -23,7 +23,15 @@ import {
   ExecutionPlan,
   parsePlanFromResponse,
   classifyPlanSafety,
+  isGuiActionDestructive,
 } from '../lib/agent/plan';
+import { isHaltActive } from '../lib/safety/killSwitch';
+import { isHardBlocked } from '../lib/safety/allowlist';
+import { requireActionApproval } from '../lib/safety/approvalGate';
+import { showControlOverlay, hideControlOverlay } from '../lib/safety/overlay';
+import { executeActionWithVisualAudit } from '../lib/safety/auditLog';
+import { ComputerAction, SimulatedActionRequest } from '../lib/safety/inputDriver';
+import { ActionIntent } from '../lib/types/actionIntent';
 
 export interface RecalledMemory {
   id: string;
@@ -487,6 +495,113 @@ export const useChatStore = create<ChatState>((set, get) => ({
           result = await openTarget(target);
           break;
         }
+        case 'gui_action': {
+          if (isHaltActive()) {
+            throw new Error('Emergency stop active: hardware kill switch triggered. GUI action aborted.');
+          }
+
+          const settings = useSettingsStore.getState();
+          if (!settings.computerControlEnabled) {
+            throw new Error('Security Policy Refusal: Computer Control master switch is disabled in Settings.');
+          }
+
+          const intent: ActionIntent = {
+            targetAppBundleId:
+              execution.args.intent?.targetAppBundleId ||
+              execution.args.targetAppBundleId ||
+              execution.args.bundleId ||
+              '',
+            naturalLanguageIntent:
+              execution.args.intent?.naturalLanguageIntent ||
+              execution.args.naturalLanguageIntent ||
+              execution.args.intent ||
+              'GUI Action',
+            targetElementDescription:
+              execution.args.intent?.targetElementDescription ||
+              execution.args.targetElementDescription ||
+              execution.args.element ||
+              '',
+            intendedStateChange:
+              execution.args.intent?.intendedStateChange ||
+              execution.args.intendedStateChange ||
+              'Unknown',
+          };
+
+          if (!intent.targetAppBundleId) {
+            throw new Error('GUI action rejected: missing target application bundle identifier.');
+          }
+
+          if (isHardBlocked(intent.targetAppBundleId)) {
+            throw new Error(`Security Policy Refusal: '${intent.targetAppBundleId}' is hard-blocked and cannot be automated under any circumstance.`);
+          }
+
+          const allowlist = settings.computerControlAllowlist.map((b) => b.trim().toLowerCase());
+          if (!allowlist.includes(intent.targetAppBundleId.trim().toLowerCase())) {
+            throw new Error(`Security Policy Refusal: '${intent.targetAppBundleId}' is not in the Computer Control allowlist.`);
+          }
+
+          const targetAppName = execution.args.targetAppName || intent.targetAppBundleId;
+          await showControlOverlay(targetAppName, intent.targetAppBundleId, intent.naturalLanguageIntent, 1, 1);
+
+          try {
+            const rawAction = execution.args.action || {};
+            const actionType = rawAction.actionType || execution.args.actionType || 'click';
+            let action: ComputerAction;
+
+            if (actionType === 'type') {
+              action = { actionType: 'type', text: rawAction.text ?? execution.args.text ?? '' };
+            } else if (actionType === 'keyCombo') {
+              action = { actionType: 'keyCombo', keys: rawAction.keys ?? execution.args.keys ?? [] };
+            } else if (actionType === 'scroll') {
+              action = { actionType: 'scroll', dx: rawAction.dx ?? execution.args.dx ?? 0, dy: rawAction.dy ?? execution.args.dy ?? 0 };
+            } else if (actionType === 'drag') {
+              action = {
+                actionType: 'drag',
+                startX: rawAction.startX ?? execution.args.startX ?? 0,
+                startY: rawAction.startY ?? execution.args.startY ?? 0,
+                endX: rawAction.endX ?? execution.args.endX ?? 0,
+                endY: rawAction.endY ?? execution.args.endY ?? 0,
+              };
+            } else if (actionType === 'move') {
+              action = { actionType: 'move', x: rawAction.x ?? execution.args.x ?? 0, y: rawAction.y ?? execution.args.y ?? 0 };
+            } else {
+              action = {
+                actionType: 'click',
+                x: rawAction.x ?? execution.args.x ?? 0,
+                y: rawAction.y ?? execution.args.y ?? 0,
+                button: rawAction.button || execution.args.button || 'left',
+                double: rawAction.double || execution.args.double || false,
+              };
+            }
+
+            const actionRequest: SimulatedActionRequest = {
+              intent,
+              action,
+              stepNumber: 1,
+              totalSteps: 1,
+              operatorApproved: true,
+            };
+
+            const receipt = await executeActionWithVisualAudit(
+              actionRequest,
+              messageId,
+              execution.args.windowTitle,
+              execution.args.grounding
+            );
+
+            if (receipt.execution.kill_switch_triggered || receipt.execution.status === 'ABORTED_BY_KILL_SWITCH') {
+              throw new Error('Action aborted by hardware emergency kill switch.');
+            }
+            if (receipt.execution.status === 'REFUSED_SECURITY_POLICY') {
+              throw new Error(`Action refused by security policy: ${receipt.execution.status}`);
+            }
+
+            result = receipt;
+          } finally {
+            await hideControlOverlay();
+          }
+          break;
+        }
         default:
           throw new Error(`Unknown tool: ${execution.toolName}`);
       }
@@ -698,6 +813,142 @@ export const useChatStore = create<ChatState>((set, get) => ({
           case 'open_target': {
             const target = step.args.target || step.args.path || step.args.url || '';
             stepResult = await openTarget(target);
+            break;
+          }
+          case 'gui_action': {
+            // Hardware Kill Switch check (Pillar 4)
+            if (isHaltActive()) {
+              throw new Error('Emergency stop active: hardware kill switch triggered. GUI action aborted.');
+            }
+
+            const settings = useSettingsStore.getState();
+
+            // Master switch check (Pillar 1)
+            if (!settings.computerControlEnabled) {
+              throw new Error('Security Policy Refusal: Computer Control master switch is disabled in Settings.');
+            }
+
+            // Extract intent (Pillar 2)
+            const intent: ActionIntent = {
+              targetAppBundleId:
+                step.args.intent?.targetAppBundleId ||
+                step.args.targetAppBundleId ||
+                step.args.bundleId ||
+                '',
+              naturalLanguageIntent:
+                step.args.intent?.naturalLanguageIntent ||
+                step.args.naturalLanguageIntent ||
+                step.args.intent ||
+                step.description,
+              targetElementDescription:
+                step.args.intent?.targetElementDescription ||
+                step.args.targetElementDescription ||
+                step.args.element ||
+                '',
+              intendedStateChange:
+                step.args.intent?.intendedStateChange ||
+                step.args.intendedStateChange ||
+                'Unknown',
+            };
+
+            if (!intent.targetAppBundleId) {
+              throw new Error('GUI action rejected: missing target application bundle identifier.');
+            }
+
+            // Hard blocklist check (Pillar 1)
+            if (isHardBlocked(intent.targetAppBundleId)) {
+              throw new Error(`Security Policy Refusal: '${intent.targetAppBundleId}' is hard-blocked and cannot be automated under any circumstance.`);
+            }
+
+            // Allowlist check (Pillar 1)
+            const allowlist = settings.computerControlAllowlist.map((b) => b.trim().toLowerCase());
+            if (!allowlist.includes(intent.targetAppBundleId.trim().toLowerCase())) {
+              throw new Error(`Security Policy Refusal: '${intent.targetAppBundleId}' is not in the Computer Control allowlist.`);
+            }
+
+            // Upfront human approval modal gate (Pillar 5)
+            if (!step.args.operatorApproved) {
+              const approval = await requireActionApproval(intent, {
+                targetAppName: step.args.targetAppName || intent.targetAppBundleId,
+              });
+              if (!approval.approved) {
+                throw new Error(approval.reason || 'Action rejected by operator.');
+              }
+            }
+
+            // Re-verify kill switch post-approval
+            if (isHaltActive()) {
+              throw new Error('Emergency stop active: hardware kill switch triggered before input dispatch.');
+            }
+
+            // Active-Control HUD overlay (Pillar 3)
+            const targetAppName = step.args.targetAppName || intent.targetAppBundleId;
+            await showControlOverlay(
+              targetAppName,
+              intent.targetAppBundleId,
+              intent.naturalLanguageIntent,
+              i + 1,
+              steps.length
+            );
+
+            try {
+              const rawAction = step.args.action || {};
+              const actionType = rawAction.actionType || step.args.actionType || 'click';
+              let action: ComputerAction;
+
+              if (actionType === 'type') {
+                action = { actionType: 'type', text: rawAction.text ?? step.args.text ?? '' };
+              } else if (actionType === 'keyCombo') {
+                action = { actionType: 'keyCombo', keys: rawAction.keys ?? step.args.keys ?? [] };
+              } else if (actionType === 'scroll') {
+                action = { actionType: 'scroll', dx: rawAction.dx ?? step.args.dx ?? 0, dy: rawAction.dy ?? step.args.dy ?? 0 };
+              } else if (actionType === 'drag') {
+                action = {
+                  actionType: 'drag',
+                  startX: rawAction.startX ?? step.args.startX ?? 0,
+                  startY: rawAction.startY ?? step.args.startY ?? 0,
+                  endX: rawAction.endX ?? step.args.endX ?? 0,
+                  endY: rawAction.endY ?? step.args.endY ?? 0,
+                };
+              } else if (actionType === 'move') {
+                action = { actionType: 'move', x: rawAction.x ?? step.args.x ?? 0, y: rawAction.y ?? step.args.y ?? 0 };
+              } else {
+                action = {
+                  actionType: 'click',
+                  x: rawAction.x ?? step.args.x ?? 0,
+                  y: rawAction.y ?? step.args.y ?? 0,
+                  button: rawAction.button || step.args.button || 'left',
+                  double: rawAction.double || step.args.double || false,
+                };
+              }
+
+              const actionRequest: SimulatedActionRequest = {
+                intent,
+                action,
+                stepNumber: i + 1,
+                totalSteps: steps.length,
+                operatorApproved: true,
+              };
+
+              // Visual audit execution (Pillar 7)
+              const receipt = await executeActionWithVisualAudit(
+                actionRequest,
+                messageId,
+                step.args.windowTitle,
+                step.args.grounding
+              );
+
+              if (receipt.execution.kill_switch_triggered || receipt.execution.status === 'ABORTED_BY_KILL_SWITCH') {
+                throw new Error('Action aborted by hardware emergency kill switch.');
+              }
+              if (receipt.execution.status === 'REFUSED_SECURITY_POLICY') {
+                throw new Error(`Action refused by security policy: ${receipt.execution.status}`);
+              }
+
+              stepResult = receipt;
+            } finally {
+              await hideControlOverlay();
+            }
             break;
           }
           default:
@@ -966,6 +1217,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
       '   - open_target: Open file, directory, application, or URL with default OS handler. Arguments: {"target": "..."}\n' +
       '   - read_clipboard: Inspect clipboard text. Arguments: {}\n' +
       '   - write_clipboard: Copy text to clipboard. Arguments: {"text": "..."}\n' +
+      (useSettingsStore.getState().computerControlEnabled
+        ? '   - gui_action: Execute desktop GUI action on allowlisted application. Arguments: {"intent": {"targetAppBundleId": "...", "naturalLanguageIntent": "...", "targetElementDescription": "...", "intendedStateChange": "..."}, "action": {"actionType": "click"|"type"|"keyCombo"|"scroll"|"drag", ...}}\n'
+        : '') +
       '5. When tool execution outputs are fed back to you, analyze the result and deliver the synthesized answer or next action.\n' +
       '6. When a user goal requires multiple steps or sequential tool operations, emit a structured plan:\n' +
       '   <plan title="Descriptive title of the overall plan">\n' +
@@ -1160,6 +1414,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
           } catch {
             isDestructive = true;
           }
+        } else if (name === 'gui_action') {
+          isDestructive = isGuiActionDestructive(args);
         }
 
         tools.push({
@@ -1189,6 +1445,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
               } catch {
                 isDestructive = true;
               }
+            } else if (name === 'gui_action') {
+              isDestructive = isGuiActionDestructive(args);
             }
 
             tools.push({

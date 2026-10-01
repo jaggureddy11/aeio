@@ -1,3 +1,7 @@
+import { ActionIntent } from '../types/actionIntent';
+import { isHardBlocked, classifyActionRiskWithAllowlist } from '../safety/allowlist';
+import { useSettingsStore } from '../../stores/settingsStore';
+
 export interface PlanStep {
   id: string;
   stepNumber: number;
@@ -34,12 +38,94 @@ export function isDestructiveCommandClient(command: string): boolean {
   return DESTRUCTIVE_PATTERNS.some((p) => lower.includes(p));
 }
 
+export function extractActionIntentFromArgs(args: any): ActionIntent | null {
+  if (!args || typeof args !== 'object') return null;
+  const rawIntent = args.intent || args;
+  const targetAppBundleId =
+    rawIntent.targetAppBundleId ||
+    rawIntent.bundle_id ||
+    rawIntent.bundleId ||
+    rawIntent.target_app ||
+    rawIntent.targetApp ||
+    args.targetAppBundleId ||
+    args.bundle_id ||
+    args.bundleId ||
+    '';
+  const naturalLanguageIntent =
+    rawIntent.naturalLanguageIntent ||
+    rawIntent.natural_language ||
+    rawIntent.intent ||
+    args.naturalLanguageIntent ||
+    args.intent ||
+    '';
+  const targetElementDescription =
+    rawIntent.targetElementDescription ||
+    rawIntent.element ||
+    rawIntent.target_element ||
+    args.targetElementDescription ||
+    args.element ||
+    '';
+  const intendedStateChange =
+    rawIntent.intendedStateChange ||
+    rawIntent.intended_state_change ||
+    rawIntent.state_change ||
+    args.intendedStateChange ||
+    'Unknown';
+
+  if (!targetAppBundleId && !naturalLanguageIntent) {
+    return null;
+  }
+
+  return {
+    targetAppBundleId,
+    naturalLanguageIntent,
+    targetElementDescription,
+    intendedStateChange,
+  };
+}
+
+export function isGuiActionDestructive(args: any): boolean {
+  try {
+    const settings = useSettingsStore.getState();
+    if (!settings.computerControlEnabled) {
+      return true;
+    }
+
+    const intent = extractActionIntentFromArgs(args);
+    if (!intent || !intent.targetAppBundleId) {
+      return true;
+    }
+
+    const bundle = intent.targetAppBundleId.trim().toLowerCase();
+    if (isHardBlocked(bundle)) {
+      return true;
+    }
+
+    const allowlist = (settings.computerControlAllowlist || []).map((b) => b.trim().toLowerCase());
+    if (!allowlist.includes(bundle)) {
+      return true;
+    }
+
+    const risk = classifyActionRiskWithAllowlist(intent, allowlist, true);
+    return risk !== 'Low';
+  } catch {
+    return true;
+  }
+}
+
 const PLAN_BLOCK_REGEX = /<plan(?:\s+title=["']([^"']*)["'])?>([\s\S]*?)<\/plan>/i;
 
 export function normalizeToolName(name: string): string {
   const lower = name.toLowerCase().trim();
   if (lower === 'run_shell_command' || lower === 'shell' || lower === 'bash' || lower === 'sh') return 'run_shell';
   if (lower === 'open_url' || lower === 'open_file' || lower === 'open') return 'open_target';
+  if (
+    lower === 'gui_action' ||
+    lower === 'computer_action' ||
+    lower === 'computer_control' ||
+    lower === 'desktop_action' ||
+    lower === 'gui'
+  ) return 'gui_action';
   return lower;
 }
 
@@ -81,6 +167,8 @@ export function parsePlanFromResponse(rawText: string): { plan: ExecutionPlan | 
       const isDestructive =
         toolName === 'run_shell' && command
           ? isDestructiveCommandClient(command)
+          : toolName === 'gui_action'
+          ? isGuiActionDestructive(args)
           : toolName.includes('delete') || toolName.includes('remove');
 
       steps.push({
@@ -140,6 +228,8 @@ export function parsePlanFromResponse(rawText: string): { plan: ExecutionPlan | 
     const isDestructive =
       toolName === 'run_shell' && command
         ? isDestructiveCommandClient(command)
+        : toolName === 'gui_action'
+        ? isGuiActionDestructive(args)
         : toolName.includes('delete') || toolName.includes('remove');
 
     steps.push({
@@ -195,6 +285,8 @@ export async function classifyPlanSafety(
       } else {
         isDestructive = isDestructiveCommandClient(step.args.command);
       }
+    } else if (normalizedTool === 'gui_action') {
+      isDestructive = isGuiActionDestructive(step.args);
     } else if (
       normalizedTool.includes('delete') ||
       normalizedTool.includes('remove') ||

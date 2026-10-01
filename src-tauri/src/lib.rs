@@ -114,6 +114,11 @@ pub fn run() {
                 tray_builder = tray_builder.icon(icon.clone());
             }
 
+            #[cfg(target_os = "macos")]
+            {
+                tray_builder = tray_builder.icon_as_template(true);
+            }
+
             let _tray = tray_builder.build(app)?;
 
             if let Some(window) = app.get_webview_window("main") {

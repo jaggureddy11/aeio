@@ -270,6 +270,8 @@ export const PlanExecutionCard: React.FC<Props> = ({
                   <code style={{ fontSize: '0.7rem', color: '#9ca3af', padding: '0.15rem 0.35rem', background: 'rgba(0,0,0,0.4)', borderRadius: '0.25rem', border: '1px solid rgba(255,255,255,0.06)' }}>
                     {step.toolName === 'run_shell' ? (
                       step.args.command
+                    ) : step.toolName === 'gui_action' ? (
+                      step.args.intent?.targetAppBundleId || step.args.targetAppBundleId || 'gui_action'
                     ) : (
                       step.toolName
                     )}

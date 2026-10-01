@@ -2,15 +2,28 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
   parsePlanFromResponse,
   classifyPlanSafety,
+  normalizeToolName,
   ExecutionPlan,
 } from '../lib/agent/plan';
 import { useChatStore } from '../stores/chatStore';
+import { useSettingsStore } from '../stores/settingsStore';
+import { setLocalHaltActive } from '../lib/safety/killSwitch';
+import { resolveApprovalRequest } from '../lib/safety/approvalGate';
+import { resetLocalOverlayState, getControlOverlayState } from '../lib/safety/overlay';
+import { resetMockAuditLog } from '../lib/safety/auditLog';
 import * as ipc from '../lib/ipc';
 
 describe('Phase 2 — Agentic Multi-Step Execution Mode', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
     vi.spyOn(ipc, 'saveChatMessage').mockResolvedValue();
+    setLocalHaltActive(false);
+    resetLocalOverlayState();
+    resetMockAuditLog();
+    useSettingsStore.setState({
+      computerControlEnabled: false,
+      computerControlAllowlist: ['com.apple.calculator'],
+    });
     useChatStore.setState({
       messages: [],
       isLoading: false,
@@ -461,6 +474,472 @@ Let me know if you want to proceed.`;
       expect(msgAfter?.plan?.steps[2].status).toBe('cancelled');
       expect(msgAfter?.plan?.stoppedReason).toContain('failed');
       expect(callCount).toBe(2);
+    });
+  });
+
+  describe('Phase 8 — Agent-S GUI Action Execution & Safety Integration', () => {
+    it('normalizes various tool aliases to gui_action', () => {
+      expect(normalizeToolName('gui_action')).toBe('gui_action');
+      expect(normalizeToolName('computer_action')).toBe('gui_action');
+      expect(normalizeToolName('computer_control')).toBe('gui_action');
+      expect(normalizeToolName('desktop_action')).toBe('gui_action');
+      expect(normalizeToolName('GUI')).toBe('gui_action');
+    });
+
+    it('classifies gui_action as destructive when master toggle is disabled', async () => {
+      useSettingsStore.setState({
+        computerControlEnabled: false,
+        computerControlAllowlist: ['com.apple.calculator'],
+      });
+
+      const planXml = `<plan title="Calculator Plan">
+  <step number="1" tool="gui_action" description="Click 5">{"intent": {"targetAppBundleId": "com.apple.calculator", "naturalLanguageIntent": "Click button 5", "intendedStateChange": "Navigate"}}</step>
+</plan>`;
+
+      const { plan } = parsePlanFromResponse(planXml);
+      expect(plan).not.toBeNull();
+      expect(plan?.steps[0].isDestructive).toBe(true);
+      expect(plan?.hasDestructiveSteps).toBe(true);
+      expect(plan?.status).toBe('pending_approval');
+    });
+
+    it('classifies gui_action as destructive when target app is hard-blocked', async () => {
+      useSettingsStore.setState({
+        computerControlEnabled: true,
+        computerControlAllowlist: ['com.apple.terminal'],
+      });
+
+      const planXml = `<plan title="Terminal Plan">
+  <step number="1" tool="gui_action" description="Click Terminal">{"intent": {"targetAppBundleId": "com.apple.terminal", "naturalLanguageIntent": "Click Terminal window", "intendedStateChange": "Navigate"}}</step>
+</plan>`;
+
+      const { plan } = parsePlanFromResponse(planXml);
+      expect(plan).not.toBeNull();
+      expect(plan?.steps[0].isDestructive).toBe(true);
+      expect(plan?.hasDestructiveSteps).toBe(true);
+      expect(plan?.status).toBe('pending_approval');
+    });
+
+    it('classifies gui_action as destructive when target app is not in allowlist', async () => {
+      useSettingsStore.setState({
+        computerControlEnabled: true,
+        computerControlAllowlist: ['com.apple.calculator'],
+      });
+
+      const planXml = `<plan title="Random App Plan">
+  <step number="1" tool="gui_action" description="Click Untrusted App">{"intent": {"targetAppBundleId": "com.untrusted.app", "naturalLanguageIntent": "Click UI", "intendedStateChange": "Navigate"}}</step>
+</plan>`;
+
+      const { plan } = parsePlanFromResponse(planXml);
+      expect(plan).not.toBeNull();
+      expect(plan?.steps[0].isDestructive).toBe(true);
+      expect(plan?.hasDestructiveSteps).toBe(true);
+      expect(plan?.status).toBe('pending_approval');
+    });
+
+    it('classifies low-risk gui_action as non-destructive when allowlisted and enabled', async () => {
+      useSettingsStore.setState({
+        computerControlEnabled: true,
+        computerControlAllowlist: ['com.apple.calculator'],
+      });
+
+      const planXml = `<plan title="Safe Calculator Inspection">
+  <step number="1" tool="gui_action" description="Inspect Calculator">{"intent": {"targetAppBundleId": "com.apple.calculator", "naturalLanguageIntent": "Inspect display", "targetElementDescription": "Display", "intendedStateChange": "Navigate"}}</step>
+</plan>`;
+
+      const { plan } = parsePlanFromResponse(planXml);
+      expect(plan).not.toBeNull();
+      expect(plan?.steps[0].isDestructive).toBe(false);
+      expect(plan?.hasDestructiveSteps).toBe(false);
+      expect(plan?.status).toBe('running');
+    });
+
+    it('refuses executePlan when Computer Control master toggle is disabled', async () => {
+      useSettingsStore.setState({
+        computerControlEnabled: false,
+        computerControlAllowlist: ['com.apple.calculator'],
+      });
+
+      const messageId = useChatStore.getState().addMessage({
+        role: 'assistant',
+        content: 'Running calculator action',
+      });
+
+      const plan: ExecutionPlan = {
+        id: 'plan-master-off',
+        title: 'Calculator Automation',
+        status: 'running',
+        hasDestructiveSteps: false,
+        currentStepIndex: 0,
+        steps: [
+          {
+            id: 'step-1',
+            stepNumber: 1,
+            description: 'Click button',
+            toolName: 'gui_action',
+            args: {
+              intent: {
+                targetAppBundleId: 'com.apple.calculator',
+                naturalLanguageIntent: 'Click 5',
+                targetElementDescription: '5',
+                intendedStateChange: 'Navigate',
+              },
+            },
+            isDestructive: false,
+            status: 'pending',
+          },
+        ],
+      };
+
+      useChatStore.getState().updateMessageContent(
+        messageId,
+        'Running calculator action',
+        false,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        plan
+      );
+
+      await useChatStore.getState().executePlan(messageId);
+
+      const updated = useChatStore.getState().messages.find((m) => m.id === messageId);
+      expect(updated?.plan?.status).toBe('failed');
+      expect(updated?.plan?.steps[0].status).toBe('failed');
+      expect(updated?.plan?.steps[0].error).toContain('Computer Control master switch is disabled');
+      expect(updated?.toolExecutions?.[0].status).toBe('error');
+    });
+
+    it('refuses executePlan when target app is hard-blocked', async () => {
+      useSettingsStore.setState({
+        computerControlEnabled: true,
+        computerControlAllowlist: ['com.apple.terminal'],
+      });
+
+      const messageId = useChatStore.getState().addMessage({
+        role: 'assistant',
+        content: 'Running blocked action',
+      });
+
+      const plan: ExecutionPlan = {
+        id: 'plan-blocked-target',
+        title: 'Terminal GUI Automation',
+        status: 'running',
+        hasDestructiveSteps: false,
+        currentStepIndex: 0,
+        steps: [
+          {
+            id: 'step-1',
+            stepNumber: 1,
+            description: 'Click Terminal',
+            toolName: 'gui_action',
+            args: {
+              intent: {
+                targetAppBundleId: 'com.apple.terminal',
+                naturalLanguageIntent: 'Click terminal input',
+                targetElementDescription: 'Console',
+                intendedStateChange: 'Navigate',
+              },
+            },
+            isDestructive: false,
+            status: 'pending',
+          },
+        ],
+      };
+
+      useChatStore.getState().updateMessageContent(
+        messageId,
+        'Running blocked action',
+        false,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        plan
+      );
+
+      await useChatStore.getState().executePlan(messageId);
+
+      const updated = useChatStore.getState().messages.find((m) => m.id === messageId);
+      expect(updated?.plan?.status).toBe('failed');
+      expect(updated?.plan?.steps[0].status).toBe('failed');
+      expect(updated?.plan?.steps[0].error).toContain('is hard-blocked');
+    });
+
+    it('refuses executePlan when target app is not allowlisted', async () => {
+      useSettingsStore.setState({
+        computerControlEnabled: true,
+        computerControlAllowlist: ['com.apple.calculator'],
+      });
+
+      const messageId = useChatStore.getState().addMessage({
+        role: 'assistant',
+        content: 'Running unallowlisted action',
+      });
+
+      const plan: ExecutionPlan = {
+        id: 'plan-unallowlisted',
+        title: 'Unallowlisted App Automation',
+        status: 'running',
+        hasDestructiveSteps: false,
+        currentStepIndex: 0,
+        steps: [
+          {
+            id: 'step-1',
+            stepNumber: 1,
+            description: 'Click Unknown',
+            toolName: 'gui_action',
+            args: {
+              intent: {
+                targetAppBundleId: 'com.unknown.arbitrary',
+                naturalLanguageIntent: 'Click Button',
+                targetElementDescription: 'Button',
+                intendedStateChange: 'Navigate',
+              },
+            },
+            isDestructive: false,
+            status: 'pending',
+          },
+        ],
+      };
+
+      useChatStore.getState().updateMessageContent(
+        messageId,
+        'Running unallowlisted action',
+        false,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        plan
+      );
+
+      await useChatStore.getState().executePlan(messageId);
+
+      const updated = useChatStore.getState().messages.find((m) => m.id === messageId);
+      expect(updated?.plan?.status).toBe('failed');
+      expect(updated?.plan?.steps[0].status).toBe('failed');
+      expect(updated?.plan?.steps[0].error).toContain('is not in the Computer Control allowlist');
+    });
+
+    it('aborts executePlan immediately when hardware kill switch is triggered', async () => {
+      useSettingsStore.setState({
+        computerControlEnabled: true,
+        computerControlAllowlist: ['com.apple.calculator'],
+      });
+
+      // Trip the hardware kill switch
+      setLocalHaltActive(true);
+
+      const messageId = useChatStore.getState().addMessage({
+        role: 'assistant',
+        content: 'Attempting execution while halted',
+      });
+
+      const plan: ExecutionPlan = {
+        id: 'plan-halted',
+        title: 'Halted Plan',
+        status: 'running',
+        hasDestructiveSteps: false,
+        currentStepIndex: 0,
+        steps: [
+          {
+            id: 'step-1',
+            stepNumber: 1,
+            description: 'Click Button 1',
+            toolName: 'gui_action',
+            args: {
+              intent: {
+                targetAppBundleId: 'com.apple.calculator',
+                naturalLanguageIntent: 'Click 1',
+                targetElementDescription: '1',
+                intendedStateChange: 'Navigate',
+              },
+            },
+            isDestructive: false,
+            status: 'pending',
+          },
+          {
+            id: 'step-2',
+            stepNumber: 2,
+            description: 'Click Button 2',
+            toolName: 'gui_action',
+            args: {
+              intent: {
+                targetAppBundleId: 'com.apple.calculator',
+                naturalLanguageIntent: 'Click 2',
+                targetElementDescription: '2',
+                intendedStateChange: 'Navigate',
+              },
+            },
+            isDestructive: false,
+            status: 'pending',
+          },
+        ],
+      };
+
+      useChatStore.getState().updateMessageContent(
+        messageId,
+        'Attempting execution while halted',
+        false,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        plan
+      );
+
+      await useChatStore.getState().executePlan(messageId);
+
+      const updated = useChatStore.getState().messages.find((m) => m.id === messageId);
+      expect(updated?.plan?.status).toBe('failed');
+      expect(updated?.plan?.steps[0].status).toBe('failed');
+      expect(updated?.plan?.steps[0].error).toContain('hardware kill switch triggered');
+      expect(updated?.plan?.steps[1].status).toBe('cancelled');
+    });
+
+    it('halts and fails step when human operator rejects approval modal', async () => {
+      useSettingsStore.setState({
+        computerControlEnabled: true,
+        computerControlAllowlist: ['com.apple.calculator'],
+      });
+
+      const messageId = useChatStore.getState().addMessage({
+        role: 'assistant',
+        content: 'Plan requiring modal approval',
+      });
+
+      const plan: ExecutionPlan = {
+        id: 'plan-modal-rejection',
+        title: 'Data Entry Plan',
+        status: 'running',
+        hasDestructiveSteps: true,
+        currentStepIndex: 0,
+        steps: [
+          {
+            id: 'step-1',
+            stepNumber: 1,
+            description: 'Enter Data',
+            toolName: 'gui_action',
+            args: {
+              intent: {
+                targetAppBundleId: 'com.apple.calculator',
+                naturalLanguageIntent: 'Type numbers',
+                targetElementDescription: 'Keypad',
+                intendedStateChange: 'DataEntry', // Medium risk -> requires approval modal
+              },
+            },
+            isDestructive: true,
+            status: 'pending',
+          },
+        ],
+      };
+
+      useChatStore.getState().updateMessageContent(
+        messageId,
+        'Plan requiring modal approval',
+        false,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        plan
+      );
+
+      // Trigger execution in background, and resolve approval as rejected
+      const execPromise = useChatStore.getState().executePlan(messageId);
+      // Wait a tick for approval gate to set pending request
+      await new Promise((r) => setTimeout(r, 10));
+      resolveApprovalRequest(false);
+      await execPromise;
+
+      const updated = useChatStore.getState().messages.find((m) => m.id === messageId);
+      expect(updated?.plan?.status).toBe('failed');
+      expect(updated?.plan?.steps[0].status).toBe('failed');
+      expect(updated?.plan?.steps[0].error).toContain('Action rejected by operator');
+    });
+
+    it('successfully executes allowlisted gui_action with HUD overlay and visual audit receipts', async () => {
+      useSettingsStore.setState({
+        computerControlEnabled: true,
+        computerControlAllowlist: ['com.apple.calculator'],
+      });
+
+      const messageId = useChatStore.getState().addMessage({
+        role: 'assistant',
+        content: 'Executing safe calculator operation',
+      });
+
+      const plan: ExecutionPlan = {
+        id: 'plan-successful-gui',
+        title: 'Calculator Operation',
+        status: 'running',
+        hasDestructiveSteps: false,
+        currentStepIndex: 0,
+        steps: [
+          {
+            id: 'step-1',
+            stepNumber: 1,
+            description: 'Click button 7',
+            toolName: 'gui_action',
+            args: {
+              intent: {
+                targetAppBundleId: 'com.apple.calculator',
+                naturalLanguageIntent: 'Click button 7',
+                targetElementDescription: 'Button 7',
+                intendedStateChange: 'Navigate',
+              },
+              action: { actionType: 'click', x: 100, y: 150 },
+            },
+            isDestructive: false,
+            status: 'pending',
+          },
+        ],
+      };
+
+      useChatStore.getState().updateMessageContent(
+        messageId,
+        'Executing safe calculator operation',
+        false,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        plan
+      );
+
+      await useChatStore.getState().executePlan(messageId);
+
+      const updated = useChatStore.getState().messages.find((m) => m.id === messageId);
+      expect(updated?.plan?.status).toBe('completed');
+      expect(updated?.plan?.steps[0].status).toBe('completed');
+
+      // Verify visual audit receipt was attached to toolExecutions
+      expect(updated?.toolExecutions).toHaveLength(1);
+      const receipt = updated?.toolExecutions?.[0].result;
+      expect(receipt).toBeDefined();
+      expect(receipt.audit_id).toBeDefined();
+      expect(receipt.session_id).toBe(messageId);
+      expect(receipt.intent.bundle_id).toBe('com.apple.calculator');
+      expect(receipt.artifacts.pre_screenshot_sha256).toBeDefined();
+      expect(receipt.artifacts.post_screenshot_sha256).toBeDefined();
+
+      // Verify overlay HUD was hidden after execution
+      const overlay = await getControlOverlayState();
+      expect(overlay.isActive).toBe(false);
     });
   });
 });
