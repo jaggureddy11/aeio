@@ -1073,4 +1073,194 @@ Let me know if you want to proceed.`;
       expect(receipt.grounding.predicted_coordinate).toEqual({ x: 672, y: 454 });
     });
   });
+
+  describe('OpenClaw Capability Integration & Execution Tests', () => {
+    it('gating: multi-step plan containing write_file is strictly classified as destructive', async () => {
+      const planXml = `<plan title="Scaffold project files">
+  <step number="1" tool="list_directory" description="Check files in directory">{"dir": "./src"}</step>
+  <step number="2" tool="write_file" description="Write new component file">{"path": "./src/NewComponent.tsx", "content": "export default () => <div>Hello</div>;"}</step>
+</plan>`;
+
+      const { plan } = parsePlanFromResponse(planXml);
+      expect(plan).not.toBeNull();
+      expect(plan?.steps[0].toolName).toBe('list_directory');
+      expect(plan?.steps[0].isDestructive).toBe(false);
+      expect(plan?.steps[1].toolName).toBe('write_file');
+      expect(plan?.steps[1].isDestructive).toBe(true);
+      expect(plan?.hasDestructiveSteps).toBe(true);
+
+      const classified = await classifyPlanSafety(plan!);
+      expect(classified.hasDestructiveSteps).toBe(true);
+      expect(classified.status).toBe('pending_approval');
+    });
+
+    it('normalizes tool aliases for OpenClaw parity (create_file, web_fetch, query_memory, dir)', () => {
+      expect(normalizeToolName('create_file')).toBe('write_file');
+      expect(normalizeToolName('save_file')).toBe('write_file');
+      expect(normalizeToolName('web_fetch')).toBe('fetch_url');
+      expect(normalizeToolName('curl')).toBe('fetch_url');
+      expect(normalizeToolName('query_memory')).toBe('search_memory');
+      expect(normalizeToolName('recall_memory')).toBe('search_memory');
+      expect(normalizeToolName('dir')).toBe('list_directory');
+      expect(normalizeToolName('ls')).toBe('list_directory');
+    });
+
+    it('executes safe multi-step plan with list_directory, fetch_url, and search_memory autonomously', async () => {
+      const searchFilesSpy = vi.spyOn(ipc, 'searchFiles').mockResolvedValue([
+        { name: 'index.ts', path: './src/index.ts', is_dir: false, size_bytes: 120 },
+        { name: 'app.tsx', path: './src/app.tsx', is_dir: false, size_bytes: 340 },
+      ]);
+      const fetchUrlSpy = vi.spyOn(ipc, 'fetchUrl').mockResolvedValue('# API Docs\nEndpoints and specifications...');
+      const searchMemoriesSpy = vi.spyOn(ipc, 'searchMemories').mockResolvedValue([
+        { id: 'mem-1', text: 'Project prefers TypeScript strict mode', category: 'preference', score: 0.95 } as any,
+      ]);
+
+      const messageId = useChatStore.getState().addMessage({
+        role: 'assistant',
+        content: 'Autonomous research plan',
+      });
+
+      const plan: ExecutionPlan = {
+        id: 'plan-autonomous-research',
+        title: 'Autonomous Research Plan',
+        status: 'running',
+        hasDestructiveSteps: false,
+        currentStepIndex: 0,
+        steps: [
+          {
+            id: 'step-1',
+            stepNumber: 1,
+            description: 'List project files',
+            toolName: 'list_directory',
+            args: { dir: './src' },
+            isDestructive: false,
+            status: 'pending',
+          },
+          {
+            id: 'step-2',
+            stepNumber: 2,
+            description: 'Fetch remote documentation',
+            toolName: 'fetch_url',
+            args: { url: 'https://api.example.com/docs' },
+            isDestructive: false,
+            status: 'pending',
+          },
+          {
+            id: 'step-3',
+            stepNumber: 3,
+            description: 'Search workspace memory',
+            toolName: 'search_memory',
+            args: { query: 'TypeScript preferences' },
+            isDestructive: false,
+            status: 'pending',
+          },
+        ],
+      };
+
+      useChatStore.getState().updateMessageContent(
+        messageId,
+        'Autonomous research plan',
+        false,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        plan
+      );
+
+      await useChatStore.getState().executePlan(messageId);
+
+      const updated = useChatStore.getState().messages.find((m) => m.id === messageId);
+      expect(updated?.plan?.status).toBe('completed');
+      expect(updated?.plan?.steps[0].status).toBe('completed');
+      expect(updated?.plan?.steps[1].status).toBe('completed');
+      expect(updated?.plan?.steps[2].status).toBe('completed');
+
+      expect(searchFilesSpy).toHaveBeenCalledWith('./src', '');
+      expect(fetchUrlSpy).toHaveBeenCalledWith('https://api.example.com/docs');
+      expect(searchMemoriesSpy).toHaveBeenCalled();
+    });
+
+    it('executes write_file in plan execution upon approval', async () => {
+      const writeFileSpy = vi.spyOn(ipc, 'writeFile').mockResolvedValue('Successfully wrote 42 bytes to ./notes.txt');
+
+      const messageId = useChatStore.getState().addMessage({
+        role: 'assistant',
+        content: 'Plan to write notes',
+      });
+
+      const plan: ExecutionPlan = {
+        id: 'plan-write-file',
+        title: 'Write project notes',
+        status: 'pending_approval',
+        hasDestructiveSteps: true,
+        currentStepIndex: 0,
+        steps: [
+          {
+            id: 'step-1',
+            stepNumber: 1,
+            description: 'Write summary notes',
+            toolName: 'write_file',
+            args: { path: './notes.txt', content: 'Project notes and architecture summary.' },
+            isDestructive: true,
+            status: 'pending',
+          },
+        ],
+      };
+
+      useChatStore.getState().updateMessageContent(
+        messageId,
+        'Plan to write notes',
+        false,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        plan
+      );
+
+      // User approves plan
+      await useChatStore.getState().approvePlan(messageId);
+
+      const updated = useChatStore.getState().messages.find((m) => m.id === messageId);
+      expect(updated?.plan?.status).toBe('completed');
+      expect(updated?.plan?.steps[0].status).toBe('completed');
+      expect(writeFileSpy).toHaveBeenCalledWith('./notes.txt', 'Project notes and architecture summary.');
+    });
+
+    it('approves single write_file tool execution with isDestructive gating and feeds back output', async () => {
+      const writeFileSpy = vi.spyOn(ipc, 'writeFile').mockResolvedValue('Wrote 30 bytes');
+      const sendMessageSpy = vi.spyOn(useChatStore.getState(), 'sendMessage').mockResolvedValue();
+
+      const messageId = useChatStore.getState().addMessage({
+        role: 'assistant',
+        content: 'I need to write a file for you.',
+        toolExecutions: [
+          {
+            id: 'exec-write-1',
+            toolName: 'write_file',
+            args: { path: './config.json', content: '{"enabled": true}' },
+            status: 'pending_approval',
+            isDestructive: true,
+          },
+        ],
+      });
+
+      await useChatStore.getState().approveToolExecution(messageId, 0);
+
+      const updated = useChatStore.getState().messages.find((m) => m.id === messageId);
+      expect(updated?.toolExecutions?.[0].status).toBe('completed');
+      expect(updated?.toolExecutions?.[0].result).toBe('Wrote 30 bytes');
+      expect(writeFileSpy).toHaveBeenCalledWith('./config.json', '{"enabled": true}');
+      expect(sendMessageSpy).toHaveBeenCalledWith(
+        expect.stringContaining('[Tool Result: write_file]'),
+        expect.objectContaining({ isAgenticContinuation: true })
+      );
+    });
+  });
 });
+

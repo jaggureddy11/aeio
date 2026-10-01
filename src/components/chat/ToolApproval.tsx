@@ -13,6 +13,10 @@ import {
   Loader2,
   ShieldAlert,
   ExternalLink,
+  FilePlus,
+  Folder,
+  Globe,
+  Brain,
 } from 'lucide-react';
 import { ToolExecution } from '../../stores/chatStore';
 
@@ -42,8 +46,16 @@ export const ToolApprovalCard: React.FC<Props> = ({
         return <Terminal size={13} />;
       case 'read_file':
         return <FileText size={13} />;
+      case 'write_file':
+        return <FilePlus size={13} />;
       case 'search_files':
         return <Search size={13} />;
+      case 'list_directory':
+        return <Folder size={13} />;
+      case 'fetch_url':
+        return <Globe size={13} />;
+      case 'search_memory':
+        return <Brain size={13} />;
       case 'read_clipboard':
       case 'write_clipboard':
         return <Clipboard size={13} />;
@@ -60,8 +72,16 @@ export const ToolApprovalCard: React.FC<Props> = ({
         return 'Shell Command';
       case 'read_file':
         return 'Read Local File';
+      case 'write_file':
+        return 'Write Local File';
       case 'search_files':
         return 'Search Files';
+      case 'list_directory':
+        return 'List Directory';
+      case 'fetch_url':
+        return 'Fetch Web URL';
+      case 'search_memory':
+        return 'Search Memory Store';
       case 'read_clipboard':
         return 'Read Clipboard';
       case 'write_clipboard':
@@ -137,6 +157,39 @@ export const ToolApprovalCard: React.FC<Props> = ({
           <div className="code-command-snippet">
             <span className="arg-label">File:</span>
             <code>{execution.args.path}</code>
+          </div>
+        )}
+
+        {execution.toolName === 'write_file' && (
+          <div className="code-command-snippet">
+            <span className="arg-label">File:</span>
+            <code>{execution.args.path}</code>
+            {execution.args.content && (
+              <div className="clipboard-preview" style={{ maxHeight: '100px', overflowY: 'auto', marginTop: 4 }}>
+                {execution.args.content}
+              </div>
+            )}
+          </div>
+        )}
+
+        {execution.toolName === 'list_directory' && (
+          <div className="code-command-snippet">
+            <span className="arg-label">Directory:</span>
+            <code>{execution.args.dir || './'}</code>
+          </div>
+        )}
+
+        {execution.toolName === 'fetch_url' && (
+          <div className="code-command-snippet">
+            <span className="arg-label">URL:</span>
+            <code>{execution.args.url}</code>
+          </div>
+        )}
+
+        {execution.toolName === 'search_memory' && (
+          <div className="code-command-snippet">
+            <span className="arg-label">Query:</span>
+            <code>{execution.args.query}</code>
           </div>
         )}
 

@@ -155,6 +155,11 @@ pub fn read_file(path: String) -> Result<String, String> {
 }
 
 #[tauri::command]
+pub fn write_file(path: String, content: String) -> Result<String, String> {
+    tools::write_file(&path, &content)
+}
+
+#[tauri::command]
 pub fn search_files(dir: String, query: String) -> Result<Vec<FileMatch>, String> {
     tools::search_files(&dir, &query)
 }

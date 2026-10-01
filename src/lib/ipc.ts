@@ -136,6 +136,45 @@ export async function readFile(path: string): Promise<string> {
   return invoke<string>('read_file', { path });
 }
 
+export async function writeFile(path: string, content: string): Promise<string> {
+  try {
+    return await invoke<string>('write_file', { path, content });
+  } catch (err) {
+    if (typeof window !== 'undefined' && !(window as any).__TAURI_INTERNALS__) {
+      return `[Preview] Wrote ${content.length} bytes to ${path}`;
+    }
+    throw err;
+  }
+}
+
+export async function fetchUrl(url: string): Promise<string> {
+  if (!url.startsWith('http://') && !url.startsWith('https://')) {
+    throw new Error('Only http:// and https:// URLs are supported.');
+  }
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 12000);
+  try {
+    const res = await fetch(url, {
+      signal: controller.signal,
+      headers: {
+        'User-Agent': 'Aeio-Desktop/1.0 (Local-First Assistant)',
+        'Accept': 'text/html,application/xhtml+xml,application/xml,text/plain,application/json;q=0.9,*/*;q=0.8',
+      },
+    });
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+    }
+    const text = await res.text();
+    const MAX_LEN = 100_000;
+    if (text.length > MAX_LEN) {
+      return text.slice(0, MAX_LEN) + `\n\n[Output truncated at 100KB (${text.length} total bytes)]`;
+    }
+    return text;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
 export async function searchFiles(dir: string, query: string): Promise<FileMatch[]> {
   return invoke<FileMatch[]>('search_files', { dir, query });
 }

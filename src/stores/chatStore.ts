@@ -18,12 +18,15 @@ import {
   saveChatMessage,
   loadChatMessages,
   clearChatHistory,
+  writeFile,
+  fetchUrl,
 } from '../lib/ipc';
 import {
   ExecutionPlan,
   parsePlanFromResponse,
   classifyPlanSafety,
   isGuiActionDestructive,
+  normalizeToolName,
 } from '../lib/agent/plan';
 import { isHaltActive } from '../lib/safety/killSwitch';
 import { isHardBlocked } from '../lib/safety/allowlist';
@@ -471,6 +474,24 @@ export const useChatStore = create<ChatState>((set, get) => ({
           result = await readFile(execution.args.path);
           break;
         }
+        case 'write_file': {
+          result = await writeFile(execution.args.path, execution.args.content ?? '');
+          break;
+        }
+        case 'list_directory': {
+          result = await searchFiles(execution.args.dir || './', '');
+          break;
+        }
+        case 'fetch_url': {
+          result = await fetchUrl(execution.args.url);
+          break;
+        }
+        case 'search_memory': {
+          const ws = useWorkspaceStore.getState().activeWorkspace;
+          const limit = typeof execution.args.limit === 'number' ? execution.args.limit : 5;
+          result = await searchMemories(execution.args.query, ws?.id, false, limit);
+          break;
+        }
         case 'search_files': {
           result = await searchFiles(
             execution.args.dir || './',
@@ -831,6 +852,24 @@ export const useChatStore = create<ChatState>((set, get) => ({
           }
           case 'read_file': {
             stepResult = await readFile(step.args.path);
+            break;
+          }
+          case 'write_file': {
+            stepResult = await writeFile(step.args.path, step.args.content ?? '');
+            break;
+          }
+          case 'list_directory': {
+            stepResult = await searchFiles(step.args.dir || './', '');
+            break;
+          }
+          case 'fetch_url': {
+            stepResult = await fetchUrl(step.args.url);
+            break;
+          }
+          case 'search_memory': {
+            const ws = useWorkspaceStore.getState().activeWorkspace;
+            const limit = typeof step.args.limit === 'number' ? step.args.limit : 5;
+            stepResult = await searchMemories(step.args.query, ws?.id, false, limit);
             break;
           }
           case 'search_files': {
@@ -1284,7 +1323,11 @@ export const useChatStore = create<ChatState>((set, get) => ({
       '4. Available host tools:\n' +
       '   - run_shell: Execute shell commands. Arguments: {"command": "...", "cwd": "optional_path"}\n' +
       '   - read_file: Read file contents. Arguments: {"path": "..."}\n' +
+      '   - write_file: Write or create a file with specified contents. Arguments: {"path": "...", "content": "..."}\n' +
       '   - search_files: Search directory for files matching query. Arguments: {"dir": ".", "query": "..."}\n' +
+      '   - list_directory: List files and folders in directory. Arguments: {"dir": "."}\n' +
+      '   - fetch_url: Fetch and read URL content (HTTP/HTTPS web pages, API JSON, or raw documentation). Arguments: {"url": "..."}\n' +
+      '   - search_memory: Query stored user preferences, facts, project context. Arguments: {"query": "...", "limit": 5}\n' +
       '   - open_target: Open file, directory, application, or URL with default OS handler. Arguments: {"target": "..."}\n' +
       '   - read_clipboard: Inspect clipboard text. Arguments: {}\n' +
       '   - write_clipboard: Copy text to clipboard. Arguments: {"text": "..."}\n' +
@@ -1469,7 +1512,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       const xmlRegex = new RegExp(XML_TOOL_CALL_REGEX.source, 'gi');
       while ((xmlMatch = xmlRegex.exec(rawStreamed)) !== null) {
         handledToolSignatures.add(xmlMatch[0]);
-        const name = xmlMatch[1].trim();
+        const name = normalizeToolName(xmlMatch[1]);
         const argsStr = xmlMatch[2] || xmlMatch[3] || xmlMatch[4] || '{}';
         let args: Record<string, any> = {};
         try {
@@ -1487,6 +1530,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
           }
         } else if (name === 'gui_action') {
           isDestructive = isGuiActionDestructive(args);
+        } else if (name === 'write_file') {
+          isDestructive = true;
         }
 
         tools.push({
@@ -1507,7 +1552,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         try {
           const parsed = JSON.parse(inner);
           if (parsed.name) {
-            const name = String(parsed.name).trim();
+            const name = normalizeToolName(String(parsed.name));
             const args = (parsed.arguments || parsed.parameters || parsed.args || {}) as Record<string, any>;
             let isDestructive = false;
             if (name === 'run_shell' && args.command) {
@@ -1518,6 +1563,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
               }
             } else if (name === 'gui_action') {
               isDestructive = isGuiActionDestructive(args);
+            } else if (name === 'write_file') {
+              isDestructive = true;
             }
 
             tools.push({

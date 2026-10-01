@@ -142,6 +142,7 @@ pub fn run() {
             commands::delete_memory,
             commands::search_memories,
             commands::read_file,
+            commands::write_file,
             commands::search_files,
             commands::read_clipboard,
             commands::write_clipboard,

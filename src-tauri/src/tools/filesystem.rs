@@ -32,6 +32,17 @@ pub fn read_file(path_str: &str) -> Result<String, String> {
     fs::read_to_string(path).map_err(|e| format!("Failed to read file: {}", e))
 }
 
+pub fn write_file(path_str: &str, content: &str) -> Result<String, String> {
+    let path = Path::new(path_str);
+    if let Some(parent) = path.parent() {
+        if !parent.as_os_str().is_empty() && !parent.exists() {
+            fs::create_dir_all(parent).map_err(|e| format!("Failed to create parent directories: {}", e))?;
+        }
+    }
+    fs::write(path, content).map_err(|e| format!("Failed to write file: {}", e))?;
+    Ok(format!("Successfully wrote {} bytes to {}", content.len(), path_str))
+}
+
 pub fn search_files(dir_str: &str, query: &str) -> Result<Vec<FileMatch>, String> {
     let dir = Path::new(dir_str);
     if !dir.exists() {

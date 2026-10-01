@@ -119,6 +119,11 @@ export function normalizeToolName(name: string): string {
   const lower = name.toLowerCase().trim();
   if (lower === 'run_shell_command' || lower === 'shell' || lower === 'bash' || lower === 'sh') return 'run_shell';
   if (lower === 'open_url' || lower === 'open_file' || lower === 'open') return 'open_target';
+  if (lower === 'create_file' || lower === 'save_file' || lower === 'write' || lower === 'write_file') return 'write_file';
+  if (lower === 'view_file' || lower === 'cat' || lower === 'read' || lower === 'read_file') return 'read_file';
+  if (lower === 'list_directory' || lower === 'list_dir' || lower === 'ls' || lower === 'dir') return 'list_directory';
+  if (lower === 'fetch_url' || lower === 'web_fetch' || lower === 'fetch' || lower === 'curl' || lower === 'http_get' || lower === 'web_search') return 'fetch_url';
+  if (lower === 'search_memory' || lower === 'search_memories' || lower === 'recall_memory' || lower === 'query_memory') return 'search_memory';
   if (
     lower === 'gui_action' ||
     lower === 'computer_action' ||
@@ -169,6 +174,8 @@ export function parsePlanFromResponse(rawText: string): { plan: ExecutionPlan | 
           ? isDestructiveCommandClient(command)
           : toolName === 'gui_action'
           ? isGuiActionDestructive(args)
+          : toolName === 'write_file'
+          ? true
           : toolName.includes('delete') || toolName.includes('remove');
 
       steps.push({
@@ -230,6 +237,8 @@ export function parsePlanFromResponse(rawText: string): { plan: ExecutionPlan | 
         ? isDestructiveCommandClient(command)
         : toolName === 'gui_action'
         ? isGuiActionDestructive(args)
+        : toolName === 'write_file'
+        ? true
         : toolName.includes('delete') || toolName.includes('remove');
 
     steps.push({
@@ -288,6 +297,7 @@ export async function classifyPlanSafety(
     } else if (normalizedTool === 'gui_action') {
       isDestructive = isGuiActionDestructive(step.args);
     } else if (
+      normalizedTool === 'write_file' ||
       normalizedTool.includes('delete') ||
       normalizedTool.includes('remove') ||
       normalizedTool.includes('drop') ||
