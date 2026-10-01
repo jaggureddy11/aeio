@@ -10,8 +10,6 @@ import {
   Plus,
   PanelLeftClose,
   ShieldCheck,
-  Cpu,
-  Bot,
   Layers,
   Trash2,
 } from 'lucide-react';
@@ -31,6 +29,7 @@ export const Sidebar: React.FC<Props> = ({
     activeTab,
     setActiveTab,
     activeProvider,
+    ollamaModel,
     hotkey,
   } = useSettingsStore();
 
@@ -158,7 +157,6 @@ export const Sidebar: React.FC<Props> = ({
         >
           <Brain size={14} className="nav-item-icon" />
           <span className="nav-item-label">Memory Vault</span>
-          <span className="nav-item-pill">SQLite</span>
         </button>
 
         <button
@@ -212,20 +210,21 @@ export const Sidebar: React.FC<Props> = ({
           type="button"
           className="sidebar-engine-badge"
           onClick={onOpenSettings}
-          title="Configure model engine & API keys in settings"
+          title="Configure model engine and API keys in settings"
         >
           <div className="engine-left">
-            <span className="engine-pulse-dot" />
-            {activeProvider === 'qwen-coder' || activeProvider === 'ollama' ? (
-              <Cpu size={12} />
-            ) : (
-              <Bot size={12} />
-            )}
+            <span className="engine-status-indicator" />
             <span className="engine-name">
-              Auto Orchestrator
+              {activeProvider === 'qwen-coder' && 'Qwen 2.5 Coder'}
+              {activeProvider === 'claude' && 'Claude 3.5 Sonnet'}
+              {activeProvider === 'gemini' && 'Gemini 2.5 Flash'}
+              {activeProvider === 'openai' && 'GPT-4o'}
+              {activeProvider === 'aeio-free' && 'Claude 3.5 Haiku'}
+              {activeProvider === 'ollama' && (ollamaModel || 'Local Ollama')}
+              {!['qwen-coder', 'claude', 'gemini', 'openai', 'aeio-free', 'ollama'].includes(activeProvider) && 'Active Engine'}
             </span>
           </div>
-          <span className="engine-manage-link">Edit</span>
+          <span className="engine-manage-link">Settings</span>
         </button>
 
         <div className="sidebar-privacy-note">
