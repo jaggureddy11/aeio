@@ -941,5 +941,136 @@ Let me know if you want to proceed.`;
       const overlay = await getControlOverlayState();
       expect(overlay.isActive).toBe(false);
     });
+
+    it('fails step when coordinate is omitted and grounding endpoint URL is not configured', async () => {
+      useSettingsStore.setState({
+        computerControlEnabled: true,
+        computerControlAllowlist: ['com.apple.calculator'],
+        groundingEndpointUrl: '',
+      });
+
+      const messageId = useChatStore.getState().addMessage({
+        role: 'assistant',
+        content: 'Ungrounded plan',
+      });
+
+      const plan: ExecutionPlan = {
+        id: 'plan-ungrounded-missing-endpoint',
+        title: 'Ungrounded Plan',
+        status: 'running',
+        hasDestructiveSteps: false,
+        currentStepIndex: 0,
+        steps: [
+          {
+            id: 'step-1',
+            stepNumber: 1,
+            description: 'Click button without coordinates',
+            toolName: 'gui_action',
+            args: {
+              intent: {
+                targetAppBundleId: 'com.apple.calculator',
+                naturalLanguageIntent: 'Click clear',
+                targetElementDescription: 'Clear Button',
+                intendedStateChange: 'Navigate',
+              },
+              action: { actionType: 'click' },
+            },
+            isDestructive: false,
+            status: 'pending',
+          },
+        ],
+      };
+
+      useChatStore.getState().updateMessageContent(
+        messageId,
+        'Ungrounded plan',
+        false,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        plan
+      );
+
+      await useChatStore.getState().executePlan(messageId);
+
+      const updated = useChatStore.getState().messages.find((m) => m.id === messageId);
+      expect(updated?.plan?.status).toBe('failed');
+      expect(updated?.plan?.steps[0].status).toBe('failed');
+      expect(updated?.plan?.steps[0].error).toContain('Grounding required');
+    });
+
+    it('resolves coordinates via Grounding Endpoint when coordinates are omitted', async () => {
+      useSettingsStore.setState({
+        computerControlEnabled: true,
+        computerControlAllowlist: ['com.apple.calculator'],
+        groundingEndpointUrl: 'https://mock-grounding.example.com/v1',
+      });
+
+      const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        text: async () => 'click(point=\'[350, 420]\')',
+      } as any);
+
+      const messageId = useChatStore.getState().addMessage({
+        role: 'assistant',
+        content: 'Grounding-assisted plan',
+      });
+
+      const plan: ExecutionPlan = {
+        id: 'plan-grounding-assisted',
+        title: 'Grounding-Assisted Plan',
+        status: 'running',
+        hasDestructiveSteps: false,
+        currentStepIndex: 0,
+        steps: [
+          {
+            id: 'step-1',
+            stepNumber: 1,
+            description: 'Click button via AI visual grounding',
+            toolName: 'gui_action',
+            args: {
+              intent: {
+                targetAppBundleId: 'com.apple.calculator',
+                naturalLanguageIntent: 'Click Plus button',
+                targetElementDescription: 'Plus button on calculator keypad',
+                intendedStateChange: 'Navigate',
+              },
+              action: { actionType: 'click' },
+            },
+            isDestructive: false,
+            status: 'pending',
+          },
+        ],
+      };
+
+      useChatStore.getState().updateMessageContent(
+        messageId,
+        'Grounding-assisted plan',
+        false,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        plan
+      );
+
+      await useChatStore.getState().executePlan(messageId);
+
+      const updated = useChatStore.getState().messages.find((m) => m.id === messageId);
+      expect(updated?.plan?.status).toBe('completed');
+      expect(updated?.plan?.steps[0].status).toBe('completed');
+      expect(fetchSpy).toHaveBeenCalled();
+
+      const receipt = updated?.toolExecutions?.[0].result;
+      expect(receipt).toBeDefined();
+      expect(receipt.grounding).toBeDefined();
+      expect(receipt.grounding.predicted_coordinate).toEqual({ x: 672, y: 454 });
+    });
   });
 });

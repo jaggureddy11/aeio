@@ -32,6 +32,7 @@ import { showControlOverlay, hideControlOverlay } from '../lib/safety/overlay';
 import { executeActionWithVisualAudit } from '../lib/safety/auditLog';
 import { ComputerAction, SimulatedActionRequest } from '../lib/safety/inputDriver';
 import { ActionIntent } from '../lib/types/actionIntent';
+import { resolveGroundingTarget } from '../lib/safety/groundingClient';
 
 export interface RecalledMemory {
   id: string;
@@ -546,6 +547,41 @@ export const useChatStore = create<ChatState>((set, get) => ({
           try {
             const rawAction = execution.args.action || {};
             const actionType = rawAction.actionType || execution.args.actionType || 'click';
+            let targetX = rawAction.x ?? execution.args.x;
+            let targetY = rawAction.y ?? execution.args.y;
+            let groundingVerdict = execution.args.grounding;
+
+            if (
+              (actionType === 'click' || actionType === 'move') &&
+              (targetX === undefined || targetY === undefined) &&
+              intent.targetElementDescription
+            ) {
+              if (!settings.groundingEndpointUrl) {
+                throw new Error(
+                  'Grounding required: Action coordinates (x, y) were not specified and no Grounding Endpoint URL is configured in Settings.'
+                );
+              }
+
+              const groundingRes = await resolveGroundingTarget(
+                settings.groundingEndpointUrl,
+                {
+                  image: execution.args.image || '',
+                  instruction: intent.targetElementDescription,
+                  targetAppName,
+                  windowBounds: execution.args.windowBounds,
+                }
+              );
+
+              targetX = groundingRes.coordinate.x;
+              targetY = groundingRes.coordinate.y;
+              groundingVerdict = {
+                model_endpoint: groundingRes.modelEndpoint,
+                predicted_coordinate: groundingRes.coordinate,
+                bounding_box: groundingRes.boundingBox,
+                confidence: groundingRes.confidence,
+              };
+            }
+
             let action: ComputerAction;
 
             if (actionType === 'type') {
@@ -563,12 +599,12 @@ export const useChatStore = create<ChatState>((set, get) => ({
                 endY: rawAction.endY ?? execution.args.endY ?? 0,
               };
             } else if (actionType === 'move') {
-              action = { actionType: 'move', x: rawAction.x ?? execution.args.x ?? 0, y: rawAction.y ?? execution.args.y ?? 0 };
+              action = { actionType: 'move', x: targetX ?? 0, y: targetY ?? 0 };
             } else {
               action = {
                 actionType: 'click',
-                x: rawAction.x ?? execution.args.x ?? 0,
-                y: rawAction.y ?? execution.args.y ?? 0,
+                x: targetX ?? 0,
+                y: targetY ?? 0,
                 button: rawAction.button || execution.args.button || 'left',
                 double: rawAction.double || execution.args.double || false,
               };
@@ -586,7 +622,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
               actionRequest,
               messageId,
               execution.args.windowTitle,
-              execution.args.grounding
+              groundingVerdict
             );
 
             if (receipt.execution.kill_switch_triggered || receipt.execution.status === 'ABORTED_BY_KILL_SWITCH') {
@@ -894,6 +930,41 @@ export const useChatStore = create<ChatState>((set, get) => ({
             try {
               const rawAction = step.args.action || {};
               const actionType = rawAction.actionType || step.args.actionType || 'click';
+              let targetX = rawAction.x ?? step.args.x;
+              let targetY = rawAction.y ?? step.args.y;
+              let groundingVerdict = step.args.grounding;
+
+              if (
+                (actionType === 'click' || actionType === 'move') &&
+                (targetX === undefined || targetY === undefined) &&
+                intent.targetElementDescription
+              ) {
+                if (!settings.groundingEndpointUrl) {
+                  throw new Error(
+                    'Grounding required: Action coordinates (x, y) were not specified and no Grounding Endpoint URL is configured in Settings.'
+                  );
+                }
+
+                const groundingRes = await resolveGroundingTarget(
+                  settings.groundingEndpointUrl,
+                  {
+                    image: step.args.image || '',
+                    instruction: intent.targetElementDescription,
+                    targetAppName,
+                    windowBounds: step.args.windowBounds,
+                  }
+                );
+
+                targetX = groundingRes.coordinate.x;
+                targetY = groundingRes.coordinate.y;
+                groundingVerdict = {
+                  model_endpoint: groundingRes.modelEndpoint,
+                  predicted_coordinate: groundingRes.coordinate,
+                  bounding_box: groundingRes.boundingBox,
+                  confidence: groundingRes.confidence,
+                };
+              }
+
               let action: ComputerAction;
 
               if (actionType === 'type') {
@@ -911,12 +982,12 @@ export const useChatStore = create<ChatState>((set, get) => ({
                   endY: rawAction.endY ?? step.args.endY ?? 0,
                 };
               } else if (actionType === 'move') {
-                action = { actionType: 'move', x: rawAction.x ?? step.args.x ?? 0, y: rawAction.y ?? step.args.y ?? 0 };
+                action = { actionType: 'move', x: targetX ?? 0, y: targetY ?? 0 };
               } else {
                 action = {
                   actionType: 'click',
-                  x: rawAction.x ?? step.args.x ?? 0,
-                  y: rawAction.y ?? step.args.y ?? 0,
+                  x: targetX ?? 0,
+                  y: targetY ?? 0,
                   button: rawAction.button || step.args.button || 'left',
                   double: rawAction.double || step.args.double || false,
                 };
@@ -935,7 +1006,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
                 actionRequest,
                 messageId,
                 step.args.windowTitle,
-                step.args.grounding
+                groundingVerdict
               );
 
               if (receipt.execution.kill_switch_triggered || receipt.execution.status === 'ABORTED_BY_KILL_SWITCH') {
