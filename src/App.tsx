@@ -105,11 +105,17 @@ export const App: React.FC = () => {
 
   useEffect(() => {
     let mounted = true;
+    let attempts = 0;
     const checkInit = async () => {
       try {
         await ping();
         if (mounted) setIsInitializing(false);
       } catch (err) {
+        attempts++;
+        if (attempts >= 2 && typeof window !== 'undefined' && !(window as any).__TAURI_INTERNALS__) {
+          if (mounted) setIsInitializing(false);
+          return;
+        }
         if (mounted) {
           setTimeout(checkInit, 150);
         }

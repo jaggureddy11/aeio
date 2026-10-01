@@ -1,11 +1,11 @@
 :root,
-[data-theme="dark"] {
+[data-theme="light"] {
   /* ==========================================================================
-     Anthropic Claude Dark Espresso Palette (Default / System Dark)
+     Anthropic Claude Light Ivory & Paper Palette (Premier White Theme)
      ========================================================================== */
 
   /* 1. TYPOGRAPHY */
-  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
+  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
   --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
 
   /* Disciplined Type Scale */
@@ -14,20 +14,100 @@
   --text-base: 14px;     /* UI body, controls, settings rows, list items */
   --text-chat: 15px;     /* Chat message body (reading comfort) */
   --text-lg: 17px;       /* Section headings, dialog titles */
-  --text-xl: 20px;       /* Window header / primary titles (sparingly used) */
+  --text-xl: 20px;       /* Window header / primary titles */
 
   /* Line Heights */
   --leading-tight: 1.25;
   --leading-normal: 1.5;
-  --leading-relaxed: 1.6; /* Body and chat reading comfort */
+  --leading-relaxed: 1.65; /* Claude signature relaxed reading comfort */
 
   /* 2. COLOR PALETTE */
+  --bg-app: #FFFFFF;          /* Pure crisp white reading canvas */
+  --bg-sidebar: #FBF9F7;      /* Claude signature warm stone/sand sidebar */
+  --bg-surface: #FFFFFF;      /* Clean elevated card & modal surface */
+  --bg-card: #FFFFFF;         /* Crisp message & card surface */
+  --bg-card-hover: #F4F2EC;   /* Card hover state */
+  --bg-input: #FFFFFF;        /* Input background */
+  --bg-bubble-user: #F3F3EE;  /* Claude signature warm linen user bubble */
+  --bg-overlay: rgba(31, 30, 27, 0.40); /* Modal backdrop */
+
+  /* Neutral Reading Typography Hierarchy */
+  --text-primary: #1F1E1B;    /* Deep warm charcoal/black */
+  --text-secondary: #6F6B63;  /* Warm stone secondary text */
+  --text-muted: #8F8B83;      /* De-emphasized timestamps & helpers */
+  --text-faint: #B8B4AA;      /* Placeholders & disabled states */
+
+  /* Hairline Precision Borders */
+  --border-subtle: rgba(0, 0, 0, 0.05); /* Card dividers */
+  --border-default: rgba(0, 0, 0, 0.08); /* Standard hairline borders (#E8E6DF) */
+  --border-hover: rgba(0, 0, 0, 0.16);   /* Interactive hover border */
+  --border-focus: rgba(15, 169, 88, 0.40); /* Logo Green focus border */
+
+  /* Signature Aeio Logo Emerald Green Accent (#0FA958) */
+  --accent-primary: #0FA958;
+  --accent-hover: #0D934C;
+  --accent-active: #0B7E40;
+  --accent-text: #0B8343;
+  --accent-subtle: rgba(15, 169, 88, 0.08); /* Active row tint */
+  --accent-border: rgba(15, 169, 88, 0.22); /* Active element boundary */
+
+  /* Functional Status Colors (Calm, professional) */
+  --status-success: #059669;
+  --status-success-subtle: rgba(5, 150, 105, 0.08);
+  --status-warning: #d97706;
+  --status-warning-subtle: rgba(217, 119, 6, 0.08);
+  --status-danger: #dc2626;
+  --status-danger-subtle: rgba(220, 38, 38, 0.08);
+
+  /* 3. SPACING SCALE (4px / 8px rhythm) */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+
+  /* Corner Radii */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+  --radius-2xl: 18px;
+
+  /* 4. MOTION & TRANSITIONS */
+  --ease-standard: cubic-bezier(0.16, 1, 0.3, 1);
+  --duration-fast: 110ms;
+  --duration-normal: 140ms;
+  --duration-fade: 160ms;
+
+  --transition-fast: var(--duration-fast) var(--ease-standard);
+  --transition-normal: var(--duration-normal) var(--ease-standard);
+
+  /* 5. ELEVATION & SHADOWS */
+  --shadow-window: 0 20px 48px -12px rgba(0, 0, 0, 0.08), 0 0 0 1px var(--border-default);
+  --shadow-menu: 0 12px 28px -6px rgba(0, 0, 0, 0.09), 0 0 0 1px var(--border-default);
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.04), 0 0 0 1px var(--border-subtle);
+  --shadow-composer: 0 4px 20px -2px rgba(0, 0, 0, 0.06), 0 1px 3px rgba(0, 0, 0, 0.03);
+  --shadow-composer-focus: 0 6px 24px -2px rgba(0, 0, 0, 0.09), 0 0 0 1px rgba(15, 169, 88, 0.25);
+
+  --aeio-bg-glass: rgba(255, 255, 255, 0.92);
+  --aeio-text-inverse: #FFFFFF;
+}
+
+[data-theme="dark"] {
+  /* ==========================================================================
+     Anthropic Claude Dark Espresso Palette
+     ========================================================================== */
   --bg-app: #181715;          /* Warm espresso background */
   --bg-sidebar: #1E1D1A;      /* Warm stone sidebar */
   --bg-surface: #24221E;      /* Main reading card surface */
   --bg-card: #282622;         /* Elevated cards, rows, message bubbles */
   --bg-card-hover: #32302A;   /* Card hover state */
   --bg-input: #23221E;        /* Input and search backgrounds */
+  --bg-bubble-user: #2C2A25;  /* Warm espresso user bubble */
   --bg-overlay: rgba(24, 23, 21, 0.85); /* Modal backdrop */
 
   /* Neutral Reading Typography Hierarchy */
@@ -58,85 +138,15 @@
   --status-danger: #ef4444;
   --status-danger-subtle: rgba(239, 68, 68, 0.12);
 
-  /* 3. SPACING SCALE (4px / 8px rhythm) */
-  --space-1: 4px;
-  --space-2: 8px;
-  --space-3: 12px;
-  --space-4: 16px;
-  --space-5: 20px;
-  --space-6: 24px;
-  --space-8: 32px;
-  --space-10: 40px;
-  --space-12: 48px;
-
-  /* Corner Radii */
-  --radius-sm: 4px;
-  --radius-md: 6px;
-  --radius-lg: 8px;
-  --radius-xl: 12px;
-
-  /* 4. MOTION & TRANSITIONS */
-  --ease-standard: cubic-bezier(0.16, 1, 0.3, 1);
-  --duration-fast: 110ms;
-  --duration-normal: 140ms;
-  --duration-fade: 160ms;
-
-  --transition-fast: var(--duration-fast) var(--ease-standard);
-  --transition-normal: var(--duration-normal) var(--ease-standard);
-
-  /* 5. ELEVATION & SHADOWS */
+  /* Elevation & Shadows */
   --shadow-window: 0 20px 48px -12px rgba(0, 0, 0, 0.85), 0 0 0 1px var(--border-default);
   --shadow-menu: 0 12px 28px -6px rgba(0, 0, 0, 0.75), 0 0 0 1px var(--border-default);
   --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.2);
-}
+  --shadow-composer: 0 8px 32px rgba(0, 0, 0, 0.36);
+  --shadow-composer-focus: 0 8px 32px rgba(0, 0, 0, 0.45), 0 0 0 1px var(--accent-subtle);
 
-[data-theme="light"] {
-  /* ==========================================================================
-     Aeio Light Warm Paper / Linen Palette with Logo Emerald Theme
-     ========================================================================== */
-  --bg-app: #FAF9F5;          /* Signature warm linen */
-  --bg-sidebar: #F3F1EB;      /* Warm stone/sand sidebar */
-  --bg-surface: #FFFFFF;      /* Clean card surface */
-  --bg-card: #FFFFFF;         /* Crisp message & card surface */
-  --bg-card-hover: #F0ECE1;   /* Card hover state */
-  --bg-input: #F3F0E8;        /* Input background */
-  --bg-overlay: rgba(31, 30, 27, 0.45); /* Modal backdrop */
-
-  /* Neutral Reading Typography Hierarchy */
-  --text-primary: #1F1E1B;    /* Deep warm charcoal/black */
-  --text-secondary: #6F6B63;  /* Warm stone secondary text */
-  --text-muted: #8F8B83;      /* De-emphasized timestamps & helpers */
-  --text-faint: #B5B1A8;      /* Placeholders & disabled states */
-
-  /* Hairline Precision Borders */
-  --border-subtle: rgba(0, 0, 0, 0.06);
-  --border-default: rgba(0, 0, 0, 0.09);
-  --border-hover: rgba(0, 0, 0, 0.16);
-  --border-focus: rgba(15, 169, 88, 0.40);
-
-  /* Signature Aeio Logo Emerald Green Accent (#0FA958) */
-  --accent-primary: #0FA958;
-  --accent-hover: #0D934C;
-  --accent-active: #0B7E40;
-  --accent-text: #0B8343;
-  --accent-subtle: rgba(15, 169, 88, 0.10);
-  --accent-border: rgba(15, 169, 88, 0.24);
-
-  /* Functional Status Colors */
-  --status-success: #059669;
-  --status-success-subtle: rgba(5, 150, 105, 0.10);
-  --status-warning: #d97706;
-  --status-warning-subtle: rgba(217, 119, 6, 0.10);
-  --status-danger: #dc2626;
-  --status-danger-subtle: rgba(220, 38, 38, 0.10);
-
-  /* Shadows for light mode */
-  --shadow-window: 0 20px 48px -12px rgba(0, 0, 0, 0.14), 0 0 0 1px var(--border-default);
-  --shadow-menu: 0 12px 28px -6px rgba(0, 0, 0, 0.12), 0 0 0 1px var(--border-default);
-  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.05), 0 0 0 1px var(--border-subtle);
-
-  --aeio-bg-glass: rgba(250, 249, 245, 0.94);
-  --aeio-text-inverse: #FFFFFF;
+  --aeio-bg-glass: rgba(24, 23, 21, 0.94);
+  --aeio-text-inverse: #181715;
 }
 
 :root {
@@ -4429,7 +4439,7 @@ html, body, #root {
   justify-content: center;
   height: 100vh;
   width: 100vw;
-  background: #181715;
+  background: var(--bg-app);
 }
 
 .claude-init-content {
@@ -4442,13 +4452,13 @@ html, body, #root {
 .claude-init-logo {
   width: 44px;
   height: 44px;
-  opacity: 0.85;
+  opacity: 0.9;
   animation: pulse 1.8s infinite ease-in-out;
 }
 
 .claude-init-text {
   font-size: 13px;
-  color: #A39E96;
+  color: var(--text-muted);
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   letter-spacing: 0.02em;
 }
@@ -4457,8 +4467,8 @@ html, body, #root {
   display: flex;
   height: 100vh;
   width: 100vw;
-  background: #181715;
-  color: #ECEAE5;
+  background: var(--bg-app);
+  color: var(--text-primary);
   overflow: hidden;
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
 }
@@ -4468,8 +4478,8 @@ html, body, #root {
   width: 260px;
   min-width: 260px;
   height: 100%;
-  background: #1E1D1A;
-  border-right: 1px solid rgba(255, 255, 255, 0.07);
+  background: var(--bg-sidebar);
+  border-right: 1px solid var(--border-default);
   display: flex;
   flex-direction: column;
   user-select: none;
@@ -4490,7 +4500,7 @@ html, body, #root {
   align-items: center;
   justify-content: space-between;
   padding: 0 16px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  border-bottom: 1px solid var(--border-subtle);
 }
 
 .sidebar-brand-group {
@@ -4530,14 +4540,14 @@ html, body, #root {
 .sidebar-brand-name {
   font-size: 15px;
   font-weight: 600;
-  color: #ECEAE5;
+  color: var(--text-primary);
   letter-spacing: -0.01em;
   line-height: 1.1;
 }
 
 .sidebar-brand-sub {
   font-size: 10px;
-  color: #736E66;
+  color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
@@ -4545,7 +4555,7 @@ html, body, #root {
 .sidebar-toggle-btn {
   background: transparent;
   border: none;
-  color: #736E66;
+  color: var(--text-muted);
   cursor: pointer;
   padding: 6px;
   border-radius: 6px;
@@ -4556,8 +4566,8 @@ html, body, #root {
 }
 
 .sidebar-toggle-btn:hover {
-  color: #ECEAE5;
-  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-primary);
+  background: var(--bg-card-hover);
 }
 
 .sidebar-collapse-btn {
@@ -4574,7 +4584,7 @@ html, body, #root {
 }
 
 .sidebar-collapse-btn:hover {
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--bg-card-hover);
 }
 
 .sidebar-primary-action-wrap {
@@ -4587,20 +4597,22 @@ html, body, #root {
   align-items: center;
   justify-content: space-between;
   padding: 9px 12px;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
   border-radius: 10px;
-  color: #ECEAE5;
+  color: var(--text-primary);
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
   transition: all 0.16s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .sidebar-new-chat-btn:hover {
-  background: var(--accent-subtle);
-  border-color: var(--accent-border);
-  color: #FFFFFF;
+  background: var(--bg-card-hover);
+  border-color: var(--border-hover);
+  color: var(--text-primary);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
 }
 
 .new-chat-btn-left {
@@ -4611,12 +4623,12 @@ html, body, #root {
 
 .new-chat-shortcut {
   font-size: 10px;
-  font-family: -apple-system, BlinkMacSystemFont, monospace;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  font-family: var(--font-mono);
+  background: var(--border-subtle);
+  border: 1px solid var(--border-default);
   padding: 2px 5px;
   border-radius: 4px;
-  color: #A39E96;
+  color: var(--text-secondary);
 }
 
 .sidebar-nav-section {
@@ -4629,7 +4641,7 @@ html, body, #root {
 .sidebar-section-label {
   font-size: 10px;
   font-weight: 600;
-  color: #736E66;
+  color: var(--text-muted);
   letter-spacing: 0.06em;
   padding: 4px 6px 6px 6px;
 }
@@ -4642,7 +4654,7 @@ html, body, #root {
   border-radius: 8px;
   border: none;
   background: transparent;
-  color: #A39E96;
+  color: var(--text-secondary);
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
@@ -4652,8 +4664,8 @@ html, body, #root {
 }
 
 .sidebar-nav-item:hover {
-  background: rgba(255, 255, 255, 0.05);
-  color: #ECEAE5;
+  background: var(--bg-card-hover);
+  color: var(--text-primary);
 }
 
 .sidebar-nav-item.active {
@@ -4695,7 +4707,7 @@ html, body, #root {
   gap: 8px;
   padding: 8px 10px;
   border-radius: 8px;
-  background: var(--border-subtle);
+  background: var(--bg-card-hover);
   border: 1px solid var(--border-default);
   font-size: 12px;
   color: var(--text-secondary);
@@ -4718,8 +4730,9 @@ html, body, #root {
   justify-content: space-between;
   padding: 8px 10px;
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
 }
 
 .recent-card-text {
@@ -4730,7 +4743,7 @@ html, body, #root {
 
 .recent-title {
   font-size: 12px;
-  color: #ECEAE5;
+  color: var(--text-primary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -4738,13 +4751,13 @@ html, body, #root {
 
 .recent-time {
   font-size: 10px;
-  color: #736E66;
+  color: var(--text-muted);
 }
 
 .recent-clear-btn {
   background: transparent;
   border: none;
-  color: #736E66;
+  color: var(--text-muted);
   cursor: pointer;
   padding: 4px;
   border-radius: 4px;
@@ -4754,14 +4767,14 @@ html, body, #root {
 }
 
 .recent-clear-btn:hover {
-  color: #EF4444;
-  background: rgba(239, 68, 68, 0.12);
+  color: var(--status-danger);
+  background: var(--status-danger-subtle);
 }
 
 .sidebar-footer {
   margin-top: auto;
   padding: 14px;
-  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  border-top: 1px solid var(--border-subtle);
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -4773,17 +4786,18 @@ html, body, #root {
   justify-content: space-between;
   padding: 8px 10px;
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.07);
-  color: #ECEAE5;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  color: var(--text-primary);
   cursor: pointer;
   text-align: left;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
   transition: all 0.15s ease;
 }
 
 .sidebar-engine-badge:hover {
-  background: rgba(255, 255, 255, 0.08);
-  border-color: rgba(255, 255, 255, 0.14);
+  background: var(--bg-card-hover);
+  border-color: var(--border-hover);
 }
 
 .engine-left {
@@ -4821,7 +4835,7 @@ html, body, #root {
   align-items: center;
   gap: 6px;
   font-size: 11px;
-  color: #736E66;
+  color: var(--text-muted);
 }
 
 .privacy-icon {
@@ -4832,7 +4846,9 @@ html, body, #root {
 .privacy-hotkey {
   margin-left: auto;
   font-size: 10px;
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--border-subtle);
+  border: 1px solid var(--border-default);
+  color: var(--text-secondary);
   padding: 1px 5px;
   border-radius: 4px;
 }
@@ -4851,7 +4867,7 @@ html, body, #root {
   border-radius: 10px;
   background: transparent;
   border: 1px solid transparent;
-  color: #A39E96;
+  color: var(--text-secondary);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -4860,8 +4876,8 @@ html, body, #root {
 }
 
 .sidebar-mini-action:hover {
-  background: rgba(255, 255, 255, 0.06);
-  color: #ECEAE5;
+  background: var(--bg-card-hover);
+  color: var(--text-primary);
 }
 
 .sidebar-mini-action.active {
@@ -4873,7 +4889,7 @@ html, body, #root {
 .sidebar-mini-action.primary {
   background: var(--accent-subtle);
   border-color: var(--accent-border);
-  color: #FFFFFF;
+  color: var(--accent-primary);
 }
 
 /* --- Claude Main Canvas --- */
@@ -5144,19 +5160,19 @@ html, body, #root {
   gap: 8px;
   padding: 6px 12px;
   border-radius: 10px;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--bg-card);
+  border: 1px solid var(--border-default);
   font-size: 13px;
   font-weight: 500;
-  color: #ECEAE5;
+  color: var(--text-primary);
   cursor: pointer;
   transition: all 0.15s ease;
 }
 
 .model-selector-trigger:hover,
 .model-selector-trigger.active {
-  background: rgba(255, 255, 255, 0.08);
-  border-color: rgba(255, 255, 255, 0.16);
+  background: var(--bg-card-hover);
+  border-color: var(--border-hover);
 }
 
 .model-selector-trigger.compact {
@@ -5167,7 +5183,7 @@ html, body, #root {
 }
 
 .model-selector-trigger.compact:hover {
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--bg-card-hover);
 }
 
 .model-trigger-left {
@@ -5190,14 +5206,15 @@ html, body, #root {
 
 .model-trigger-badge {
   font-size: 10px;
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--bg-card-hover);
+  border: 1px solid var(--border-subtle);
   padding: 1px 6px;
   border-radius: 6px;
-  color: #A39E96;
+  color: var(--text-secondary);
 }
 
 .model-chevron {
-  color: #736E66;
+  color: var(--text-muted);
   transition: transform 0.18s ease;
 }
 
@@ -5211,9 +5228,9 @@ html, body, #root {
   left: 0;
   width: 320px;
   border-radius: 14px;
-  background: #24221E;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(0, 0, 0, 0.2);
+  background: var(--bg-card);
+  border: 1px solid var(--border-default);
+  box-shadow: var(--shadow-menu);
   padding: 8px;
   z-index: 100;
   display: flex;
@@ -5223,7 +5240,7 @@ html, body, #root {
 
 .model-dropdown-header {
   padding: 8px 10px 6px 10px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  border-bottom: 1px solid var(--border-subtle);
   display: flex;
   flex-direction: column;
   margin-bottom: 4px;
@@ -5232,12 +5249,12 @@ html, body, #root {
 .model-dropdown-header span:first-child {
   font-size: 12px;
   font-weight: 600;
-  color: #ECEAE5;
+  color: var(--text-primary);
 }
 
 .model-dropdown-sub {
   font-size: 11px;
-  color: #736E66;
+  color: var(--text-muted);
 }
 
 .model-dropdown-list {
@@ -5262,7 +5279,7 @@ html, body, #root {
 }
 
 .model-option-item:hover {
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--bg-card-hover);
 }
 
 .model-option-item.selected {
@@ -5293,13 +5310,14 @@ html, body, #root {
 .opt-name {
   font-size: 13px;
   font-weight: 600;
-  color: #ECEAE5;
+  color: var(--text-primary);
 }
 
 .opt-badge {
   font-size: 10px;
-  color: #A39E96;
-  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-secondary);
+  background: var(--bg-card-hover);
+  border: 1px solid var(--border-subtle);
   padding: 1px 5px;
   border-radius: 4px;
 }
@@ -5320,7 +5338,7 @@ html, body, #root {
 
 .opt-tagline {
   font-size: 11px;
-  color: #A39E96;
+  color: var(--text-secondary);
   line-height: 1.4;
   margin: 0;
 }
@@ -5356,7 +5374,7 @@ html, body, #root {
 }
 
 .opt-key-status.free {
-  color: #A39E96;
+  color: var(--text-muted);
 }
 
 /* --- Scroll Canvas & Claude Layout --- */
@@ -5367,6 +5385,7 @@ html, body, #root {
   justify-content: center;
   padding: 24px 24px 150px 24px;
   scroll-behavior: smooth;
+  background: var(--bg-app);
 }
 
 .claude-reading-column {
@@ -5409,14 +5428,14 @@ html, body, #root {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", serif;
   font-size: 32px;
   font-weight: 500;
-  color: #ECEAE5;
+  color: var(--text-primary);
   margin: 0 0 10px 0;
   letter-spacing: -0.02em;
 }
 
 .welcome-subheading {
   font-size: 15px;
-  color: #A39E96;
+  color: var(--text-secondary);
   max-width: 580px;
   line-height: 1.55;
   margin: 0 0 32px 0;
@@ -5432,32 +5451,34 @@ html, body, #root {
 .claude-prompt-card {
   padding: 16px;
   border-radius: 14px;
-  background: #21201C;
-  border: 1px solid rgba(255, 255, 255, 0.07);
+  background: var(--bg-card);
+  border: 1px solid var(--border-default);
   display: flex;
   align-items: center;
   gap: 14px;
   cursor: pointer;
   text-align: left;
   transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
 }
 
 .claude-prompt-card:hover {
-  background: #282622;
+  background: var(--bg-card-hover);
   border-color: var(--accent-border);
   transform: translateY(-2px);
-  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.25);
+  box-shadow: var(--shadow-card);
 }
 
 .prompt-card-icon {
   width: 36px;
   height: 36px;
   border-radius: 10px;
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--accent-subtle);
+  border: 1px solid var(--accent-border);
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--accent-text);
+  color: var(--accent-primary);
   flex-shrink: 0;
 }
 
@@ -5471,17 +5492,17 @@ html, body, #root {
 .prompt-card-title {
   font-size: 13px;
   font-weight: 600;
-  color: #ECEAE5;
+  color: var(--text-primary);
 }
 
 .prompt-card-desc {
   font-size: 11px;
-  color: #736E66;
+  color: var(--text-secondary);
   line-height: 1.4;
 }
 
 .prompt-card-arrow {
-  color: #736E66;
+  color: var(--text-muted);
   transition: transform 0.15s ease, color 0.15s ease;
   flex-shrink: 0;
 }
@@ -5511,12 +5532,12 @@ html, body, #root {
   max-width: 82%;
   padding: 12px 18px;
   border-radius: 20px 20px 6px 20px;
-  background: #2C2A25;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  color: #ECEAE5;
+  background: var(--bg-bubble-user);
+  border: 1px solid var(--border-default);
+  color: var(--text-primary);
   font-size: 15px;
   line-height: 1.55;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
   word-break: break-word;
 }
 
@@ -5526,7 +5547,7 @@ html, body, #root {
 
 .user-message-meta {
   font-size: 10px;
-  color: #736E66;
+  color: var(--text-muted);
   text-align: right;
   margin-top: 4px;
 }
@@ -5575,7 +5596,7 @@ html, body, #root {
 
 .claude-sender-name {
   font-weight: 600;
-  color: #ECEAE5;
+  color: var(--text-primary);
   font-size: 13px;
 }
 
@@ -5597,12 +5618,12 @@ html, body, #root {
 
 .claude-model-chip.local {
   background: rgba(16, 185, 129, 0.12);
-  color: #6EE7B7;
+  color: #059669;
   border: 1px solid rgba(16, 185, 129, 0.2);
 }
 
 .claude-time {
-  color: #736E66;
+  color: var(--text-muted);
   font-size: 11px;
   margin-left: auto;
 }
@@ -5618,25 +5639,25 @@ html, body, #root {
   gap: 6px;
   padding: 4px 10px;
   border-radius: 6px;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  color: #A39E96;
+  background: var(--bg-card);
+  border: 1px solid var(--border-default);
+  color: var(--text-secondary);
   font-size: 11px;
   cursor: pointer;
   transition: all 0.15s ease;
 }
 
 .claude-recalled-toggle:hover {
-  background: rgba(255, 255, 255, 0.08);
-  color: #ECEAE5;
+  background: var(--bg-card-hover);
+  color: var(--text-primary);
 }
 
 .claude-recalled-drawer {
   margin-top: 8px;
   padding: 10px 14px;
   border-radius: 10px;
-  background: #21201C;
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: var(--bg-card);
+  border: 1px solid var(--border-default);
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -5657,7 +5678,7 @@ html, body, #root {
 }
 
 .recalled-content {
-  color: #ECEAE5;
+  color: var(--text-primary);
   line-height: 1.4;
 }
 
@@ -5674,7 +5695,7 @@ html, body, #root {
   border-radius: 8px;
   background: rgba(245, 158, 11, 0.08);
   border: 1px solid rgba(245, 158, 11, 0.2);
-  color: #FBBF24;
+  color: #D97706;
   font-size: 12px;
   font-weight: 500;
   cursor: pointer;
@@ -5694,11 +5715,11 @@ html, body, #root {
   margin-top: 8px;
   padding: 12px 16px;
   border-radius: 12px;
-  background: #21201C;
+  background: var(--bg-card);
   border-left: 3px solid #F59E0B;
-  border: 1px solid rgba(245, 158, 11, 0.15);
+  border: 1px solid rgba(245, 158, 11, 0.18);
   font-size: 13px;
-  color: #A39E96;
+  color: var(--text-secondary);
   line-height: 1.55;
   font-style: italic;
 }
@@ -5707,7 +5728,7 @@ html, body, #root {
 .claude-markdown-body {
   font-size: 15px;
   line-height: 1.65;
-  color: #ECEAE5;
+  color: var(--text-primary);
   word-break: break-word;
 }
 
@@ -5733,7 +5754,7 @@ html, body, #root {
 .claude-markdown-body h2,
 .claude-markdown-body h3,
 .claude-markdown-body h4 {
-  color: #FFFFFF;
+  color: var(--text-primary);
   margin: 18px 0 8px 0;
   font-weight: 600;
 }
@@ -5751,10 +5772,11 @@ html, body, #root {
 /* --- Code Blocks --- */
 .claude-code-block {
   border-radius: 12px;
-  background: #141311;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: #18181B;
+  border: 1px solid rgba(0, 0, 0, 0.12);
   margin: 12px 0;
   overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
 }
 
 .code-header {
@@ -5762,14 +5784,14 @@ html, body, #root {
   align-items: center;
   justify-content: space-between;
   padding: 6px 14px;
-  background: rgba(255, 255, 255, 0.03);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.04);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .code-lang {
   font-size: 11px;
-  font-family: -apple-system, BlinkMacSystemFont, monospace;
-  color: #736E66;
+  font-family: var(--font-mono);
+  color: #A1A1AA;
   text-transform: lowercase;
 }
 
@@ -5779,7 +5801,7 @@ html, body, #root {
   gap: 5px;
   background: transparent;
   border: none;
-  color: #A39E96;
+  color: #A1A1AA;
   font-size: 11px;
   cursor: pointer;
   padding: 3px 6px;
@@ -5788,26 +5810,26 @@ html, body, #root {
 }
 
 .code-copy-btn:hover {
-  color: #ECEAE5;
-  background: rgba(255, 255, 255, 0.06);
+  color: #FFFFFF;
+  background: rgba(255, 255, 255, 0.1);
 }
 
 .code-pre {
   margin: 0;
   padding: 14px;
   overflow-x: auto;
-  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-family: var(--font-mono);
   font-size: 13px;
   line-height: 1.5;
-  color: #F3F4F6;
+  color: #F4F4F5;
 }
 
 /* --- Error Banner --- */
 .claude-error-banner {
   padding: 14px 16px;
   border-radius: 12px;
-  background: rgba(239, 68, 68, 0.08);
-  border: 1px solid rgba(239, 68, 68, 0.25);
+  background: var(--status-danger-subtle);
+  border: 1px solid rgba(239, 68, 68, 0.2);
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -5831,7 +5853,7 @@ html, body, #root {
 .error-dismiss-btn {
   background: transparent;
   border: none;
-  color: #736E66;
+  color: var(--text-muted);
   cursor: pointer;
   padding: 2px;
   border-radius: 4px;
@@ -5839,7 +5861,7 @@ html, body, #root {
 
 .error-message-text {
   font-size: 13px;
-  color: #ECEAE5;
+  color: var(--text-primary);
   margin: 0;
   line-height: 1.45;
 }
@@ -5874,23 +5896,23 @@ html, body, #root {
 }
 
 .error-btn.fallback {
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  color: #ECEAE5;
+  background: var(--bg-card);
+  border: 1px solid var(--border-default);
+  color: var(--text-primary);
 }
 
 .error-btn.fallback:hover {
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--bg-card-hover);
 }
 
 .error-btn.settings {
   background: transparent;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  color: #A39E96;
+  border: 1px solid var(--border-default);
+  color: var(--text-secondary);
 }
 
 .error-btn.settings:hover {
-  color: #ECEAE5;
+  color: var(--text-primary);
 }
 
 /* --- Claude Floating Bottom Composer --- */
@@ -5903,8 +5925,12 @@ html, body, #root {
   justify-content: center;
   padding: 0 24px 18px 24px;
   pointer-events: none;
-  background: linear-gradient(180deg, transparent 0%, rgba(24, 23, 21, 0.8) 25%, #181715 100%);
+  background: linear-gradient(180deg, transparent 0%, rgba(255, 255, 255, 0.88) 25%, var(--bg-app) 100%);
   z-index: 10;
+}
+
+[data-theme="dark"] .claude-bottom-section {
+  background: linear-gradient(180deg, transparent 0%, rgba(24, 23, 21, 0.85) 25%, var(--bg-app) 100%);
 }
 
 .claude-composer-wrapper {
@@ -5929,21 +5955,29 @@ html, body, #root {
 .claude-consent-pill.privacy-locked {
   background: rgba(16, 185, 129, 0.12);
   border: 1px solid rgba(16, 185, 129, 0.25);
+  color: #059669;
+}
+
+[data-theme="dark"] .claude-consent-pill.privacy-locked {
   color: #6EE7B7;
 }
 
 .claude-consent-pill.cloud-warning {
   background: rgba(245, 158, 11, 0.12);
   border: 1px solid rgba(245, 158, 11, 0.25);
+  color: #D97706;
+}
+
+[data-theme="dark"] .claude-consent-pill.cloud-warning {
   color: #FBBF24;
 }
 
 .claude-composer-box {
   width: 100%;
   border-radius: 20px;
-  background: #23221E;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.36);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  box-shadow: var(--shadow-composer);
   padding: 14px 16px 10px 18px;
   transition: border-color 0.18s, box-shadow 0.18s;
   display: flex;
@@ -5953,7 +5987,7 @@ html, body, #root {
 .claude-composer-box:focus-within,
 .claude-composer-box.has-text {
   border-color: var(--accent-border);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45), 0 0 0 1px var(--accent-subtle);
+  box-shadow: var(--shadow-composer-focus);
 }
 
 .claude-composer-textarea {
@@ -5965,14 +5999,21 @@ html, body, #root {
   font-family: inherit;
   font-size: 15px;
   line-height: 1.5;
-  color: #ECEAE5;
+  color: var(--text-primary);
   max-height: 160px;
   padding: 0;
   box-sizing: border-box;
 }
 
+.claude-composer-textarea:focus,
+.claude-composer-textarea:focus-visible {
+  outline: none !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
 .claude-composer-textarea::placeholder {
-  color: #736E66;
+  color: var(--text-faint);
 }
 
 .claude-composer-toolbar {
@@ -5991,8 +6032,9 @@ html, body, #root {
 
 .composer-workspace-indicator {
   font-size: 11px;
-  color: #736E66;
-  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-secondary);
+  background: var(--bg-card-hover);
+  border: 1px solid var(--border-subtle);
   padding: 2px 7px;
   border-radius: 6px;
 }
@@ -6001,9 +6043,9 @@ html, body, #root {
   width: 32px;
   height: 32px;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--border-default);
   border: none;
-  color: rgba(255, 255, 255, 0.3);
+  color: var(--text-muted);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -6035,7 +6077,7 @@ html, body, #root {
 
 .claude-composer-subtext {
   font-size: 11px;
-  color: #736E66;
+  color: var(--text-muted);
   letter-spacing: 0.01em;
 }
 

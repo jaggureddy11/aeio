@@ -113,7 +113,7 @@ const getOrGenerateInstallationId = (): string => {
 export const useSettingsStore = create<SettingsState>((set) => ({
   activeTab: 'chat',
   activeProvider: 'gemini',
-  theme: (getStoredString('aeio_theme_mode', 'system') as ThemeMode) || 'system',
+  theme: (getStoredString('aeio_theme_mode', 'light') as ThemeMode) || 'light',
   ollamaModel: 'qwen3-coder',
   activeWindowAwareness: getStoredBool('aeio_active_window_awareness', false),
   ambientProactive: getStoredBool('aeio_ambient_proactive', false),
