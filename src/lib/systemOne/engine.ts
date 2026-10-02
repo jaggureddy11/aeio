@@ -11,9 +11,11 @@ import {
 } from './types';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { getProvider } from '../providers/providerRegistry';
+import { systemOneEvaluate } from '../ipc';
 
 /**
  * Executes a bundle of System One questions in parallel over a shared state.
+ * Uses native Rust backend (system_one_evaluate) when running in Tauri desktop.
  */
 export class SystemOneEngine {
   /**
@@ -33,8 +35,23 @@ export class SystemOneEngine {
       };
     }
 
+    // 1. Attempt native Rust backend evaluation first
     try {
-      // 1. Attempt LLM-based structured evaluation if a provider is configured
+      const nativeResp = await systemOneEvaluate(request);
+      if (nativeResp && nativeResp.answers) {
+        return {
+          answers: nativeResp.answers,
+          evaluatedAt: nativeResp.evaluated_at || startTime,
+          engine: nativeResp.engine || 'system-one-rust-native',
+          durationMs: nativeResp.duration_ms ?? (Date.now() - startTime),
+        };
+      }
+    } catch {
+      // Fallback for non-Tauri / test environments
+    }
+
+    try {
+      // 2. Attempt LLM-based structured evaluation if a provider is configured
       const answers = await this.evaluateWithLLM(state, questions);
       return {
         answers,
@@ -43,7 +60,7 @@ export class SystemOneEngine {
         durationMs: Date.now() - startTime,
       };
     } catch {
-      // 2. Deterministic calibrated fallback (zero API key / offline resilience)
+      // 3. Deterministic calibrated fallback (zero API key / offline resilience)
       const fallbackAnswers = this.evaluateFallback(state, questions);
       return {
         answers: fallbackAnswers,

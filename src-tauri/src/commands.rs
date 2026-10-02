@@ -399,3 +399,44 @@ pub fn get_audit_receipt(
     crate::safety::get_audit_receipt(&audit_dir, &audit_id)
 }
 
+// System One Decision Engine Commands (Native Rust Backend)
+#[tauri::command]
+pub fn system_one_evaluate(
+    request: crate::system_one::SystemOneRequest,
+) -> Result<crate::system_one::SystemOneResponse, String> {
+    let engine = crate::system_one::SystemOneEngine::new();
+    Ok(engine.evaluate(&request))
+}
+
+#[tauri::command]
+pub fn judge_command_risk(
+    command: String,
+) -> Result<crate::system_one::CommandSafetyVerdict, String> {
+    Ok(crate::system_one::judge_command_risk(&command))
+}
+
+#[tauri::command]
+pub fn classify_user_task(
+    prompt: String,
+) -> Result<crate::system_one::TaskIntentVerdict, String> {
+    Ok(crate::system_one::classify_user_task(&prompt))
+}
+
+#[tauri::command]
+pub fn rerank_memories(
+    state: State<MemoryManager>,
+    query: String,
+    workspace_id: Option<String>,
+    cross_workspace: Option<bool>,
+    limit: Option<usize>,
+) -> Result<Vec<crate::system_one::RerankedMemoryResult>, String> {
+    let raw_results = state.db().search_memories(
+        &query,
+        workspace_id.as_deref(),
+        cross_workspace.unwrap_or(false),
+        limit.unwrap_or(15),
+    )?;
+    Ok(crate::system_one::rerank_memories(&query, raw_results))
+}
+
+

@@ -319,4 +319,60 @@ export async function hideWindow(): Promise<void> {
   }
 }
 
+// System One Calibrated Intelligence (Native Rust Backend)
+export interface SystemOneCommandSafetyVerdict {
+  command: string;
+  is_destructive: boolean;
+  destructive_probability: number;
+  requires_approval: boolean;
+  risk_tier: 'low' | 'medium' | 'critical';
+  rationale: string;
+}
+
+export interface SystemOneTaskIntentVerdict {
+  prompt: string;
+  primary_intent: 'planning' | 'code' | 'search_retrieval' | 'conversational';
+  probabilities: Record<string, number>;
+  confidence: number;
+  suggested_system_prompt?: string | null;
+}
+
+export interface SystemOneRerankedMemoryResult {
+  memory_id: string;
+  content: string;
+  category: string;
+  original_score: number;
+  system_one_score: number;
+  final_score: number;
+  confidence: number;
+  rationale: string;
+}
+
+export async function judgeCommandRisk(command: string): Promise<SystemOneCommandSafetyVerdict> {
+  return invoke<SystemOneCommandSafetyVerdict>('judge_command_risk', { command });
+}
+
+export async function classifyUserTask(prompt: string): Promise<SystemOneTaskIntentVerdict> {
+  return invoke<SystemOneTaskIntentVerdict>('classify_user_task', { prompt });
+}
+
+export async function rerankMemories(
+  query: string,
+  workspaceId?: string,
+  crossWorkspace: boolean = false,
+  limit: number = 15
+): Promise<SystemOneRerankedMemoryResult[]> {
+  return invoke<SystemOneRerankedMemoryResult[]>('rerank_memories', {
+    query,
+    workspaceId: workspaceId ?? null,
+    crossWorkspace,
+    limit,
+  });
+}
+
+export async function systemOneEvaluate(request: any): Promise<any> {
+  return invoke<any>('system_one_evaluate', { request });
+}
+
+
 

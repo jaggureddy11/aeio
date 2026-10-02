@@ -10,6 +10,7 @@ pub mod keychain;
 pub mod memory;
 pub mod observability;
 pub mod safety;
+pub mod system_one;
 pub mod tools;
 
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
@@ -185,6 +186,10 @@ pub fn run() {
             commands::execute_computer_action_with_audit,
             commands::list_audit_receipts,
             commands::get_audit_receipt,
+            commands::system_one_evaluate,
+            commands::judge_command_risk,
+            commands::classify_user_task,
+            commands::rerank_memories,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
