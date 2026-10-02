@@ -28,6 +28,7 @@ import {
   isGuiActionDestructive,
   normalizeToolName,
 } from '../lib/agent/plan';
+import { rerankMemoriesSystemOne } from '../lib/systemOne/memoryRerank';
 import { isHaltActive } from '../lib/safety/killSwitch';
 import { isHardBlocked } from '../lib/safety/allowlist';
 import { requireActionApproval } from '../lib/safety/approvalGate';
@@ -1253,9 +1254,12 @@ export const useChatStore = create<ChatState>((set, get) => ({
     // 2. Search relevant memories strictly scoped to active workspace (Tier 1 & Tier 4 Scoped Recall)
     let recalled: RecalledMemory[] = [];
     try {
-      const searchResults = await searchMemories(trimmed, wsId, false, 4);
-      recalled = searchResults
+      const searchResults = await searchMemories(trimmed, wsId, false, 5);
+      const reranked = await rerankMemoriesSystemOne(trimmed, searchResults);
+      const candidates = reranked.length > 0 ? reranked.map((r) => r.searchResult) : searchResults;
+      recalled = candidates
         .filter((r) => r.score >= 1.0)
+        .slice(0, 4)
         .map((r) => ({
           id: r.memory.id,
           content: r.memory.content,

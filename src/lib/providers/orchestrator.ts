@@ -7,6 +7,8 @@ import { aeioFreeProvider } from './aeioFree';
 import { getApiKey } from '../ipc';
 import { useSettingsStore } from '../../stores/settingsStore';
 
+import { routeUserIntent } from '../systemOne/intentRouting';
+
 export type TaskType = 'code' | 'planning' | 'search_retrieval' | 'conversational';
 
 export interface OrchestrationResult {
@@ -18,7 +20,20 @@ export interface OrchestrationResult {
 }
 
 /**
- * Classifies a user prompt to determine optimal execution characteristics.
+ * TypeSafe System One Intent Classifier:
+ * Evaluates user intent using discrete Choice questions with calibrated confidence.
+ */
+export async function classifyUserTaskSystemOne(prompt: string): Promise<TaskType> {
+  try {
+    const verdict = await routeUserIntent(prompt);
+    return verdict.taskType;
+  } catch {
+    return classifyUserTask(prompt);
+  }
+}
+
+/**
+ * Classifies a user prompt to determine optimal execution characteristics (deterministic baseline).
  */
 export function classifyUserTask(prompt: string): TaskType {
   const lower = prompt.toLowerCase();
@@ -109,7 +124,7 @@ export async function orchestrateChat(
   options?: ChatOptions
 ): Promise<OrchestrationResult> {
   const latestMessage = messages[messages.length - 1]?.content || '';
-  const taskType = classifyUserTask(latestMessage);
+  const taskType = await classifyUserTaskSystemOne(latestMessage);
   const keys = await getAvailableKeys();
   const settings = useSettingsStore.getState();
 
