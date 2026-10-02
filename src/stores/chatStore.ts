@@ -20,6 +20,10 @@ import {
   clearChatHistory,
   writeFile,
   fetchUrl,
+  judgeCommandRisk,
+  classifyUserTask,
+  rerankMemories,
+  SystemOneTaskIntentVerdict,
 } from '../lib/ipc';
 import {
   ExecutionPlan,
@@ -56,6 +60,9 @@ export interface ToolExecution {
   args: Record<string, any>;
   status: 'pending_approval' | 'approved' | 'running' | 'completed' | 'denied' | 'error';
   isDestructive?: boolean;
+  riskTier?: 'low' | 'medium' | 'critical';
+  destructiveProbability?: number;
+  safetyRationale?: string;
   result?: any;
   error?: string;
 }
@@ -490,9 +497,20 @@ export const useChatStore = create<ChatState>((set, get) => ({
         case 'search_memory': {
           const ws = useWorkspaceStore.getState().activeWorkspace;
           const limit = typeof execution.args.limit === 'number' ? execution.args.limit : 5;
-          result = await searchMemories(execution.args.query, ws?.id, false, limit);
+          try {
+            const reranked = await rerankMemories(execution.args.query, ws?.id, false, limit);
+            result = reranked.map((r) => ({
+              id: r.memory_id,
+              content: r.content,
+              category: r.category,
+              relevance: r.final_score,
+            }));
+          } catch {
+            result = await searchMemories(execution.args.query, ws?.id, false, limit);
+          }
           break;
         }
+
         case 'search_files': {
           result = await searchFiles(
             execution.args.dir || './',
@@ -870,9 +888,20 @@ export const useChatStore = create<ChatState>((set, get) => ({
           case 'search_memory': {
             const ws = useWorkspaceStore.getState().activeWorkspace;
             const limit = typeof step.args.limit === 'number' ? step.args.limit : 5;
-            stepResult = await searchMemories(step.args.query, ws?.id, false, limit);
+            try {
+              const reranked = await rerankMemories(step.args.query, ws?.id, false, limit);
+              stepResult = reranked.map((r) => ({
+                id: r.memory_id,
+                content: r.content,
+                category: r.category,
+                relevance: r.final_score,
+              }));
+            } catch {
+              stepResult = await searchMemories(step.args.query, ws?.id, false, limit);
+            }
             break;
           }
+
           case 'search_files': {
             stepResult = await searchFiles(step.args.dir || './', step.args.query || '');
             break;
@@ -1254,19 +1283,31 @@ export const useChatStore = create<ChatState>((set, get) => ({
     // 2. Search relevant memories strictly scoped to active workspace (Tier 1 & Tier 4 Scoped Recall)
     let recalled: RecalledMemory[] = [];
     try {
-      const searchResults = await searchMemories(trimmed, wsId, false, 5);
-      const reranked = await rerankMemoriesSystemOne(trimmed, searchResults);
-      const candidates = reranked.length > 0 ? reranked.map((r) => r.searchResult) : searchResults;
-      recalled = candidates
-        .filter((r) => r.score >= 1.0)
+      const reranked = await rerankMemories(trimmed, wsId, false, 5);
+      recalled = reranked
+        .filter((r) => r.final_score >= 35.0 || r.confidence >= 0.70)
         .slice(0, 4)
         .map((r) => ({
-          id: r.memory.id,
-          content: r.memory.content,
-          category: r.memory.category,
+          id: r.memory_id,
+          content: r.content,
+          category: r.category,
         }));
-    } catch (err) {
-      console.warn('Memory search before prompt failed:', err);
+    } catch {
+      try {
+        const searchResults = await searchMemories(trimmed, wsId, false, 5);
+        const reranked = await rerankMemoriesSystemOne(trimmed, searchResults);
+        const candidates = reranked.length > 0 ? reranked.map((r) => r.searchResult) : searchResults;
+        recalled = candidates
+          .filter((r) => r.score >= 0.6)
+          .slice(0, 4)
+          .map((r) => ({
+            id: r.memory.id,
+            content: r.memory.content,
+            category: r.memory.category,
+          }));
+      } catch (err) {
+        console.warn('Memory search before prompt failed:', err);
+      }
     }
 
     // 3. Provider info & sensitivity calculation
@@ -1314,10 +1355,25 @@ export const useChatStore = create<ChatState>((set, get) => ({
       }
     }
 
+    // 4.5 Task Intent Classification (Native Rust System One Engine)
+    let taskIntent: SystemOneTaskIntentVerdict | undefined = undefined;
+    try {
+      taskIntent = await classifyUserTask(trimmed);
+    } catch {
+      // Non-blocking fallback for browser/test environments
+    }
+
     // 5. Build system prompt tailored for Qwen3-Coder
     let systemPrompt =
       'You are Aeio, an intelligent, helpful, and concise local-first desktop AI assistant powered by Qwen3-Coder.\n' +
-      'You specialize in programming, systems automation, shell scripting, code analysis, and local host tasks.\n' +
+      'You specialize in programming, systems automation, shell scripting, code analysis, and local host tasks.\n';
+
+    if (taskIntent?.suggested_system_prompt) {
+      systemPrompt += `Task Intent Mode [${taskIntent.primary_intent.toUpperCase()} (${Math.round(taskIntent.confidence * 100)}% confidence)]: ${taskIntent.suggested_system_prompt}\n`;
+    }
+
+    systemPrompt +=
+
       'Always adhere to these guidelines:\n' +
       '1. Be direct, precise, and concise. Never use emojis or conversational fluff.\n' +
       '2. For non-trivial code analysis, logic, or multi-step decisions, output your internal reasoning inside <think>Your thought process</think> before your final response.\n' +
@@ -1511,6 +1567,45 @@ export const useChatStore = create<ChatState>((set, get) => ({
       const tools: ToolExecution[] = [];
       const handledToolSignatures = new Set<string>();
 
+      const evaluateSafety = async (toolName: string, toolArgs: Record<string, any>) => {
+        let isDestructive = false;
+        let riskTier: 'low' | 'medium' | 'critical' = 'low';
+        let destructiveProbability: number | undefined = undefined;
+        let safetyRationale: string | undefined = undefined;
+
+        if (toolName === 'run_shell' && toolArgs.command) {
+          try {
+            const verdict = await judgeCommandRisk(toolArgs.command);
+            isDestructive = verdict.is_destructive || verdict.requires_approval;
+            riskTier = verdict.risk_tier;
+            destructiveProbability = verdict.destructive_probability;
+            safetyRationale = verdict.rationale;
+          } catch {
+            try {
+              isDestructive = await checkDestructiveCommand(toolArgs.command);
+              riskTier = isDestructive ? 'critical' : 'low';
+            } catch {
+              isDestructive = true;
+              riskTier = 'critical';
+            }
+          }
+        } else if (toolName === 'gui_action') {
+          isDestructive = isGuiActionDestructive(toolArgs);
+          riskTier = isDestructive ? 'critical' : 'low';
+          destructiveProbability = isDestructive ? 0.90 : 0.10;
+          safetyRationale = isDestructive
+            ? 'Desktop GUI action targets restricted OS control or non-allowlisted application'
+            : 'Guarded GUI action on allowlisted application';
+        } else if (toolName === 'write_file') {
+          isDestructive = true;
+          riskTier = 'medium';
+          destructiveProbability = 0.35;
+          safetyRationale = 'Writing or overwriting local file modifies filesystem state';
+        }
+
+        return { isDestructive, riskTier, destructiveProbability, safetyRationale };
+      };
+
       // A. XML format: <tool_call name="..." args='...'> or <tool_call name="...">...</tool_call>
       let xmlMatch;
       const xmlRegex = new RegExp(XML_TOOL_CALL_REGEX.source, 'gi');
@@ -1525,25 +1620,17 @@ export const useChatStore = create<ChatState>((set, get) => ({
           args = { raw: argsStr.trim() };
         }
 
-        let isDestructive = false;
-        if (name === 'run_shell' && args.command) {
-          try {
-            isDestructive = await checkDestructiveCommand(args.command);
-          } catch {
-            isDestructive = true;
-          }
-        } else if (name === 'gui_action') {
-          isDestructive = isGuiActionDestructive(args);
-        } else if (name === 'write_file') {
-          isDestructive = true;
-        }
+        const safety = await evaluateSafety(name, args);
 
         tools.push({
           id: crypto.randomUUID(),
           toolName: name,
           args,
           status: 'pending_approval',
-          isDestructive,
+          isDestructive: safety.isDestructive,
+          riskTier: safety.riskTier,
+          destructiveProbability: safety.destructiveProbability,
+          safetyRationale: safety.safetyRationale,
         });
       }
 
@@ -1558,25 +1645,17 @@ export const useChatStore = create<ChatState>((set, get) => ({
           if (parsed.name) {
             const name = normalizeToolName(String(parsed.name));
             const args = (parsed.arguments || parsed.parameters || parsed.args || {}) as Record<string, any>;
-            let isDestructive = false;
-            if (name === 'run_shell' && args.command) {
-              try {
-                isDestructive = await checkDestructiveCommand(args.command);
-              } catch {
-                isDestructive = true;
-              }
-            } else if (name === 'gui_action') {
-              isDestructive = isGuiActionDestructive(args);
-            } else if (name === 'write_file') {
-              isDestructive = true;
-            }
+            const safety = await evaluateSafety(name, args);
 
             tools.push({
               id: crypto.randomUUID(),
               toolName: name,
               args,
               status: 'pending_approval',
-              isDestructive,
+              isDestructive: safety.isDestructive,
+              riskTier: safety.riskTier,
+              destructiveProbability: safety.destructiveProbability,
+              safetyRationale: safety.safetyRationale,
             });
           }
         } catch {
@@ -1588,8 +1667,16 @@ export const useChatStore = create<ChatState>((set, get) => ({
       let executionPlan: ExecutionPlan | null = null;
       const parsedPlanResult = parsePlanFromResponse(rawStreamed);
       if (parsedPlanResult.plan) {
-        executionPlan = await classifyPlanSafety(parsedPlanResult.plan, checkDestructiveCommand);
+        executionPlan = await classifyPlanSafety(parsedPlanResult.plan, async (cmd) => {
+          try {
+            const v = await judgeCommandRisk(cmd);
+            return v.is_destructive || v.requires_approval;
+          } catch {
+            return checkDestructiveCommand(cmd);
+          }
+        });
       } else if (tools.length > 1) {
+
         // Automatically bundle multiple tools into a multi-step plan
         const steps = tools.map((t, idx) => ({
           id: t.id,

@@ -111,7 +111,12 @@ export const ToolApprovalCard: React.FC<Props> = ({
           {isDestructive && (
             <span className="destructive-tag">
               <AlertTriangle size={11} />
-              <span>Destructive Action</span>
+              <span>{execution.riskTier ? `${execution.riskTier.toUpperCase()} RISK` : 'Destructive Action'}</span>
+            </span>
+          )}
+          {execution.destructiveProbability !== undefined && (
+            <span className={`risk-probability-badge tier-${execution.riskTier || 'medium'}`}>
+              {Math.round(execution.destructiveProbability * 100)}% Risk
             </span>
           )}
         </div>
@@ -136,11 +141,13 @@ export const ToolApprovalCard: React.FC<Props> = ({
           <div className="warning-text">
             <strong>POTENTIALLY DESTRUCTIVE ACTION</strong>
             <p>
-              This command contains patterns (such as <code>rm</code>, <code>del</code>, or filesystem modification) that may permanently overwrite or erase data on your device. Aeio requires your explicit authorization.
+              {execution.safetyRationale ||
+                'This command contains patterns (such as rm, del, or filesystem modification) that may permanently overwrite or erase data on your device. Explicit operator authorization is required.'}
             </p>
           </div>
         </div>
       )}
+
 
       {/* Command or Target Display */}
       <div className="tool-details-block">

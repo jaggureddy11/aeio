@@ -6,6 +6,7 @@ import {
   MemoryCategory,
   MemoryRecord,
   searchMemories,
+  rerankMemories,
   updateMemory,
 } from '../lib/ipc';
 import { useWorkspaceStore } from './workspaceStore';
@@ -44,12 +45,27 @@ export const useMemoryStore = create<MemoryState>((set, get) => ({
       const wsId = crossWorkspaceSearch ? undefined : activeWs?.id;
 
       if (searchQuery.trim()) {
-        const results = await searchMemories(searchQuery.trim(), wsId, crossWorkspaceSearch, 20);
-        let mems = results.map((r) => r.memory);
-        if (activeCategory !== 'all') {
-          mems = mems.filter((m) => m.category === activeCategory);
+        try {
+          const reranked = await rerankMemories(searchQuery.trim(), wsId, crossWorkspaceSearch, 20);
+          let mems: MemoryRecord[] = reranked.map((r) => ({
+            id: r.memory_id,
+            content: r.content,
+            category: r.category as MemoryCategory,
+            created_at: 0,
+            updated_at: 0,
+          }));
+          if (activeCategory !== 'all') {
+            mems = mems.filter((m) => m.category === activeCategory);
+          }
+          set({ memories: mems });
+        } catch {
+          const results = await searchMemories(searchQuery.trim(), wsId, crossWorkspaceSearch, 20);
+          let mems = results.map((r) => r.memory);
+          if (activeCategory !== 'all') {
+            mems = mems.filter((m) => m.category === activeCategory);
+          }
+          set({ memories: mems });
         }
-        set({ memories: mems });
       } else {
         const catFilter = activeCategory === 'all' ? undefined : activeCategory;
         const mems = await listMemories(catFilter, wsId);
