@@ -62,7 +62,11 @@ export const ChatView: React.FC<Props> = ({ onOpenSettings }) => {
 
   const topBarTitle =
     messages.length === 0
-      ? 'What can I help you with today?'
+      ? activeWorkspace?.name || 'General Workspace'
+      : messages[0]?.content
+      ? messages[0].content.length > 36
+        ? `${messages[0].content.slice(0, 36)}...`
+        : messages[0].content
       : activeWorkspace?.name || 'Aeio Assistant';
 
   return (

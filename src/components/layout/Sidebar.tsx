@@ -105,7 +105,7 @@ export const Sidebar: React.FC<Props> = ({
           </div>
           <div className="brand-text-col">
             <span className="sidebar-brand-name">aeio</span>
-            <span className="sidebar-brand-sub">local-first assistant</span>
+            <span className="sidebar-brand-sub">Local Assistant</span>
           </div>
         </div>
 
@@ -116,7 +116,7 @@ export const Sidebar: React.FC<Props> = ({
           title="Collapse sidebar (⌘B)"
           aria-label="Collapse sidebar"
         >
-          <PanelLeftClose size={15} />
+          <PanelLeftClose size={15} strokeWidth={1.8} />
         </button>
       </div>
 
@@ -126,9 +126,10 @@ export const Sidebar: React.FC<Props> = ({
           type="button"
           className="sidebar-new-chat-btn"
           onClick={handleStartNewChat}
+          title="Start new chat (⌘K)"
         >
           <div className="new-chat-btn-left">
-            <Plus size={15} />
+            <Plus size={14} strokeWidth={2.2} />
             <span>Start new chat</span>
           </div>
           <kbd className="new-chat-shortcut">⌘K</kbd>
@@ -143,7 +144,7 @@ export const Sidebar: React.FC<Props> = ({
           className={`sidebar-nav-item ${activeTab === 'chat' ? 'active' : ''}`}
           onClick={() => setActiveTab('chat')}
         >
-          <MessageSquare size={14} className="nav-item-icon" />
+          <MessageSquare size={14} strokeWidth={1.9} className="nav-item-icon" />
           <span className="nav-item-label">Conversation</span>
           {messages.length > 0 && (
             <span className="nav-item-badge">{messages.length}</span>
@@ -155,7 +156,7 @@ export const Sidebar: React.FC<Props> = ({
           className={`sidebar-nav-item ${activeTab === 'memory' ? 'active' : ''}`}
           onClick={() => setActiveTab('memory')}
         >
-          <Brain size={14} className="nav-item-icon" />
+          <Brain size={14} strokeWidth={1.9} className="nav-item-icon" />
           <span className="nav-item-label">Memory Vault</span>
         </button>
 
@@ -164,7 +165,7 @@ export const Sidebar: React.FC<Props> = ({
           className={`sidebar-nav-item ${activeTab === 'settings' ? 'active' : ''}`}
           onClick={() => setActiveTab('settings')}
         >
-          <Settings size={14} className="nav-item-icon" />
+          <Settings size={14} strokeWidth={1.9} className="nav-item-icon" />
           <span className="nav-item-label">Settings & Keys</span>
         </button>
       </div>
@@ -172,8 +173,8 @@ export const Sidebar: React.FC<Props> = ({
       {/* Current Workspace Pill */}
       <div className="sidebar-nav-section">
         <div className="sidebar-section-label">WORKSPACE</div>
-        <div className="sidebar-workspace-chip">
-          <Layers size={13} className="ws-chip-icon" />
+        <div className="sidebar-workspace-chip" title={activeWorkspace?.name || 'General Workspace'}>
+          <Layers size={13} strokeWidth={2} className="ws-chip-icon" />
           <span className="ws-chip-name">{activeWorkspace?.name || 'General Workspace'}</span>
         </div>
       </div>

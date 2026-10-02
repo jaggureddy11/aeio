@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { ChevronDown, Check, ArrowUp, Sun, Moon, Laptop, Plus, Trash2, Brain, Settings } from 'lucide-react';
+import { MoreHorizontal, Check, Sun, Moon, Laptop, Plus, Trash2, Brain, Settings } from 'lucide-react';
 import { AeLogo } from '../common/AeLogo';
 import { useSettingsStore, ThemeMode } from '../../stores/settingsStore';
 
@@ -20,11 +20,25 @@ export const ClaudeTopBar: React.FC<Props> = ({
   onClearChat,
   onOpenSettings,
   onOpenMemory,
-  onActionClick,
 }) => {
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
-  const { theme, setTheme } = useSettingsStore();
+  const { theme, setTheme, activeProvider, ollamaModel } = useSettingsStore();
+
+  const providerLabel =
+    activeProvider === 'qwen-coder'
+      ? 'Qwen 2.5 Coder'
+      : activeProvider === 'claude'
+      ? 'Claude 3.5 Sonnet'
+      : activeProvider === 'gemini'
+      ? 'Gemini 2.5 Flash'
+      : activeProvider === 'openai'
+      ? 'GPT-4o'
+      : activeProvider === 'aeio-free'
+      ? 'Claude 3.5 Haiku'
+      : activeProvider === 'ollama'
+      ? ollamaModel || 'Local Ollama'
+      : 'Active Engine';
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -59,19 +73,31 @@ export const ClaudeTopBar: React.FC<Props> = ({
       {/* Middle: Native draggable region */}
       <div className="top-bar-center" data-tauri-drag-region />
 
-      {/* Right: Dropdown menu & Terracotta Action Button */}
+      {/* Right: Model Status & Options Menu */}
       <div className="top-bar-right">
-        {/* New Chat Dropdown Button */}
+        {onOpenSettings && (
+          <button
+            type="button"
+            className="top-bar-model-chip"
+            onClick={onOpenSettings}
+            title="Configure model engine and keys in settings"
+          >
+            <span className="top-bar-status-dot" />
+            <span className="top-bar-model-name">{providerLabel}</span>
+          </button>
+        )}
+
+        {/* Overflow Options Menu */}
         <div className="top-bar-menu-wrapper" ref={menuRef}>
           <button
             type="button"
-            className={`top-bar-capsule-btn ${menuOpen ? 'active' : ''}`}
+            className={`top-bar-icon-btn ${menuOpen ? 'active' : ''}`}
             onClick={() => setMenuOpen(!menuOpen)}
+            title="Options and settings"
             aria-expanded={menuOpen}
-            aria-label="New chat and options menu"
+            aria-label="Options menu"
           >
-            <span>New Chat</span>
-            <ChevronDown size={13} className={`chevron-icon ${menuOpen ? 'open' : ''}`} />
+            <MoreHorizontal size={15} />
           </button>
 
           {menuOpen && (
@@ -88,21 +114,6 @@ export const ClaudeTopBar: React.FC<Props> = ({
                 <span className="dropdown-item-label">New Chat</span>
                 <kbd className="dropdown-shortcut">⌘K</kbd>
               </button>
-
-              {hasMessages && (
-                <button
-                  type="button"
-                  className="dropdown-item danger"
-                  onClick={() => {
-                    onClearChat();
-                    setMenuOpen(false);
-                  }}
-                >
-                  <Trash2 size={14} className="dropdown-item-icon" />
-                  <span className="dropdown-item-label">Clear Conversation</span>
-                </button>
-              )}
-
               {onOpenMemory && (
                 <button
                   type="button"
@@ -131,6 +142,23 @@ export const ClaudeTopBar: React.FC<Props> = ({
                   <span className="dropdown-item-label">Settings</span>
                   <kbd className="dropdown-shortcut">⌘3</kbd>
                 </button>
+              )}
+
+              {hasMessages && (
+                <>
+                  <div className="dropdown-divider" />
+                  <button
+                    type="button"
+                    className="dropdown-item danger"
+                    onClick={() => {
+                      onClearChat();
+                      setMenuOpen(false);
+                    }}
+                  >
+                    <Trash2 size={14} className="dropdown-item-icon" />
+                    <span className="dropdown-item-label">Clear Conversation</span>
+                  </button>
+                </>
               )}
 
               <div className="dropdown-divider" />
@@ -169,17 +197,6 @@ export const ClaudeTopBar: React.FC<Props> = ({
             </div>
           )}
         </div>
-
-        {/* Emerald Brand Action Button (Rounded Square with Upward Arrow) */}
-        <button
-          type="button"
-          className="top-bar-brand-btn"
-          onClick={onActionClick || onNewChat}
-          title="New Chat or Submit (Return)"
-          aria-label="New chat or action"
-        >
-          <ArrowUp size={16} />
-        </button>
       </div>
     </header>
   );
