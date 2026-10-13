@@ -7441,3 +7441,252 @@ html, body, #root {
   text-overflow: ellipsis;
 }
 
+/* =========================================================================
+   Dedicated Floating Dynamic Island & Notch Auxiliary Window
+   ========================================================================= */
+.dynamic-island-screen-container {
+  width: 100vw;
+  height: 100vh;
+  margin: 0;
+  padding: 0;
+  background: transparent !important;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  overflow: hidden;
+  user-select: none;
+  -webkit-app-region: drag;
+}
+
+.dynamic-island-notch-capsule {
+  margin-top: 4px;
+  background: rgba(14, 15, 19, 0.88);
+  backdrop-filter: blur(28px) saturate(180%);
+  -webkit-backdrop-filter: blur(28px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 24px;
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.65), 0 0 1px rgba(255, 255, 255, 0.3) inset;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  -webkit-app-region: no-drag;
+}
+
+.dynamic-island-notch-capsule.collapsed {
+  width: 376px;
+  height: 40px;
+}
+
+.dynamic-island-notch-capsule.expanded {
+  width: 420px;
+  height: 148px;
+}
+
+.dynamic-island-notch-capsule.listening {
+  border-color: rgba(240, 86, 35, 0.5);
+  box-shadow: 0 12px 36px rgba(240, 86, 35, 0.2), 0 0 20px rgba(240, 86, 35, 0.2) inset;
+}
+
+.dynamic-island-notch-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 40px;
+  padding: 0 12px;
+  gap: 10px;
+}
+
+.dynamic-island-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.dynamic-island-mic-btn {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 50%;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #d1d5db;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.dynamic-island-mic-btn.active {
+  background: #f05623;
+  color: #ffffff;
+  border-color: #f05623;
+  box-shadow: 0 0 12px rgba(240, 86, 35, 0.6);
+}
+
+.dynamic-island-waveform {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  height: 16px;
+}
+
+.dynamic-island-waveform .bar {
+  width: 2.5px;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 2px;
+  transition: height 0.15s ease, background-color 0.2s ease;
+}
+
+.dynamic-island-waveform .bar.active {
+  background: #f05623;
+  animation: dynamicIslandWave 1s ease-in-out infinite alternate;
+}
+
+.dynamic-island-waveform .bar-1 { animation-delay: 0.05s; }
+.dynamic-island-waveform .bar-2 { animation-delay: 0.2s; }
+.dynamic-island-waveform .bar-3 { animation-delay: 0.1s; }
+.dynamic-island-waveform .bar-4 { animation-delay: 0.25s; }
+.dynamic-island-waveform .bar-5 { animation-delay: 0.15s; }
+
+@keyframes dynamicIslandWave {
+  0% { height: 4px; }
+  50% { height: 16px; }
+  100% { height: 8px; }
+}
+
+.dynamic-island-center {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  cursor: pointer;
+}
+
+.dynamic-island-status-text {
+  font-size: 11px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  letter-spacing: -0.01em;
+}
+
+.dynamic-island-status-text.idle {
+  color: #9ca3af;
+}
+
+.dynamic-island-status-text.transcript {
+  color: #f3f4f6;
+  font-style: italic;
+}
+
+.dynamic-island-status-text.active-step {
+  color: #fb923c;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.dynamic-island-status-text.success {
+  color: #34d399;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.dynamic-island-right {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.dynamic-island-action-btn {
+  background: transparent;
+  border: none;
+  color: #9ca3af;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.dynamic-island-action-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+}
+
+.dynamic-island-action-btn.active {
+  color: #f05623;
+}
+
+.dynamic-island-action-btn.close:hover {
+  color: #ef4444;
+}
+
+.dynamic-island-expanded-drawer {
+  padding: 10px 14px 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.dynamic-island-expanded-content {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.dynamic-island-expanded-transcript .drawer-label {
+  font-size: 9.5px;
+  text-transform: uppercase;
+  color: #6b7280;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  display: block;
+  margin-bottom: 2px;
+}
+
+.dynamic-island-expanded-transcript .drawer-text {
+  font-size: 12px;
+  color: #f9fafb;
+  margin: 0;
+  line-height: 1.4;
+}
+
+.dynamic-island-expanded-hint {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  color: #9ca3af;
+  line-height: 1.4;
+}
+
+.dynamic-island-expanded-step {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(240, 86, 35, 0.08);
+  border: 1px solid rgba(240, 86, 35, 0.2);
+  border-radius: 6px;
+  padding: 4px 8px;
+}
+
+.dynamic-island-expanded-step .step-badge {
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: #f05623;
+  letter-spacing: 0.05em;
+}
+
+.dynamic-island-expanded-step .step-name {
+  font-size: 11px;
+  color: #e5e7eb;
+}
+

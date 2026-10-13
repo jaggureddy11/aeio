@@ -543,3 +543,62 @@ export async function registerGlobalHotkey(hotkey: string): Promise<boolean> {
 export async function unregisterGlobalHotkey(hotkey: string): Promise<boolean> {
   return invoke<boolean>('unregister_global_hotkey', { hotkey });
 }
+
+export interface SpeechEngineStatus {
+  whisperBinPath?: string | null;
+  ffmpegPath?: string | null;
+  hasPythonWhisper: boolean;
+  isOfflineCapable: boolean;
+  defaultEngine: string;
+  supportedModels: string[];
+}
+
+export interface WakeWordSpotResult {
+  detected: boolean;
+  keyword: string;
+  command: string;
+  confidence: number;
+  engineUsed: string;
+  transcription: string;
+}
+
+export interface NotchWindowState {
+  isVisible: boolean;
+  width: number;
+  height: number;
+  isExpanded: boolean;
+}
+
+export async function getSpeechEngineStatus(): Promise<SpeechEngineStatus> {
+  return invoke<SpeechEngineStatus>('get_speech_engine_status');
+}
+
+export async function spotWakeWordInAudio(
+  audioBase64: string,
+  format?: string
+): Promise<WakeWordSpotResult> {
+  return invoke<WakeWordSpotResult>('spot_wake_word_in_audio', {
+    audioBase64,
+    format: format ?? null,
+  });
+}
+
+export async function showNotchWindow(): Promise<boolean> {
+  return invoke<boolean>('show_notch_window');
+}
+
+export async function hideNotchWindow(): Promise<boolean> {
+  return invoke<boolean>('hide_notch_window');
+}
+
+export async function toggleNotchWindow(): Promise<boolean> {
+  return invoke<boolean>('toggle_notch_window');
+}
+
+export async function resizeNotchWindow(width: number, height: number): Promise<boolean> {
+  return invoke<boolean>('resize_notch_window', { width, height });
+}
+
+export async function getNotchWindowState(): Promise<NotchWindowState> {
+  return invoke<NotchWindowState>('get_notch_window_state');
+}

@@ -23,19 +23,25 @@ fn greet(name: &str) -> String {
 pub fn run() {
     let _ = dotenvy::dotenv();
     let global_shortcut_plugin = GlobalShortcutBuilder::new()
-        .with_shortcut("CmdOrCtrl+Shift+Space")
-        .expect("Failed to parse shortcut CmdOrCtrl+Shift+Space")
-        .with_handler(|app, _shortcut, event| {
+        .with_shortcuts(["CmdOrCtrl+Shift+Space", "CmdOrCtrl+Shift+V"])
+        .expect("Failed to parse global shortcuts")
+        .with_handler(|app, shortcut, event| {
             if event.state() == ShortcutState::Pressed {
-                if let Some(window) = app.get_webview_window("main") {
-                    let is_visible = window.is_visible().unwrap_or(false);
-                    if is_visible {
-                        let _ = window.hide();
-                    } else {
-                        let _ = window.center();
-                        let _ = window.show();
-                        let _ = window.set_focus();
+                let shortcut_str = shortcut.to_string();
+                if shortcut_str.contains("Space") {
+                    if let Some(window) = app.get_webview_window("main") {
+                        let is_visible = window.is_visible().unwrap_or(false);
+                        if is_visible {
+                            let _ = window.hide();
+                        } else {
+                            let _ = window.center();
+                            let _ = window.show();
+                            let _ = window.set_focus();
+                        }
                     }
+                } else if shortcut_str.contains("V") || shortcut_str.contains("KeyV") {
+                    let _ = crate::tools::notch::toggle_notch_window(app);
+                    let _ = app.emit("open-voice-hud", ());
                 }
             }
         })
@@ -217,6 +223,13 @@ pub fn run() {
             commands::get_registered_hotkeys,
             commands::register_global_hotkey,
             commands::unregister_global_hotkey,
+            commands::get_speech_engine_status,
+            commands::spot_wake_word_in_audio,
+            commands::show_notch_window,
+            commands::hide_notch_window,
+            commands::toggle_notch_window,
+            commands::resize_notch_window,
+            commands::get_notch_window_state,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

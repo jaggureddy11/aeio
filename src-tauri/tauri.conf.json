@@ -39,6 +39,19 @@
         "alwaysOnTop": true,
         "resizable": false,
         "shadow": false
+      },
+      {
+        "label": "notch",
+        "title": "Aeio Ambient Dynamic Island",
+        "url": "index.html?notch=true",
+        "width": 380,
+        "height": 48,
+        "visible": false,
+        "decorations": false,
+        "transparent": true,
+        "alwaysOnTop": true,
+        "resizable": false,
+        "shadow": false
       }
     ],
     "security": {

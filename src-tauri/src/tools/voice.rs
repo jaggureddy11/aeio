@@ -442,6 +442,109 @@ pub fn transcribe_audio_buffer(
     result
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SpeechEngineStatus {
+    pub whisper_bin_path: Option<String>,
+    pub ffmpeg_path: Option<String>,
+    pub has_python_whisper: bool,
+    pub is_offline_capable: bool,
+    pub default_engine: String,
+    pub supported_models: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WakeWordSpotResult {
+    pub detected: bool,
+    pub keyword: String,
+    pub command: String,
+    pub confidence: f64,
+    pub engine_used: String,
+    pub transcription: String,
+}
+
+/// Diagnoses the local system's offline speech recognition engines.
+pub fn get_speech_engine_status() -> SpeechEngineStatus {
+    let whisper_bin = find_whisper_bin().map(|p| p.to_string_lossy().to_string());
+    let ffmpeg_bin = find_ffmpeg().map(|p| p.to_string_lossy().to_string());
+
+    // Check if python3 has whisper module installed
+    let has_python_whisper = if let Ok(out) = Command::new("python3")
+        .args(["-c", "import whisper; print('ok')"])
+        .output()
+    {
+        out.status.success() && String::from_utf8_lossy(&out.stdout).contains("ok")
+    } else {
+        false
+    };
+
+    let is_offline_capable = whisper_bin.is_some() || has_python_whisper;
+    let default_engine = if whisper_bin.is_some() {
+        "whisper_cli".to_string()
+    } else if has_python_whisper {
+        "python_whisper".to_string()
+    } else {
+        "web_speech_or_vad".to_string()
+    };
+
+    SpeechEngineStatus {
+        whisper_bin_path: whisper_bin,
+        ffmpeg_path: ffmpeg_bin,
+        has_python_whisper,
+        is_offline_capable,
+        default_engine,
+        supported_models: vec![
+            "tiny.en".to_string(),
+            "base.en".to_string(),
+            "small.en".to_string(),
+            "medium.en".to_string(),
+        ],
+    }
+}
+
+/// Spots the "Hey Aeio" wake word within an audio buffer and extracts the trailing command.
+pub fn spot_wake_word_in_audio(
+    audio_base64: &str,
+    format: Option<String>,
+) -> Result<WakeWordSpotResult, String> {
+    let trans_res = transcribe_audio_buffer(audio_base64, format)?;
+    let clean_text = trans_res.text.trim().to_lowercase();
+
+    // Check wake triggers: "hey aeio", "okay aeio", "ok aeio", "hi aeio", "aeio"
+    let wake_triggers = ["hey aeio", "okay aeio", "ok aeio", "hi aeio", "aeio"];
+    for trigger in wake_triggers {
+        if let Some(pos) = clean_text.find(trigger) {
+            let remainder = clean_text[pos + trigger.len()..]
+                .trim()
+                .trim_start_matches(|c: char| c == ',' || c == '.' || c == ':' || c == '-' || c.is_whitespace())
+                .to_string();
+
+            return Ok(WakeWordSpotResult {
+                detected: true,
+                keyword: trigger.to_string(),
+                command: remainder,
+                confidence: 0.95,
+                engine_used: if trans_res.confidence > 0.5 {
+                    "whisper".to_string()
+                } else {
+                    "offline_matcher".to_string()
+                },
+                transcription: trans_res.text,
+            });
+        }
+    }
+
+    Ok(WakeWordSpotResult {
+        detected: false,
+        keyword: String::new(),
+        command: String::new(),
+        confidence: trans_res.confidence,
+        engine_used: "offline_matcher".to_string(),
+        transcription: trans_res.text,
+    })
+}
+
 /// Returns the active set of global daemon hotkeys and their descriptions.
 pub fn get_default_global_hotkeys() -> Vec<GlobalHotkeyStatus> {
     vec![
@@ -523,6 +626,19 @@ mod tests {
         let ffmpeg = find_ffmpeg();
         assert!(ffmpeg.is_some());
         assert!(ffmpeg.unwrap().exists());
+    }
+
+    #[test]
+    fn test_get_speech_engine_status() {
+        let status = get_speech_engine_status();
+        assert!(!status.default_engine.is_empty());
+        assert!(!status.supported_models.is_empty());
+    }
+
+    #[test]
+    fn test_spot_wake_word_in_audio_invalid_payload() {
+        let res = spot_wake_word_in_audio("!!!invalid!!!", None);
+        assert!(res.is_err());
     }
 }
 

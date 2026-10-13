@@ -18,6 +18,10 @@ import {
   transcribeAudioBuffer,
   transcribeAudioFile,
   TranscriptionResult,
+  spotWakeWordInAudio,
+  getSpeechEngineStatus,
+  SpeechEngineStatus,
+  WakeWordSpotResult,
 } from '../ipc';
 import { useWorkspaceStore } from '../../stores/workspaceStore';
 
@@ -778,6 +782,23 @@ export class VoiceEngine {
     }
     return res;
   }
+
+  public async spotWakeWordOffline(
+    audioBase64: string,
+    format?: string
+  ): Promise<WakeWordSpotResult> {
+    const res = await spotWakeWordInAudio(audioBase64, format);
+    if (res.detected) {
+      earcons.playWakeTone();
+      this.emitStatus(`Wake word spotted offline ("${res.keyword}")`);
+      this.wakeWordListeners.forEach((fn) => fn(res.keyword, res.command));
+    }
+    return res;
+  }
+
+  public async getOfflineSpeechStatus(): Promise<SpeechEngineStatus> {
+    return getSpeechEngineStatus();
+  }
 }
 
 export const globalVoiceEngine = new VoiceEngine();
@@ -789,7 +810,21 @@ export async function transcribeOfflineAudio(audioBase64: string, format?: strin
   return transcribeAudioBuffer(audioBase64, format);
 }
 
+/**
+ * Analyzes audio for wake-word trigger ("Hey Aeio") completely offline via native Rust engine.
+ */
+export async function spotWakeWordOffline(audioBase64: string, format?: string): Promise<WakeWordSpotResult> {
+  return globalVoiceEngine.spotWakeWordOffline(audioBase64, format);
+}
+
+/**
+ * Returns the diagnostic status of offline speech engines on the host system.
+ */
+export async function getOfflineSpeechStatus(): Promise<SpeechEngineStatus> {
+  return globalVoiceEngine.getOfflineSpeechStatus();
+}
+
 export { transcribeAudioFile };
-export type { TranscriptionResult };
+export type { TranscriptionResult, SpeechEngineStatus, WakeWordSpotResult };
 
 

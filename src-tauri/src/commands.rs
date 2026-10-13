@@ -599,3 +599,42 @@ pub fn unregister_global_hotkey(app: tauri::AppHandle, hotkey: String) -> Result
         Err(format!("Invalid shortcut format: {}", hotkey))
     }
 }
+
+#[tauri::command]
+pub fn get_speech_engine_status() -> Result<crate::tools::voice::SpeechEngineStatus, String> {
+    Ok(crate::tools::voice::get_speech_engine_status())
+}
+
+#[tauri::command]
+pub fn spot_wake_word_in_audio(
+    audio_base64: String,
+    format: Option<String>,
+) -> Result<crate::tools::voice::WakeWordSpotResult, String> {
+    crate::tools::voice::spot_wake_word_in_audio(&audio_base64, format)
+}
+
+// Dedicated Ambient Dynamic Island / Notch Window Commands
+#[tauri::command]
+pub fn show_notch_window(app: tauri::AppHandle) -> Result<bool, String> {
+    crate::tools::notch::show_notch_window(&app)
+}
+
+#[tauri::command]
+pub fn hide_notch_window(app: tauri::AppHandle) -> Result<bool, String> {
+    crate::tools::notch::hide_notch_window(&app)
+}
+
+#[tauri::command]
+pub fn toggle_notch_window(app: tauri::AppHandle) -> Result<bool, String> {
+    crate::tools::notch::toggle_notch_window(&app)
+}
+
+#[tauri::command]
+pub fn resize_notch_window(app: tauri::AppHandle, width: u32, height: u32) -> Result<bool, String> {
+    crate::tools::notch::resize_notch_window(&app, width, height)
+}
+
+#[tauri::command]
+pub fn get_notch_window_state() -> Result<crate::tools::notch::NotchWindowState, String> {
+    crate::tools::notch::get_notch_window_state()
+}

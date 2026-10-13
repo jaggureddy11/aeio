@@ -14,6 +14,7 @@ import { ActiveControlHud } from './components/safety/ActiveControlHud';
 import { GuiActionApprovalModal } from './components/safety/GuiActionApprovalModal';
 import { VoiceHUD } from './components/chat/VoiceHUD';
 import { BackgroundDock } from './components/chat/BackgroundDock';
+import { DynamicIslandNotchWindow } from './components/chat/DynamicIslandNotchWindow';
 import { useVoiceStore } from './stores/voiceStore';
 import './App.css';
 
@@ -38,6 +39,9 @@ export const App: React.FC = () => {
 
   const isOverlayWindow =
     typeof window !== 'undefined' && window.location.search.includes('overlay=true');
+
+  const isNotchWindow =
+    typeof window !== 'undefined' && window.location.search.includes('notch=true');
 
   // Synchronize System / Light / Dark Theme Mode
   useEffect(() => {
@@ -264,6 +268,14 @@ export const App: React.FC = () => {
     return (
       <div style={{ background: 'transparent', width: '100vw', height: '100vh', overflow: 'hidden' }}>
         <ActiveControlHud isStandalone={true} />
+      </div>
+    );
+  }
+
+  if (isNotchWindow) {
+    return (
+      <div style={{ background: 'transparent', width: '100vw', height: '100vh', overflow: 'hidden' }}>
+        <DynamicIslandNotchWindow />
       </div>
     );
   }
