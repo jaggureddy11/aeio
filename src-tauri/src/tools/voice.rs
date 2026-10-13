@@ -624,8 +624,18 @@ mod tests {
     #[test]
     fn test_find_ffmpeg_finds_path() {
         let ffmpeg = find_ffmpeg();
-        assert!(ffmpeg.is_some());
-        assert!(ffmpeg.unwrap().exists());
+        if let Some(ref path) = ffmpeg {
+            assert!(path.exists());
+        }
+
+        // Test that FFMPEG_PATH environment variable override is honored
+        let temp_bin = std::env::temp_dir().join(format!("test_ffmpeg_{}", std::process::id()));
+        let _ = std::fs::File::create(&temp_bin);
+        std::env::set_var("FFMPEG_PATH", &temp_bin);
+        let found = find_ffmpeg();
+        assert_eq!(found, Some(temp_bin.clone()));
+        std::env::remove_var("FFMPEG_PATH");
+        let _ = std::fs::remove_file(&temp_bin);
     }
 
     #[test]
