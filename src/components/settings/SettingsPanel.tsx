@@ -729,8 +729,8 @@ export const SettingsPanel: React.FC<Props> = ({ isOpen, onClose, onOpenOnboardi
                       Fast-switch between optimized coding and general-purpose local weights.
                     </div>
                   </div>
-                  <div className="settings-row-control" style={{ gap: '6px' }}>
-                    {(['qwen3-coder', 'qwen2.5-coder:7b', 'qwen2.5-coder:14b', 'llama3.2'] as const).map((tag) => (
+                  <div className="settings-row-control" style={{ gap: '6px', flexWrap: 'wrap' }}>
+                    {(['qwen3:8b', 'qwen3:14b', 'qwen2.5:7b', 'qwen2.5-coder:14b', 'llama3.2'] as const).map((tag) => (
                       <button
                         key={tag}
                         type="button"

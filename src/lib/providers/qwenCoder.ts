@@ -27,7 +27,10 @@ export class QwenCoderProvider implements LLMProvider {
       const data = await res.json();
       const models: string[] = (data.models || []).map((m: { name: string }) => m.name);
       const hasQwen = models.some(
-        (m) => m.toLowerCase().includes('qwen3-coder') || m.toLowerCase().includes('qwen2.5-coder')
+        (m) =>
+          m.toLowerCase().includes('qwen3') ||
+          m.toLowerCase().includes('qwen2.5') ||
+          m.toLowerCase().includes('qwen')
       );
 
       return {
@@ -35,7 +38,7 @@ export class QwenCoderProvider implements LLMProvider {
         installedModels: models,
         message: hasQwen
           ? 'Qwen3-Coder is installed and ready for local inference.'
-          : 'Ollama is running, but Qwen3-Coder is not pulled yet. Run `ollama run qwen3-coder` to pull the weights.',
+          : 'Ollama is running, but Qwen model is not pulled yet. Run `ollama run qwen3:8b` or `ollama run qwen2.5:7b` to pull the weights.',
       };
     } catch {
       return {
