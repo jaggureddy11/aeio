@@ -5,12 +5,26 @@ import { openAIProvider } from './openai';
 import { qwenCoderProvider } from './qwenCoder';
 import { ollamaProvider } from './ollama';
 import { aeioFreeProvider } from './aeioFree';
-import { getApiKey } from '../ipc';
+import { getApiKey, classifyUserTask as ipcClassifyUserTask } from '../ipc';
 import { useSettingsStore } from '../../stores/settingsStore';
-
 import { routeUserIntent } from '../systemOne/intentRouting';
 
-export type TaskType = 'code' | 'planning' | 'search_retrieval' | 'conversational';
+export type TaskType =
+  | 'code'
+  | 'planning'
+  | 'os_control'
+  | 'private_notes'
+  | 'search_retrieval'
+  | 'conversational';
+
+export type ModelRouteTier = 'local_first' | 'cloud_boost';
+
+export interface TaskClassification {
+  taskType: TaskType;
+  recommendedRoute: ModelRouteTier;
+  suggestedProvider: string;
+  confidence: number;
+}
 
 export interface OrchestrationResult {
   content: string;
@@ -18,19 +32,57 @@ export interface OrchestrationResult {
   modelName: string;
   isLocal: boolean;
   taskType: TaskType;
+  recommendedRoute?: ModelRouteTier;
 }
 
 /**
  * TypeSafe System One Intent Classifier:
- * Evaluates user intent using discrete Choice questions with calibrated confidence.
+ * Connects directly to the Rust system_one native classifier via IPC,
+ * falling back to structured intent routing or local heuristics.
  */
-export async function classifyUserTaskSystemOne(prompt: string): Promise<TaskType> {
+export async function classifyUserTaskSystemOne(prompt: string): Promise<TaskClassification> {
+  // 1. First priority: Native Rust System One classifier via Tauri IPC
+  try {
+    const verdict = await ipcClassifyUserTask(prompt);
+    if (verdict && verdict.primary_intent) {
+      const taskType = verdict.primary_intent as TaskType;
+      const recommendedRoute = (verdict.recommended_route as ModelRouteTier) ||
+        (taskType === 'code' || taskType === 'planning' ? 'cloud_boost' : 'local_first');
+      return {
+        taskType,
+        recommendedRoute,
+        suggestedProvider: verdict.suggested_provider || (recommendedRoute === 'cloud_boost' ? 'claude' : 'ollama'),
+        confidence: verdict.confidence,
+      };
+    }
+  } catch {
+    // Non-Tauri / test environment fallback
+  }
+
+  // 2. Second priority: Structured System One engine
   try {
     const verdict = await routeUserIntent(prompt);
-    return verdict.taskType;
+    const taskType = verdict.taskType;
+    const isCloudBoost = taskType === 'code' || taskType === 'planning';
+    return {
+      taskType,
+      recommendedRoute: isCloudBoost ? 'cloud_boost' : 'local_first',
+      suggestedProvider: isCloudBoost ? 'claude' : 'ollama',
+      confidence: verdict.confidence,
+    };
   } catch {
-    return classifyUserTask(prompt);
+    // Deterministic offline fallback
   }
+
+  // 3. Deterministic regex / keyword baseline
+  const fallbackType = classifyUserTask(prompt);
+  const isCloudBoost = fallbackType === 'code' || fallbackType === 'planning';
+  return {
+    taskType: fallbackType,
+    recommendedRoute: isCloudBoost ? 'cloud_boost' : 'local_first',
+    suggestedProvider: isCloudBoost ? 'claude' : 'ollama',
+    confidence: 0.85,
+  };
 }
 
 /**
@@ -39,6 +91,43 @@ export async function classifyUserTaskSystemOne(prompt: string): Promise<TaskTyp
 export function classifyUserTask(prompt: string): TaskType {
   const lower = prompt.toLowerCase();
 
+  // OS Control & Desktop actions
+  if (
+    lower.includes('volume') ||
+    lower.includes('spotify') ||
+    lower.includes('music') ||
+    lower.includes('song') ||
+    lower.includes('track') ||
+    lower.includes('mute') ||
+    lower.includes('unmute') ||
+    lower.includes('brightness') ||
+    lower.includes('screenshot') ||
+    lower.includes('screen inspector') ||
+    lower.includes('launch ') ||
+    lower.includes('open app') ||
+    lower.includes('battery status') ||
+    lower.includes('system status')
+  ) {
+    return 'os_control';
+  }
+
+  // Private notes & Personal sensitive memory (Zero cloud exposure)
+  if (
+    lower.includes('private note') ||
+    lower.includes('save note') ||
+    lower.includes('note down') ||
+    lower.includes('diary') ||
+    lower.includes('journal') ||
+    lower.includes('secret') ||
+    lower.includes('confidential') ||
+    lower.includes('password') ||
+    lower.includes('remember this note') ||
+    lower.includes('personal note') ||
+    lower.includes('credential')
+  ) {
+    return 'private_notes';
+  }
+
   // Multi-step planning & agent execution
   if (
     lower.includes('plan') ||
@@ -46,7 +135,9 @@ export function classifyUserTask(prompt: string): TaskType {
     lower.includes('step-by-step') ||
     lower.includes('automate') ||
     lower.includes('workflow') ||
-    lower.includes('execute')
+    lower.includes('execute') ||
+    lower.includes('roadmap') ||
+    lower.includes('architect')
   ) {
     return 'planning';
   }
@@ -65,7 +156,9 @@ export function classifyUserTask(prompt: string): TaskType {
     lower.includes('shell') ||
     lower.includes('terminal') ||
     lower.includes('compile') ||
-    lower.includes('git')
+    lower.includes('git') ||
+    lower.includes('refactor') ||
+    lower.includes('algorithm')
   ) {
     return 'code';
   }
@@ -125,7 +218,8 @@ export async function orchestrateChat(
   options?: ChatOptions
 ): Promise<OrchestrationResult> {
   const latestMessage = messages[messages.length - 1]?.content || '';
-  const taskType = await classifyUserTaskSystemOne(latestMessage);
+  const classification = await classifyUserTaskSystemOne(latestMessage);
+  const { taskType, recommendedRoute } = classification;
   const keys = await getAvailableKeys();
   const settings = useSettingsStore.getState();
 
@@ -231,13 +325,14 @@ export async function orchestrateChat(
     candidates.push(...cloudCandidates, freeCloudCandidate, ...localCandidates);
   } else {
     // Intelligent Multi-Provider Model Router (Tier 3 Auto Mode)
-    // 1. Coding & Multi-Step Planning -> Cloud-boost for peak reasoning
-    if (taskType === 'code' || taskType === 'planning') {
+    if (recommendedRoute === 'cloud_boost') {
+      // 1. Coding & Multi-Step Planning -> Cloud-boost for peak reasoning with local fallback
       candidates.push(...cloudCandidates, freeCloudCandidate, ...localCandidates);
     } else {
-      // 2. Routine Conversational, OS Actions, & Search Retrieval -> Local-First if Ollama available, with cloud fallback
-      // If user has cloud keys but no local ollama running, candidates cascade gracefully
-      candidates.push(...cloudCandidates, freeCloudCandidate, ...localCandidates);
+      // 2. Routine Conversational, OS Actions, Private Notes, & Search Retrieval
+      // -> Strictly Local-First (Ollama qwen2.5:7b / llama3.1 / qwen2.5-coder)
+      // Zero API cost, private offline execution. If local Ollama is offline/uninstalled, smoothly cascades to cloud fallback.
+      candidates.push(...localCandidates, ...cloudCandidates, freeCloudCandidate);
     }
   }
 
@@ -264,6 +359,7 @@ export async function orchestrateChat(
         modelName: candidate.model || candidate.provider.name,
         isLocal: candidate.isLocal,
         taskType,
+        recommendedRoute,
       };
     } catch (err: unknown) {
       lastError = err instanceof Error ? err : new Error(String(err));

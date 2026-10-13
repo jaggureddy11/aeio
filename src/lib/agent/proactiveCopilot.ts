@@ -1,6 +1,6 @@
 import { getActiveWindow, ActiveWindowInfo } from '../ipc';
 
-export type NudgeCategory = 'error' | 'code' | 'git' | 'docs' | 'writing' | 'productivity';
+export type NudgeCategory = 'error' | 'code' | 'git' | 'docs' | 'writing' | 'productivity' | 'system';
 
 export interface ProactiveNudge {
   id: string;
@@ -235,6 +235,10 @@ class ProactiveCopilotManager {
   }
 
   public getActiveNudge(): ProactiveNudge | null {
+    return this.activeNudge;
+  }
+
+  public getCurrentNudge(): ProactiveNudge | null {
     return this.activeNudge;
   }
 

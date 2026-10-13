@@ -331,7 +331,9 @@ export interface SystemOneCommandSafetyVerdict {
 
 export interface SystemOneTaskIntentVerdict {
   prompt: string;
-  primary_intent: 'planning' | 'code' | 'search_retrieval' | 'conversational';
+  primary_intent: 'planning' | 'code' | 'os_control' | 'private_notes' | 'search_retrieval' | 'conversational';
+  recommended_route: 'local_first' | 'cloud_boost';
+  suggested_provider: 'ollama' | 'claude' | 'gemini' | 'openai';
   probabilities: Record<string, number>;
   confidence: number;
   suggested_system_prompt?: string | null;
@@ -444,6 +446,9 @@ export interface SystemStatusInfo {
   is_charging?: boolean | null;
   active_app?: string | null;
   dark_mode?: boolean | null;
+  disk_available_gb?: number | null;
+  disk_percent_used?: number | null;
+  memory_available_mb?: number | null;
 }
 
 export async function getSystemStatus(): Promise<SystemStatusInfo> {

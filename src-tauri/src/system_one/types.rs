@@ -108,7 +108,9 @@ pub struct CommandSafetyVerdict {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TaskIntentVerdict {
     pub prompt: String,
-    pub primary_intent: String, // "planning" | "code" | "search_retrieval" | "conversational"
+    pub primary_intent: String, // "planning" | "code" | "os_control" | "private_notes" | "search_retrieval" | "conversational"
+    pub recommended_route: String, // "local_first" | "cloud_boost"
+    pub suggested_provider: String, // "ollama" | "claude" | "gemini" | "openai"
     pub probabilities: HashMap<String, f64>,
     pub confidence: f64,
     pub suggested_system_prompt: Option<String>,

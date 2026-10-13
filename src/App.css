@@ -7757,6 +7757,22 @@ html, body, #root {
   border-radius: 3px;
 }
 
+.nudge-tag.system-tag {
+  color: #fbbf24;
+  background: rgba(251, 191, 36, 0.16);
+  border: 1px solid rgba(251, 191, 36, 0.35);
+}
+
+.dynamic-island-expanded-nudge.system-alert {
+  background: rgba(245, 158, 11, 0.08);
+  border-color: rgba(245, 158, 11, 0.3);
+}
+
+.system-alert-icon {
+  color: #fbbf24;
+  animation: pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
 .nudge-app {
   font-size: 10px;
   color: #9ca3af;

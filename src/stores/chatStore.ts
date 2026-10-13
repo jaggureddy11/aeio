@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { orchestrateChat, ProviderMessage, TaskType } from '../lib/providers';
+import { orchestrateChat, ProviderMessage, TaskType, ModelRouteTier } from '../lib/providers';
 import { useSettingsStore } from './settingsStore';
 import { useWorkspaceStore } from './workspaceStore';
 import {
@@ -90,6 +90,7 @@ export interface ProviderBadgeInfo {
   isLocal: boolean;
   isPrivacyProtected?: boolean;
   memoriesWithheld?: number;
+  recommendedRoute?: 'local_first' | 'cloud_boost';
 }
 
 export interface ProactiveNudge {
@@ -1682,6 +1683,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       modelName,
       isLocal,
       taskType: 'conversational' as TaskType,
+      recommendedRoute: 'local_first' as ModelRouteTier,
     };
 
     try {
@@ -1740,6 +1742,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         modelName: result.modelName,
         isLocal: result.isLocal,
         taskType: result.taskType,
+        recommendedRoute: result.recommendedRoute || 'local_first',
       };
 
       // Synchronously flush any pending streamed tokens immediately
@@ -1913,6 +1916,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         isLocal: orchestrationResult.isLocal,
         isPrivacyProtected: orchestrationResult.isLocal || memoriesWithheldCount > 0,
         memoriesWithheld: memoriesWithheldCount > 0 ? memoriesWithheldCount : undefined,
+        recommendedRoute: orchestrationResult.recommendedRoute,
       };
 
       get().updateMessageContent(

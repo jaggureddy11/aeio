@@ -2,7 +2,13 @@ import { choice } from './primitives';
 import { systemOneEngine } from './engine';
 import { ChoiceAnswer } from './types';
 
-export type TaskType = 'code' | 'planning' | 'search_retrieval' | 'conversational';
+export type TaskType =
+  | 'code'
+  | 'planning'
+  | 'os_control'
+  | 'private_notes'
+  | 'search_retrieval'
+  | 'conversational';
 
 export interface IntentRoutingResult {
   taskType: TaskType;
@@ -27,6 +33,10 @@ export async function routeUserIntent(
         'plan planning step-by-step workflow organize automate multi-step migration orchestration execute',
       code:
         'code coding script fix error bug compile typescript javascript python rust programming syntax terminal',
+      os_control:
+        'volume brightness spotify music song play pause mute unmute launch open close screenshot click scroll dock battery system',
+      private_notes:
+        'private note save note note down diary journal secret password credential personal',
       search_retrieval:
         'search find retrieve memory memories recall remember saved lookup document inspect files',
       conversational:

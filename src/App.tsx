@@ -17,6 +17,7 @@ import { BackgroundDock } from './components/chat/BackgroundDock';
 import { DynamicIslandNotchWindow } from './components/chat/DynamicIslandNotchWindow';
 import { useVoiceStore } from './stores/voiceStore';
 import { globalProactiveCopilot } from './lib/agent/proactiveCopilot';
+import { globalProactiveHeartbeat } from './lib/agent/proactiveHeartbeat';
 import './App.css';
 
 export const App: React.FC = () => {
@@ -211,11 +212,26 @@ export const App: React.FC = () => {
     };
   }, [setOverlayState]);
 
-  // Start Contextual Desktop Proactive Copilot (polls active window and suggests actions)
+  // Start Contextual Desktop Proactive Copilot & Background Heartbeat Daemon
   useEffect(() => {
     globalProactiveCopilot.start(4000);
+    globalProactiveHeartbeat.start(20000);
+
+    let unlistenHealth: (() => void) | undefined;
+    import('@tauri-apps/api/event')
+      .then(({ listen }) => {
+        listen('run-system-health-check', () => {
+          globalProactiveHeartbeat.checkNow(true).catch(() => {});
+        }).then((unsub) => {
+          unlistenHealth = unsub;
+        });
+      })
+      .catch(() => {});
+
     return () => {
       globalProactiveCopilot.stop();
+      globalProactiveHeartbeat.stop();
+      if (unlistenHealth) unlistenHealth();
     };
   }, []);
 

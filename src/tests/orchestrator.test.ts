@@ -28,6 +28,18 @@ describe('Backend AI Orchestrator', () => {
       expect(classifyUserTask('What do you remember about my preferences?')).toBe('search_retrieval');
     });
 
+    it('identifies os_control tasks', () => {
+      expect(classifyUserTask('Turn up volume to 80 percent')).toBe('os_control');
+      expect(classifyUserTask('Play some jazz music on Spotify')).toBe('os_control');
+      expect(classifyUserTask('Open Chrome and launch Terminal')).toBe('os_control');
+    });
+
+    it('identifies private_notes tasks', () => {
+      expect(classifyUserTask('Save a private note about my medical symptoms')).toBe('private_notes');
+      expect(classifyUserTask('Write a confidential journal entry')).toBe('private_notes');
+      expect(classifyUserTask('Store secret password reminders in my notes')).toBe('private_notes');
+    });
+
     it('defaults to conversational for general prompts', () => {
       expect(classifyUserTask('Hello there, how are you?')).toBe('conversational');
       expect(classifyUserTask('Explain the history of computing')).toBe('conversational');
@@ -64,6 +76,7 @@ describe('Backend AI Orchestrator', () => {
         expect(result.content).toBe('Orchestrated response from Gemini');
         expect(result.providerId).toBe('gemini');
         expect(result.isLocal).toBe(false);
+        expect(result.recommendedRoute).toBeDefined();
       } finally {
         globalThis.fetch = originalFetch;
       }

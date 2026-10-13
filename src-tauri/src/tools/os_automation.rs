@@ -712,15 +712,21 @@ pub struct SystemStatusInfo {
     pub is_charging: Option<bool>,
     pub active_app: Option<String>,
     pub dark_mode: Option<bool>,
+    pub disk_available_gb: Option<f64>,
+    pub disk_percent_used: Option<u8>,
+    pub memory_available_mb: Option<u64>,
 }
 
-/// Retrieves system status including battery percentage, charging state, frontmost app, and dark mode.
+/// Retrieves system status including battery percentage, charging state, frontmost app, dark mode, and disk space.
 pub fn get_system_status() -> Result<SystemStatusInfo, String> {
     let os_name = std::env::consts::OS.to_string();
     let mut battery_level: Option<u8> = None;
     let mut is_charging: Option<bool> = None;
     let mut active_app: Option<String> = None;
     let mut dark_mode: Option<bool> = None;
+    let mut disk_available_gb: Option<f64> = None;
+    let mut disk_percent_used: Option<u8> = None;
+    let mut memory_available_mb: Option<u64> = None;
 
     #[cfg(target_os = "macos")]
     {
@@ -768,6 +774,51 @@ pub fn get_system_status() -> Result<SystemStatusInfo, String> {
                 dark_mode = Some(val == "true");
             }
         }
+
+        // 4. Query Root Disk Usage via df -k /
+        if let Ok(output) = Command::new("df").args(["-k", "/"]).output() {
+            if output.status.success() {
+                let text = String::from_utf8_lossy(&output.stdout);
+                if let Some(line) = text.lines().nth(1) {
+                    let parts: Vec<&str> = line.split_whitespace().collect();
+                    if parts.len() >= 5 {
+                        if let Ok(avail_kb) = parts[3].parse::<f64>() {
+                            disk_available_gb = Some((avail_kb / 1024.0 / 1024.0 * 10.0).round() / 10.0);
+                        }
+                        let cap_str = parts[4].trim_end_matches('%');
+                        if let Ok(cap_pct) = cap_str.parse::<u8>() {
+                            disk_percent_used = Some(cap_pct);
+                        }
+                    }
+                }
+            }
+        }
+
+        // 5. Query Available Memory via vm_stat
+        if let Ok(output) = Command::new("vm_stat").output() {
+            if output.status.success() {
+                let text = String::from_utf8_lossy(&output.stdout);
+                let mut pages_free: u64 = 0;
+                let mut pages_inactive: u64 = 0;
+                for line in text.lines() {
+                    if line.starts_with("Pages free:") {
+                        let digits: String = line.chars().filter(|c| c.is_ascii_digit()).collect();
+                        if let Ok(val) = digits.parse::<u64>() {
+                            pages_free = val;
+                        }
+                    } else if line.starts_with("Pages inactive:") {
+                        let digits: String = line.chars().filter(|c| c.is_ascii_digit()).collect();
+                        if let Ok(val) = digits.parse::<u64>() {
+                            pages_inactive = val;
+                        }
+                    }
+                }
+                if pages_free + pages_inactive > 0 {
+                    let avail_bytes = (pages_free + pages_inactive) * 4096;
+                    memory_available_mb = Some(avail_bytes / 1024 / 1024);
+                }
+            }
+        }
     }
 
     #[cfg(target_os = "windows")]
@@ -776,6 +827,13 @@ pub fn get_system_status() -> Result<SystemStatusInfo, String> {
         if let Ok(output) = Command::new("powershell").args(["-NoProfile", "-NonInteractive", "-Command", ps_batt]).output() {
             if let Ok(val) = String::from_utf8_lossy(&output.stdout).trim().parse::<u8>() {
                 battery_level = Some(val);
+            }
+        }
+
+        let ps_disk = "Get-PSDrive -PSProvider FileSystem | Where-Object { $_.Root -like 'C:*' } | ForEach-Object { [math]::Round($_.Free/1GB, 1) }";
+        if let Ok(output) = Command::new("powershell").args(["-NoProfile", "-NonInteractive", "-Command", ps_disk]).output() {
+            if let Ok(val) = String::from_utf8_lossy(&output.stdout).trim().parse::<f64>() {
+                disk_available_gb = Some(val);
             }
         }
     }
@@ -787,6 +845,24 @@ pub fn get_system_status() -> Result<SystemStatusInfo, String> {
                 battery_level = Some(pct);
             }
         }
+
+        if let Ok(output) = Command::new("df").args(["-k", "/"]).output() {
+            if output.status.success() {
+                let text = String::from_utf8_lossy(&output.stdout);
+                if let Some(line) = text.lines().nth(1) {
+                    let parts: Vec<&str> = line.split_whitespace().collect();
+                    if parts.len() >= 5 {
+                        if let Ok(avail_kb) = parts[3].parse::<f64>() {
+                            disk_available_gb = Some((avail_kb / 1024.0 / 1024.0 * 10.0).round() / 10.0);
+                        }
+                        let cap_str = parts[4].trim_end_matches('%');
+                        if let Ok(cap_pct) = cap_str.parse::<u8>() {
+                            disk_percent_used = Some(cap_pct);
+                        }
+                    }
+                }
+            }
+        }
     }
 
     Ok(SystemStatusInfo {
@@ -795,6 +871,9 @@ pub fn get_system_status() -> Result<SystemStatusInfo, String> {
         is_charging,
         active_app,
         dark_mode,
+        disk_available_gb,
+        disk_percent_used,
+        memory_available_mb,
     })
 }
 
@@ -1093,6 +1172,9 @@ mod tests {
         assert!(res.is_ok());
         let status = res.unwrap();
         assert!(!status.os_name.is_empty());
+        if let Some(disk_gb) = status.disk_available_gb {
+            assert!(disk_gb >= 0.0);
+        }
     }
 
     #[test]

@@ -1,5 +1,5 @@
 use tauri::{
-    menu::{Menu, MenuItem},
+    menu::{Menu, MenuItem, PredefinedMenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     Emitter, Manager,
 };
@@ -65,11 +65,35 @@ pub fn run() {
             app.manage(memory_manager);
             app.manage(observability::ErrorLogger::new());
 
-            // Build Tray Menu items: Open Aeio, Settings, Quit
-            let open_i = MenuItem::with_id(app, "open", "Open Aeio", true, None::<&str>)?;
+            // Build Enhanced Tray Menu items: Quick Launcher & Desktop Controls
+            let title_i = MenuItem::with_id(app, "title", "Aeio Assistant — Active", false, None::<&str>)?;
+            let sep1 = PredefinedMenuItem::separator(app)?;
+            let open_i = MenuItem::with_id(app, "open", "Open Aeio (⌘⇧Space)", true, None::<&str>)?;
+            let voice_i = MenuItem::with_id(app, "voice", "Voice Assistant (⌘⇧V)", true, None::<&str>)?;
+            let inspect_i = MenuItem::with_id(app, "inspect", "Inspect Screen (⌘⇧O)", true, None::<&str>)?;
+            let notch_i = MenuItem::with_id(app, "toggle_notch", "Toggle Dynamic Island Notch", true, None::<&str>)?;
+            let sep2 = PredefinedMenuItem::separator(app)?;
+            let health_i = MenuItem::with_id(app, "health_check", "Run System Health Check", true, None::<&str>)?;
+            let sep3 = PredefinedMenuItem::separator(app)?;
             let settings_i = MenuItem::with_id(app, "settings", "Settings", true, None::<&str>)?;
-            let quit_i = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
-            let menu = Menu::with_items(app, &[&open_i, &settings_i, &quit_i])?;
+            let quit_i = MenuItem::with_id(app, "quit", "Quit Aeio", true, None::<&str>)?;
+
+            let menu = Menu::with_items(
+                app,
+                &[
+                    &title_i,
+                    &sep1,
+                    &open_i,
+                    &voice_i,
+                    &inspect_i,
+                    &notch_i,
+                    &sep2,
+                    &health_i,
+                    &sep3,
+                    &settings_i,
+                    &quit_i,
+                ],
+            )?;
 
             // Build Tray Icon (Event-driven OS callback with zero idle polling)
             let mut tray_builder = TrayIconBuilder::new()
@@ -83,6 +107,20 @@ pub fn run() {
                                 let _ = window.show();
                                 let _ = window.set_focus();
                             }
+                        }
+                        "voice" => {
+                            let _ = crate::tools::notch::show_notch_window(app);
+                            let _ = app.emit("open-voice-hud", ());
+                        }
+                        "inspect" => {
+                            let _ = app.emit("inspect-screen", ());
+                        }
+                        "toggle_notch" => {
+                            let _ = crate::tools::notch::toggle_notch_window(app);
+                        }
+                        "health_check" => {
+                            let _ = crate::tools::notch::show_notch_window(app);
+                            let _ = app.emit("run-system-health-check", ());
                         }
                         "settings" => {
                             if let Some(window) = app.get_webview_window("main") {

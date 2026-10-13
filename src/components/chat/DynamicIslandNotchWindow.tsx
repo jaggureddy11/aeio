@@ -13,9 +13,11 @@ import {
   Lightbulb,
   Play,
   Eye,
+  Activity,
 } from 'lucide-react';
 import { globalVoiceEngine, VoiceState } from '../../lib/voice/voiceEngine';
 import { globalProactiveCopilot, ProactiveNudge } from '../../lib/agent/proactiveCopilot';
+import { globalProactiveHeartbeat } from '../../lib/agent/proactiveHeartbeat';
 import { inspectActiveScreen } from '../../lib/vision/screenInspector';
 import { useVoiceStore } from '../../stores/voiceStore';
 import { useChatStore } from '../../stores/chatStore';
@@ -150,8 +152,9 @@ export const DynamicIslandNotchWindow: React.FC = () => {
       }
     });
 
-    // Listen for cross-window step updates
+    // Listen for cross-window step updates & system health checks
     let unlistenStep: (() => void) | undefined;
+    let unlistenHealth: (() => void) | undefined;
     import('@tauri-apps/api/event')
       .then(({ listen }) => {
         listen<{ stepText: string }>('autonomous-step-update', (event) => {
@@ -161,6 +164,33 @@ export const DynamicIslandNotchWindow: React.FC = () => {
         }).then((unsub) => {
           unlistenStep = unsub;
         });
+
+        listen('run-system-health-check', async () => {
+          setFeedback('Running system health check...');
+          playSystemEarcon('processing').catch(() => {});
+          try {
+            const st = await globalProactiveHeartbeat.checkNow(true);
+            if (st) {
+              const bat =
+                st.battery_level !== undefined && st.battery_level !== null
+                  ? `${st.battery_level}% bat`
+                  : 'AC power';
+              const disk =
+                st.disk_available_gb !== undefined && st.disk_available_gb !== null
+                  ? `${st.disk_available_gb}GB free`
+                  : 'disk ok';
+              setFeedback(`Health: ${bat}, ${disk}`);
+              playSystemEarcon('success').catch(() => {});
+            } else {
+              setFeedback('Health check completed');
+            }
+          } catch {
+            setFeedback('Health check complete');
+          }
+          setTimeout(() => setFeedback(null), 4000);
+        }).then((unsub) => {
+          unlistenHealth = unsub;
+        });
       })
       .catch(() => {});
 
@@ -169,6 +199,7 @@ export const DynamicIslandNotchWindow: React.FC = () => {
       unsubState();
       unsubTranscript();
       if (unlistenStep) unlistenStep();
+      if (unlistenHealth) unlistenHealth();
     };
   }, [sendMessage]);
 
@@ -215,7 +246,12 @@ export const DynamicIslandNotchWindow: React.FC = () => {
               <span className="dynamic-island-status-text transcript">"{transcript}"</span>
             ) : nudge ? (
               <span className="dynamic-island-status-text proactive-nudge" title={nudge.detail}>
-                <Lightbulb size={12} className="nudge-icon" /> {nudge.title}
+                {nudge.category === 'system' ? (
+                  <Activity size={12} className="nudge-icon system-alert-icon" />
+                ) : (
+                  <Lightbulb size={12} className="nudge-icon" />
+                )}
+                {' '}{nudge.title}
               </span>
             ) : (
               <span className="dynamic-island-status-text idle">
@@ -289,9 +325,9 @@ export const DynamicIslandNotchWindow: React.FC = () => {
           <div className="dynamic-island-expanded-drawer">
             <div className="dynamic-island-expanded-content">
               {nudge && (
-                <div className="dynamic-island-expanded-nudge">
+                <div className={`dynamic-island-expanded-nudge ${nudge.category === 'system' ? 'system-alert' : ''}`}>
                   <div className="nudge-header">
-                    <span className="nudge-tag">{nudge.category}</span>
+                    <span className={`nudge-tag ${nudge.category === 'system' ? 'system-tag' : ''}`}>{nudge.category}</span>
                     <span className="nudge-app">{nudge.appName}</span>
                   </div>
                   <p className="nudge-detail">{nudge.detail}</p>
