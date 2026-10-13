@@ -374,5 +374,172 @@ export async function systemOneEvaluate(request: any): Promise<any> {
   return invoke<any>('system_one_evaluate', { request });
 }
 
+// Voice & OS Automation Interfaces (JARVIS Desktop Engine)
+export interface AutomationResult {
+  success: boolean;
+  message: string;
+  action_type: string;
+  payload?: string | null;
+}
 
+export interface VolumeStatus {
+  volume: number;
+  is_muted: boolean;
+}
 
+export async function setSystemVolume(level: number): Promise<AutomationResult> {
+  return invoke<AutomationResult>('set_system_volume', { level: Math.round(level) });
+}
+
+export async function getSystemVolume(): Promise<VolumeStatus> {
+  return invoke<VolumeStatus>('get_system_volume');
+}
+
+export async function setSystemMute(mute: boolean): Promise<AutomationResult> {
+  return invoke<AutomationResult>('set_system_mute', { mute });
+}
+
+export async function playSpotify(query: string): Promise<AutomationResult> {
+  return invoke<AutomationResult>('play_spotify', { query });
+}
+
+export async function mediaControl(action: string): Promise<AutomationResult> {
+  return invoke<AutomationResult>('media_control', { action });
+}
+
+export async function searchWebPlatform(query: string, platform: string = 'google'): Promise<AutomationResult> {
+  return invoke<AutomationResult>('search_web_platform', { query, platform });
+}
+
+export async function lockScreen(): Promise<AutomationResult> {
+  return invoke<AutomationResult>('lock_screen');
+}
+
+export async function injectTextToActiveApp(text: string): Promise<AutomationResult> {
+  return invoke<AutomationResult>('inject_text_to_active_app', { text });
+}
+
+export async function captureSelectedTextFromActiveApp(): Promise<string> {
+  return invoke<string>('capture_selected_text_from_active_app');
+}
+
+export async function simulateKeyPress(key: string): Promise<AutomationResult> {
+  return invoke<AutomationResult>('simulate_key_press', { key });
+}
+
+export async function simulateScroll(
+  direction: 'up' | 'down' | 'left' | 'right',
+  amount?: number
+): Promise<AutomationResult> {
+  return invoke<AutomationResult>('simulate_scroll', { direction, amount });
+}
+
+export async function openApp(name: string): Promise<AutomationResult> {
+  return invoke<AutomationResult>('open_app', { name });
+}
+
+export interface SystemStatusInfo {
+  os_name: string;
+  battery_level?: number | null;
+  is_charging?: boolean | null;
+  active_app?: string | null;
+  dark_mode?: boolean | null;
+}
+
+export async function getSystemStatus(): Promise<SystemStatusInfo> {
+  return invoke<SystemStatusInfo>('get_system_status');
+}
+
+export async function sendSystemNotification(title: string, message: string): Promise<AutomationResult> {
+  return invoke<AutomationResult>('send_system_notification', { title, message });
+}
+
+export async function listRunningApps(): Promise<string[]> {
+  return invoke<string[]>('list_running_apps');
+}
+
+export async function focusApp(name: string): Promise<AutomationResult> {
+  return invoke<AutomationResult>('focus_app', { name });
+}
+
+export async function toggleDarkMode(): Promise<AutomationResult> {
+  return invoke<AutomationResult>('toggle_dark_mode');
+}
+
+export async function captureScreen(outputPath: string): Promise<string> {
+  return invoke<string>('capture_screen', { outputPath });
+}
+
+export interface ScreenData {
+  filePath: string;
+  base64: string;
+  width: number;
+  height: number;
+}
+
+export async function captureScreenData(): Promise<ScreenData> {
+  return invoke<ScreenData>('capture_screen_data');
+}
+
+export interface VoiceProfile {
+  name: string;
+  locale: string;
+  description: string;
+}
+
+export interface VoiceOutputResult {
+  success: boolean;
+  message: string;
+  voiceUsed: string;
+}
+
+export async function speakText(text: string, voice?: string, rate?: number): Promise<VoiceOutputResult> {
+  return invoke<VoiceOutputResult>('speak_text', { text, voice: voice ?? null, rate: rate ?? null });
+}
+
+export async function stopSpeaking(): Promise<void> {
+  return invoke<void>('stop_speaking');
+}
+
+export async function playSystemEarcon(kind: 'wake' | 'success' | 'error' | 'processing'): Promise<void> {
+  return invoke<void>('play_system_earcon', { kind });
+}
+
+export async function listSystemVoices(): Promise<VoiceProfile[]> {
+  return invoke<VoiceProfile[]>('list_system_voices');
+}
+
+export interface TranscriptionResult {
+  success: boolean;
+  text: string;
+  language: string;
+  durationSeconds: number;
+  confidence: number;
+  error?: string;
+}
+
+export interface GlobalHotkeyStatus {
+  hotkey: string;
+  isRegistered: boolean;
+  description: string;
+}
+
+export async function transcribeAudioFile(filePath: string, model?: string): Promise<TranscriptionResult> {
+  return invoke<TranscriptionResult>('transcribe_audio_file', { filePath, model: model ?? null });
+}
+
+export async function transcribeAudioBuffer(audioBase64: string, format?: string): Promise<TranscriptionResult> {
+  return invoke<TranscriptionResult>('transcribe_audio_buffer', { audioBase64, format: format ?? null });
+}
+
+export async function getRegisteredHotkeys(): Promise<GlobalHotkeyStatus[]> {
+  return invoke<GlobalHotkeyStatus[]>('get_registered_hotkeys');
+}
+
+export async function registerGlobalHotkey(hotkey: string): Promise<boolean> {
+  return invoke<boolean>('register_global_hotkey', { hotkey });
+}
+
+export async function unregisterGlobalHotkey(hotkey: string): Promise<boolean> {
+  return invoke<boolean>('unregister_global_hotkey', { hotkey });
+}

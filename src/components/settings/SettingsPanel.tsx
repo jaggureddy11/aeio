@@ -28,8 +28,10 @@ import {
   ShieldAlert,
   Ban,
   Eye,
+  Server,
 } from 'lucide-react';
 import { VisualAuditLogViewer } from '../safety/VisualAuditLogViewer';
+import { McpServerPanel } from './McpServerPanel';
 
 interface Props {
   isOpen?: boolean;
@@ -69,7 +71,7 @@ export const SettingsPanel: React.FC<Props> = ({ isOpen, onClose, onOpenOnboardi
     setGroundingModelType,
   } = useSettingsStore();
 
-  const [activeSection, setActiveSection] = useState<'providers' | 'memory' | 'privacy' | 'shortcuts' | 'computerControl'>('providers');
+  const [activeSection, setActiveSection] = useState<'providers' | 'memory' | 'privacy' | 'shortcuts' | 'computerControl' | 'mcp'>('providers');
   const [newAppInput, setNewAppInput] = useState('');
   const [allowlistError, setAllowlistError] = useState<string | null>(null);
   const [pendingBrowserBundle, setPendingBrowserBundle] = useState<string | null>(null);
@@ -446,6 +448,16 @@ export const SettingsPanel: React.FC<Props> = ({ isOpen, onClose, onOpenOnboardi
         >
           <ShieldAlert size={13} aria-hidden="true" />
           <span>Computer Control</span>
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={activeSection === 'mcp'}
+          className={`settings-nav-tab ${activeSection === 'mcp' ? 'active' : ''}`}
+          onClick={() => setActiveSection('mcp')}
+        >
+          <Server size={13} aria-hidden="true" />
+          <span>MCP Tools</span>
         </button>
       </div>
 
@@ -1896,6 +1908,12 @@ export const SettingsPanel: React.FC<Props> = ({ isOpen, onClose, onOpenOnboardi
                 </div>
               </div>
             </div>
+          </div>
+        )}
+
+        {activeSection === 'mcp' && (
+          <div className="settings-section" role="tabpanel" aria-label="Model Context Protocol Tools">
+            <McpServerPanel />
           </div>
         )}
       </div>

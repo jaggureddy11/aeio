@@ -68,5 +68,116 @@ describe('Backend AI Orchestrator', () => {
         globalThis.fetch = originalFetch;
       }
     });
+
+    it('prioritizes local Ollama when activeProvider is set to ollama', async () => {
+      const { useSettingsStore } = await import('../stores/settingsStore');
+      useSettingsStore.setState({ activeProvider: 'ollama', ollamaModel: 'qwen2.5:7b' });
+
+      const originalFetch = globalThis.fetch;
+      globalThis.fetch = vi.fn().mockImplementation(async (url: string) => {
+        if (url.includes('11434')) {
+          return {
+            ok: true,
+            json: async () => ({
+              message: { content: 'Local response from Ollama' },
+            }),
+          } as any;
+        }
+        throw new Error('Should not reach cloud');
+      });
+
+      try {
+        const result = await orchestrateChat([
+          { role: 'user', content: 'Organize my daily task plan' },
+        ]);
+
+        expect(result.isLocal).toBe(true);
+        expect(result.content).toBe('Local response from Ollama');
+      } finally {
+        globalThis.fetch = originalFetch;
+        useSettingsStore.setState({ activeProvider: 'aeio-free' });
+      }
+    });
+
+    it('strictly confines execution to local providers when neverSendMemoriesToCloud is enabled', async () => {
+      const { useSettingsStore } = await import('../stores/settingsStore');
+      useSettingsStore.setState({ neverSendMemoriesToCloud: true, ollamaModel: 'llama3.1' });
+
+      const originalFetch = globalThis.fetch;
+      let requestedLocal = false;
+      globalThis.fetch = vi.fn().mockImplementation(async (url: string) => {
+        if (url.includes('11434')) {
+          requestedLocal = true;
+          return {
+            ok: true,
+            json: async () => ({
+              message: { content: 'Private local response' },
+            }),
+          } as any;
+        }
+        throw new Error('Privacy violation: cloud URL reached!');
+      });
+
+      try {
+        const result = await orchestrateChat([
+          { role: 'user', content: 'Remember my private SSN and account details' },
+        ]);
+
+        expect(requestedLocal).toBe(true);
+        expect(result.isLocal).toBe(true);
+        expect(result.content).toBe('Private local response');
+      } finally {
+        globalThis.fetch = originalFetch;
+        useSettingsStore.setState({ neverSendMemoriesToCloud: false });
+      }
+    });
+
+    it('gracefully fails over to secondary candidate if primary candidate throws', async () => {
+      vi.mocked(ipc.getApiKey).mockImplementation(async (target: string) => {
+        if (target === 'gemini') return 'test_gemini_key';
+        return '';
+      });
+
+      const { useSettingsStore } = await import('../stores/settingsStore');
+      useSettingsStore.setState({ activeProvider: 'aeio-free' });
+
+      const originalFetch = globalThis.fetch;
+      globalThis.fetch = vi.fn().mockImplementation(async (url: string) => {
+        // Gemini fails (e.g. rate limit HTTP 429)
+        if (url.includes('generativelanguage.googleapis.com')) {
+          return {
+            ok: false,
+            status: 429,
+            text: async () => 'Rate limit exceeded',
+          } as any;
+        }
+        // Fallback to Free proxy
+        if (url.includes('aeio') || url.includes('/v1/chat/completions') || url.includes('/api/')) {
+          return {
+            ok: true,
+            json: async () => ({
+              choices: [{ message: { content: 'Resilient fallback response' } }],
+            }),
+          } as any;
+        }
+        return {
+          ok: true,
+          json: async () => ({
+            message: { content: 'Fallback response' },
+          }),
+        } as any;
+      });
+
+      try {
+        const result = await orchestrateChat([
+          { role: 'user', content: 'Tell me a joke' },
+        ]);
+
+        expect(result.content).toBeDefined();
+        expect(result.content.length).toBeGreaterThan(0);
+      } finally {
+        globalThis.fetch = originalFetch;
+      }
+    });
   });
 });

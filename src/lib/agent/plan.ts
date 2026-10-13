@@ -131,6 +131,34 @@ export function normalizeToolName(name: string): string {
     lower === 'desktop_action' ||
     lower === 'gui'
   ) return 'gui_action';
+  if (lower === 'play_spotify' || lower === 'spotify' || lower === 'play_music' || lower === 'play_song') return 'play_spotify';
+  if (lower === 'set_volume' || lower === 'volume' || lower === 'set_system_volume') return 'set_system_volume';
+  if (lower === 'get_volume' || lower === 'get_system_volume') return 'get_system_volume';
+  if (lower === 'mute' || lower === 'unmute' || lower === 'set_mute' || lower === 'set_system_mute') return 'set_system_mute';
+  if (lower === 'media_control' || lower === 'media' || lower === 'playback' || lower === 'pause' || lower === 'play') return 'media_control';
+  if (lower === 'search_web' || lower === 'youtube_search' || lower === 'youtube' || lower === 'google_search') return 'search_web';
+  if (lower === 'lock_screen' || lower === 'lock') return 'lock_screen';
+  if (lower === 'math_evaluate' || lower === 'calculate' || lower === 'eval_math' || lower === 'calc') return 'math_evaluate';
+  if (lower === 'math_solve' || lower === 'solve_equation' || lower === 'solve_math') return 'math_solve';
+  if (lower === 'ui_command' || lower === 'voice_ui' || lower === 'shortcut') return 'ui_command';
+  if (lower === 'open_app' || lower === 'launch_app') return 'open_app';
+  if (lower === 'simulate_key_press' || lower === 'key_press' || lower === 'press_key') return 'simulate_key_press';
+  if (lower === 'simulate_scroll' || lower === 'scroll_page') return 'simulate_scroll';
+  if (lower === 'inject_text' || lower === 'type_text') return 'inject_text';
+  if (lower === 'browse_page' || lower === 'browse' || lower === 'web_browse' || lower === 'read_webpage') return 'browse_page';
+  if (lower === 'extract_links' || lower === 'get_links' || lower === 'page_links') return 'extract_links';
+  if (lower === 'get_system_status' || lower === 'system_status' || lower === 'battery' || lower === 'battery_status' || lower === 'battery_level') return 'get_system_status';
+  if (lower === 'send_notification' || lower === 'notify' || lower === 'notification' || lower === 'display_notification') return 'send_notification';
+  if (lower === 'list_running_apps' || lower === 'running_apps' || lower === 'list_apps' || lower === 'open_apps') return 'list_running_apps';
+  if (lower === 'focus_app' || lower === 'activate_app' || lower === 'switch_to_app' || lower === 'bring_to_front') return 'focus_app';
+  if (lower === 'toggle_dark_mode' || lower === 'dark_mode' || lower === 'toggle_theme' || lower === 'toggle_appearance') return 'toggle_dark_mode';
+  if (lower === 'take_screenshot' || lower === 'capture_screen' || lower === 'screenshot' || lower === 'screen_capture') return 'take_screenshot';
+  if (lower === 'gui_click' || lower === 'click' || lower === 'mouse_click') return 'gui_click';
+  if (lower === 'gui_type' || lower === 'type' || lower === 'type_text') return 'gui_type';
+  if (lower === 'gui_key_combo' || lower === 'key_combo' || lower === 'press_key' || lower === 'hotkey') return 'gui_key_combo';
+  if (lower === 'gui_scroll' || lower === 'scroll' || lower === 'mouse_scroll') return 'gui_scroll';
+  if (lower === 'gui_drag' || lower === 'drag' || lower === 'mouse_drag') return 'gui_drag';
+  if (lower === 'gui_inspect_screen' || lower === 'inspect_screen' || lower === 'look_at_screen') return 'gui_inspect_screen';
   return lower;
 }
 

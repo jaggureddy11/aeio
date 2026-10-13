@@ -24,7 +24,21 @@ import {
   classifyUserTask,
   rerankMemories,
   SystemOneTaskIntentVerdict,
+  setSystemVolume,
+  getSystemVolume,
+  setSystemMute,
+  playSpotify,
+  mediaControl,
+  searchWebPlatform,
+  lockScreen,
+  simulateKeyPress,
+  simulateScroll,
+  openApp,
+  injectTextToActiveApp,
 } from '../lib/ipc';
+import { evaluateMath, solveEquation, solveSystem } from '../lib/agent/tools/mathTool';
+import { browsePage, extractPageLinks } from '../lib/agent/tools/browserTool';
+import { executeAgentTool } from '../lib/agent/toolRegistry';
 import {
   ExecutionPlan,
   parsePlanFromResponse,
@@ -678,8 +692,103 @@ export const useChatStore = create<ChatState>((set, get) => ({
           }
           break;
         }
-        default:
-          throw new Error(`Unknown tool: ${execution.toolName}`);
+        case 'set_system_volume': {
+          const level = typeof execution.args.level === 'number' ? execution.args.level : (typeof execution.args.volume === 'number' ? execution.args.volume : 50);
+          result = await setSystemVolume(level);
+          break;
+        }
+        case 'get_system_volume': {
+          result = await getSystemVolume();
+          break;
+        }
+        case 'set_system_mute': {
+          const mute = typeof execution.args.mute === 'boolean' ? execution.args.mute : true;
+          result = await setSystemMute(mute);
+          break;
+        }
+        case 'play_spotify': {
+          const query = execution.args.query || execution.args.song || execution.args.track || '';
+          result = await playSpotify(query);
+          break;
+        }
+        case 'media_control': {
+          const action = execution.args.action || 'playpause';
+          result = await mediaControl(action);
+          break;
+        }
+        case 'search_web': {
+          const query = execution.args.query || execution.args.search || '';
+          const platform = execution.args.platform || 'google';
+          result = await searchWebPlatform(query, platform);
+          break;
+        }
+        case 'lock_screen': {
+          result = await lockScreen();
+          break;
+        }
+        case 'open_app': {
+          const appName = execution.args.name || execution.args.app || execution.args.appName || '';
+          result = await openApp(appName);
+          break;
+        }
+        case 'simulate_key_press': {
+          const key = execution.args.key || 'enter';
+          result = await simulateKeyPress(key);
+          break;
+        }
+        case 'simulate_scroll': {
+          const direction = execution.args.direction || 'down';
+          const amount = execution.args.amount || 6;
+          result = await simulateScroll(direction, amount);
+          break;
+        }
+        case 'inject_text': {
+          const text = execution.args.text || '';
+          result = await injectTextToActiveApp(text);
+          break;
+        }
+        case 'math_evaluate': {
+          const expr = execution.args.expression || execution.args.expr || '';
+          result = evaluateMath(expr, { angle: execution.args.angle });
+          break;
+        }
+        case 'math_solve': {
+          if (Array.isArray(execution.args.equations) && execution.args.equations.length > 0) {
+            result = solveSystem(execution.args.equations);
+          } else {
+            const eq = execution.args.equation || execution.args.eq || '';
+            result = solveEquation(eq);
+          }
+          break;
+        }
+        case 'ui_command': {
+          const action = execution.args.action || 'key';
+          if (action === 'key') {
+            result = await simulateKeyPress(execution.args.key || 'enter');
+          } else if (action === 'scroll') {
+            result = await simulateScroll(execution.args.direction || 'down', execution.args.amount || 6);
+          } else if (action === 'open_app') {
+            result = await openApp(execution.args.app || execution.args.appName || '');
+          } else {
+            throw new Error(`Unknown UI command action: ${action}`);
+          }
+          break;
+        }
+        case 'browse_page': {
+          const url = execution.args.url || '';
+          result = await browsePage(url);
+          break;
+        }
+        case 'extract_links': {
+          const url = execution.args.url || '';
+          const sameDomainOnly = Boolean(execution.args.sameDomainOnly ?? execution.args.same_domain_only);
+          result = await extractPageLinks(url, sameDomainOnly);
+          break;
+        }
+        default: {
+          result = await executeAgentTool(execution.toolName, execution.args);
+          break;
+        }
       }
 
       // If user enabled always allow and it's NOT destructive, add to session cache
@@ -1091,8 +1200,44 @@ export const useChatStore = create<ChatState>((set, get) => ({
             }
             break;
           }
-          default:
-            throw new Error(`Unknown tool: ${step.toolName}`);
+          case 'set_system_volume': {
+            const level = typeof step.args.level === 'number' ? step.args.level : (typeof step.args.volume === 'number' ? step.args.volume : 50);
+            stepResult = await setSystemVolume(level);
+            break;
+          }
+          case 'get_system_volume': {
+            stepResult = await getSystemVolume();
+            break;
+          }
+          case 'set_system_mute': {
+            const mute = typeof step.args.mute === 'boolean' ? step.args.mute : true;
+            stepResult = await setSystemMute(mute);
+            break;
+          }
+          case 'play_spotify': {
+            const query = step.args.query || step.args.song || step.args.track || '';
+            stepResult = await playSpotify(query);
+            break;
+          }
+          case 'media_control': {
+            const action = step.args.action || 'playpause';
+            stepResult = await mediaControl(action);
+            break;
+          }
+          case 'search_web': {
+            const query = step.args.query || step.args.search || '';
+            const platform = step.args.platform || 'google';
+            stepResult = await searchWebPlatform(query, platform);
+            break;
+          }
+          case 'lock_screen': {
+            stepResult = await lockScreen();
+            break;
+          }
+          default: {
+            stepResult = await executeAgentTool(step.toolName, step.args);
+            break;
+          }
         }
       } catch (err: unknown) {
         isError = true;
@@ -1387,10 +1532,22 @@ export const useChatStore = create<ChatState>((set, get) => ({
       '   - search_files: Search directory for files matching query. Arguments: {"dir": ".", "query": "..."}\n' +
       '   - list_directory: List files and folders in directory. Arguments: {"dir": "."}\n' +
       '   - fetch_url: Fetch and read URL content (HTTP/HTTPS web pages, API JSON, or raw documentation). Arguments: {"url": "..."}\n' +
+      '   - browse_page: Scrape and parse any webpage into clean Markdown with title and metadata. Arguments: {"url": "..."}\n' +
+      '   - extract_links: Extract and filter navigation/resource links from webpage. Arguments: {"url": "...", "sameDomainOnly": true}\n' +
       '   - search_memory: Query stored user preferences, facts, project context. Arguments: {"query": "...", "limit": 5}\n' +
       '   - open_target: Open file, directory, application, or URL with default OS handler. Arguments: {"target": "..."}\n' +
       '   - read_clipboard: Inspect clipboard text. Arguments: {}\n' +
       '   - write_clipboard: Copy text to clipboard. Arguments: {"text": "..."}\n' +
+      '   - open_app: Launch or focus desktop applications by name. Arguments: {"name": "..."}\n' +
+      '   - simulate_key_press: Press keys (enter, escape, tab, space, backspace, up, down). Arguments: {"key": "enter"}\n' +
+      '   - simulate_scroll: Scroll active window up or down. Arguments: {"direction": "up"|"down", "amount": 6}\n' +
+      '   - inject_text: Type or paste text into active focused application. Arguments: {"text": "..."}\n' +
+      '   - math_evaluate: Evaluate accurate arithmetic and mathematical expressions. Arguments: {"expression": "..."}\n' +
+      '   - math_solve: Solve algebraic equations or linear systems. Arguments: {"equation": "..."}\n' +
+      '   - set_system_volume: Set master system volume (0-100). Arguments: {"level": 50}\n' +
+      '   - play_spotify: Play track or artist in Spotify. Arguments: {"query": "..."}\n' +
+      '   - media_control: Play/pause/next/previous media playback. Arguments: {"action": "playpause"|"next"|"previous"}\n' +
+      '   - lock_screen: Lock desktop screen immediately. Arguments: {}\n' +
       (useSettingsStore.getState().computerControlEnabled
         ? '   - gui_action: Execute desktop GUI action on allowlisted application. Arguments: {"intent": {"targetAppBundleId": "...", "naturalLanguageIntent": "...", "targetElementDescription": "...", "intendedStateChange": "..."}, "action": {"actionType": "click"|"type"|"keyCombo"|"scroll"|"drag", ...}}\n'
         : '') +

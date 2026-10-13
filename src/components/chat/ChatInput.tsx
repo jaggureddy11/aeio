@@ -1,7 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { ArrowUp, Loader2, ShieldCheck, AlertTriangle } from 'lucide-react';
+import { ArrowUp, Loader2, ShieldCheck, AlertTriangle, Mic } from 'lucide-react';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { useWorkspaceStore } from '../../stores/workspaceStore';
+import { useVoiceStore } from '../../stores/voiceStore';
 import { searchMemories } from '../../lib/ipc';
 
 interface Props {
@@ -15,6 +16,7 @@ export const ChatInput: React.FC<Props> = ({ onSend, isLoading }) => {
   const [matchedMemoriesCount, setMatchedMemoriesCount] = useState(0);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
+  const { isVoiceHUDOpen, toggleVoiceHUD } = useVoiceStore();
   const { activeProvider, neverSendMemoriesToCloud } = useSettingsStore();
   const activeWs = useWorkspaceStore((state) => state.activeWorkspace);
   const wsId = activeWs?.id || 'default';
@@ -141,6 +143,16 @@ export const ChatInput: React.FC<Props> = ({ onSend, isLoading }) => {
           <div className="composer-toolbar-right">
             <button
               type="button"
+              className={`claude-voice-btn ${isVoiceHUDOpen ? 'active' : ''}`}
+              onClick={() => toggleVoiceHUD()}
+              title="Voice Automation / JARVIS Mode (Cmd+Shift+V)"
+              aria-label="Toggle voice automation"
+            >
+              <Mic size={16} />
+            </button>
+
+            <button
+              type="button"
               className={`claude-send-btn ${hasContent && !isLoading ? 'active' : ''}`}
               onClick={handleSend}
               disabled={!hasContent || isLoading}
@@ -157,7 +169,7 @@ export const ChatInput: React.FC<Props> = ({ onSend, isLoading }) => {
       </div>
 
       <div className="claude-composer-subtext">
-        <span>Aeio runs locally with persistent long-term memory. Return to send · Shift+Return for new line</span>
+        <span>Aeio runs locally with persistent long-term memory. Return to send · Cmd+Shift+V for voice</span>
       </div>
     </div>
   );

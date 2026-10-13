@@ -363,6 +363,11 @@ pub fn capture_screen(output_path: String) -> Result<String, String> {
         .map(|p| p.to_string_lossy().to_string())
 }
 
+#[tauri::command]
+pub fn capture_screen_data() -> Result<crate::tools::os_automation::ScreenData, String> {
+    crate::tools::os_automation::capture_screen_data()
+}
+
 // Visual Audit Trail Commands (Phase 6: Full Visual Audit Trail & Immutable Receipts)
 #[tauri::command]
 pub fn execute_computer_action_with_audit(
@@ -439,4 +444,158 @@ pub fn rerank_memories(
     Ok(crate::system_one::rerank_memories(&query, raw_results))
 }
 
+// Voice & OS Automation Commands (Phase 1 & 3: JARVIS-style OS controls)
+#[tauri::command]
+pub fn set_system_volume(level: u8) -> Result<crate::tools::AutomationResult, String> {
+    crate::tools::set_system_volume(level)
+}
 
+#[tauri::command]
+pub fn get_system_volume() -> Result<crate::tools::VolumeStatus, String> {
+    crate::tools::get_system_volume()
+}
+
+#[tauri::command]
+pub fn set_system_mute(mute: bool) -> Result<crate::tools::AutomationResult, String> {
+    crate::tools::set_system_mute(mute)
+}
+
+#[tauri::command]
+pub fn play_spotify(query: String) -> Result<crate::tools::AutomationResult, String> {
+    crate::tools::play_spotify(&query)
+}
+
+#[tauri::command]
+pub fn media_control(action: String) -> Result<crate::tools::AutomationResult, String> {
+    crate::tools::media_control(&action)
+}
+
+#[tauri::command]
+pub fn search_web_platform(query: String, platform: String) -> Result<crate::tools::AutomationResult, String> {
+    crate::tools::search_web_platform(&query, &platform)
+}
+
+#[tauri::command]
+pub fn lock_screen() -> Result<crate::tools::AutomationResult, String> {
+    crate::tools::lock_screen()
+}
+
+#[tauri::command]
+pub fn inject_text_to_active_app(text: String) -> Result<crate::tools::AutomationResult, String> {
+    crate::tools::inject_text_to_active_app(&text)
+}
+
+#[tauri::command]
+pub fn capture_selected_text_from_active_app() -> Result<String, String> {
+    crate::tools::capture_selected_text_from_active_app()
+}
+
+#[tauri::command]
+pub fn simulate_key_press(key: String) -> Result<crate::tools::AutomationResult, String> {
+    crate::tools::simulate_key_press(&key)
+}
+
+#[tauri::command]
+pub fn simulate_scroll(direction: String, amount: Option<u32>) -> Result<crate::tools::AutomationResult, String> {
+    crate::tools::simulate_scroll(&direction, amount.unwrap_or(6))
+}
+
+#[tauri::command]
+pub fn open_app(name: String) -> Result<crate::tools::AutomationResult, String> {
+    crate::tools::open_app(&name)
+}
+
+#[tauri::command]
+pub fn get_system_status() -> Result<crate::tools::SystemStatusInfo, String> {
+    crate::tools::get_system_status()
+}
+
+#[tauri::command]
+pub fn send_system_notification(title: String, message: String) -> Result<crate::tools::AutomationResult, String> {
+    crate::tools::send_system_notification(&title, &message)
+}
+
+#[tauri::command]
+pub fn list_running_apps() -> Result<Vec<String>, String> {
+    crate::tools::list_running_apps()
+}
+
+#[tauri::command]
+pub fn focus_app(name: String) -> Result<crate::tools::AutomationResult, String> {
+    crate::tools::focus_app(&name)
+}
+
+#[tauri::command]
+pub fn toggle_dark_mode() -> Result<crate::tools::AutomationResult, String> {
+    crate::tools::toggle_dark_mode()
+}
+
+// Native Speech & Audio Commands
+#[tauri::command]
+pub fn speak_text(
+    text: String,
+    voice: Option<String>,
+    rate: Option<u32>,
+) -> Result<crate::tools::voice::VoiceOutputResult, String> {
+    crate::tools::voice::speak_text(&text, voice, rate)
+}
+
+#[tauri::command]
+pub fn stop_speaking() -> Result<(), String> {
+    crate::tools::voice::stop_speaking()
+}
+
+#[tauri::command]
+pub fn play_system_earcon(kind: String) -> Result<(), String> {
+    crate::tools::voice::play_system_earcon(&kind)
+}
+
+#[tauri::command]
+pub fn list_system_voices() -> Result<Vec<crate::tools::voice::VoiceProfile>, String> {
+    crate::tools::voice::list_system_voices()
+}
+
+// Audio Transcription & Speech-to-Text
+#[tauri::command]
+pub fn transcribe_audio_file(
+    file_path: String,
+    model: Option<String>,
+) -> Result<crate::tools::voice::TranscriptionResult, String> {
+    crate::tools::voice::transcribe_audio_file(&file_path, model)
+}
+
+#[tauri::command]
+pub fn transcribe_audio_buffer(
+    audio_base64: String,
+    format: Option<String>,
+) -> Result<crate::tools::voice::TranscriptionResult, String> {
+    crate::tools::voice::transcribe_audio_buffer(&audio_base64, format)
+}
+
+// Global System Hotkey Management
+#[tauri::command]
+pub fn get_registered_hotkeys() -> Result<Vec<crate::tools::voice::GlobalHotkeyStatus>, String> {
+    Ok(crate::tools::voice::get_default_global_hotkeys())
+}
+
+#[tauri::command]
+pub fn register_global_hotkey(app: tauri::AppHandle, hotkey: String) -> Result<bool, String> {
+    use tauri_plugin_global_shortcut::GlobalShortcutExt;
+    if let Ok(shortcut) = hotkey.parse::<tauri_plugin_global_shortcut::Shortcut>() {
+        let _ = app.global_shortcut().register(shortcut);
+        Ok(true)
+    } else {
+        Err(format!("Invalid shortcut format: {}", hotkey))
+    }
+}
+
+#[tauri::command]
+pub fn unregister_global_hotkey(app: tauri::AppHandle, hotkey: String) -> Result<bool, String> {
+    use tauri_plugin_global_shortcut::GlobalShortcutExt;
+    if let Ok(shortcut) = hotkey.parse::<tauri_plugin_global_shortcut::Shortcut>() {
+        let _ = app.global_shortcut().unregister(shortcut);
+        Ok(true)
+    } else {
+        Err(format!("Invalid shortcut format: {}", hotkey))
+    }
+}

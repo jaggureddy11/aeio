@@ -12,6 +12,9 @@ import { getKillSwitchState, listenToKillSwitch } from './lib/safety/killSwitch'
 import { getControlOverlayState, listenToOverlayState } from './lib/safety/overlay';
 import { ActiveControlHud } from './components/safety/ActiveControlHud';
 import { GuiActionApprovalModal } from './components/safety/GuiActionApprovalModal';
+import { VoiceHUD } from './components/chat/VoiceHUD';
+import { BackgroundDock } from './components/chat/BackgroundDock';
+import { useVoiceStore } from './stores/voiceStore';
 import './App.css';
 
 export const App: React.FC = () => {
@@ -27,6 +30,7 @@ export const App: React.FC = () => {
   } = useSettingsStore();
 
   const { clearMessages } = useChatStore();
+  const { isVoiceHUDOpen, closeVoiceHUD, toggleVoiceHUD } = useVoiceStore();
 
   const [showOnboarding, setShowOnboarding] = useState(!hasCompletedOnboarding);
   const [isInitializing, setIsInitializing] = useState(true);
@@ -128,21 +132,30 @@ export const App: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    let unlisten: (() => void) | undefined;
+    let unlistenSettings: (() => void) | undefined;
+    let unlistenVoice: (() => void) | undefined;
+
     import('@tauri-apps/api/event')
       .then(({ listen }) => {
         listen('open-settings', () => {
           setActiveTab('settings');
         }).then((unsub) => {
-          unlisten = unsub;
+          unlistenSettings = unsub;
+        });
+
+        listen('open-voice-hud', () => {
+          toggleVoiceHUD();
+        }).then((unsub) => {
+          unlistenVoice = unsub;
         });
       })
       .catch(() => {});
 
     return () => {
-      if (unlisten) unlisten();
+      if (unlistenSettings) unlistenSettings();
+      if (unlistenVoice) unlistenVoice();
     };
-  }, [setActiveTab]);
+  }, [setActiveTab, toggleVoiceHUD]);
 
   // Synchronize Kill Switch state with Rust native background thread
   useEffect(() => {
@@ -198,6 +211,30 @@ export const App: React.FC = () => {
         hideWindow();
       }
 
+      // Global Voice HUD hotkey: Cmd/Ctrl + Shift + V or Cmd/Ctrl + J (Agent mode)
+      if (
+        ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 'v') ||
+        ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'j')
+      ) {
+        e.preventDefault();
+        toggleVoiceHUD('agent');
+        return;
+      }
+
+      // Voice Dictation hotkey: Cmd/Ctrl + Shift + D
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 'd') {
+        e.preventDefault();
+        toggleVoiceHUD('dictation');
+        return;
+      }
+
+      // Voice In-Place Desktop Rewrite hotkey: Cmd/Ctrl + Shift + E
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 'e') {
+        e.preventDefault();
+        toggleVoiceHUD('rewrite');
+        return;
+      }
+
       // Keyboard navigation: Cmd/Ctrl + 1 / 2 / 3 for immediate mouse-free tab switching
       if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey) {
         if (e.key === '1') {
@@ -221,7 +258,7 @@ export const App: React.FC = () => {
     };
     window.addEventListener('keydown', handleGlobalKeyDown);
     return () => window.removeEventListener('keydown', handleGlobalKeyDown);
-  }, [showOnboarding, setActiveTab, clearMessages]);
+  }, [showOnboarding, setActiveTab, clearMessages, toggleVoiceHUD]);
 
   if (isOverlayWindow) {
     return (
@@ -277,6 +314,12 @@ export const App: React.FC = () => {
 
       {/* GUI Action Approval Modal (Pillar 1 Human-In-The-Loop Gate) */}
       <GuiActionApprovalModal />
+
+      {/* Floating System Voice HUD / Ambient Notch (VoiceOS + JARVIS) */}
+      <VoiceHUD isOpen={isVoiceHUDOpen} onClose={closeVoiceHUD} />
+
+      {/* Ambient Background Task Dock */}
+      <BackgroundDock onOpenHUD={toggleVoiceHUD} />
     </div>
   );
 };

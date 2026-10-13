@@ -3,6 +3,7 @@ import { geminiProvider } from './gemini';
 import { claudeProvider } from './claude';
 import { openAIProvider } from './openai';
 import { qwenCoderProvider } from './qwenCoder';
+import { ollamaProvider } from './ollama';
 import { aeioFreeProvider } from './aeioFree';
 import { getApiKey } from '../ipc';
 import { useSettingsStore } from '../../stores/settingsStore';
@@ -138,68 +139,94 @@ export async function orchestrateChat(
 
   const candidates: ProviderCandidate[] = [];
 
-  // 1. Coding & planning
-  if (taskType === 'code' || taskType === 'planning') {
-    // 2. Coding & planning
-    if (keys.claudeKey) {
-      candidates.push({
-        provider: claudeProvider,
-        apiKey: keys.claudeKey,
-        model: 'claude-3-5-sonnet-20241022',
-        isLocal: false,
-      });
-    }
-    if (keys.geminiKey) {
-      candidates.push({
-        provider: geminiProvider,
-        apiKey: keys.geminiKey,
-        model: 'gemini-2.0-flash',
-        isLocal: false,
-      });
-    }
-  } else {
-    // Conversational or fast retrieval: prefer Gemini Flash for instant sub-second response
-    if (keys.geminiKey) {
-      candidates.push({
-        provider: geminiProvider,
-        apiKey: keys.geminiKey,
-        model: 'gemini-2.0-flash',
-        isLocal: false,
-      });
-    }
-    if (keys.claudeKey) {
-      candidates.push({
-        provider: claudeProvider,
-        apiKey: keys.claudeKey,
-        model: 'claude-3-5-haiku-20241022',
-        isLocal: false,
-      });
-    }
-  }
+  const localCandidates: ProviderCandidate[] = [
+    {
+      provider: qwenCoderProvider,
+      model: settings.ollamaModel || 'qwen2.5-coder',
+      isLocal: true,
+    },
+    {
+      provider: ollamaProvider,
+      model: settings.ollamaModel || 'llama3.1',
+      isLocal: true,
+    },
+  ];
 
-  // OpenAI candidate if key available
-  if (keys.openAIKey) {
+  // Privacy Protection Mode: strictly local inference only
+  if (settings.neverSendMemoriesToCloud) {
+    candidates.push(...localCandidates);
+  } else {
+    // If user explicitly chose local Ollama or Qwen-Coder as primary provider
+    if (settings.activeProvider === 'ollama' || settings.activeProvider === 'qwen-coder') {
+      candidates.push(...localCandidates);
+    }
+
+    // 1. Coding & Multi-Step Planning
+    if (taskType === 'code' || taskType === 'planning') {
+      if (keys.claudeKey) {
+        candidates.push({
+          provider: claudeProvider,
+          apiKey: keys.claudeKey,
+          model: 'claude-3-5-sonnet-20241022',
+          isLocal: false,
+        });
+      }
+      if (keys.geminiKey) {
+        candidates.push({
+          provider: geminiProvider,
+          apiKey: keys.geminiKey,
+          model: 'gemini-2.0-flash',
+          isLocal: false,
+        });
+      }
+      if (keys.openAIKey) {
+        candidates.push({
+          provider: openAIProvider,
+          apiKey: keys.openAIKey,
+          model: 'gpt-4o',
+          isLocal: false,
+        });
+      }
+    } else {
+      // Conversational or fast retrieval: prefer Gemini Flash for instant sub-second response
+      if (keys.geminiKey) {
+        candidates.push({
+          provider: geminiProvider,
+          apiKey: keys.geminiKey,
+          model: 'gemini-2.0-flash',
+          isLocal: false,
+        });
+      }
+      if (keys.claudeKey) {
+        candidates.push({
+          provider: claudeProvider,
+          apiKey: keys.claudeKey,
+          model: 'claude-3-5-haiku-20241022',
+          isLocal: false,
+        });
+      }
+      if (keys.openAIKey) {
+        candidates.push({
+          provider: openAIProvider,
+          apiKey: keys.openAIKey,
+          model: 'gpt-4o-mini',
+          isLocal: false,
+        });
+      }
+    }
+
+    // Cloud Free proxy candidate
     candidates.push({
-      provider: openAIProvider,
-      apiKey: keys.openAIKey,
-      model: 'gpt-4o',
+      provider: aeioFreeProvider,
+      model: 'claude-3-5-haiku',
       isLocal: false,
     });
+
+    // Local candidates as resilient offline fallback if not already at the front
+    if (settings.activeProvider !== 'ollama' && settings.activeProvider !== 'qwen-coder') {
+      candidates.push(...localCandidates);
+    }
   }
-
-  // Cloud Free proxy candidate
-  candidates.push({
-    provider: aeioFreeProvider,
-    model: 'claude-3-5-haiku',
-    isLocal: false,
-  });
-
-  // Local Qwen-Coder via Ollama (always available offline fallback)
-  candidates.push({
-    provider: qwenCoderProvider,
-    model: settings.ollamaModel || 'qwen2.5-coder',
-    isLocal: true,
-  });
 
   let lastError: Error | null = null;
 

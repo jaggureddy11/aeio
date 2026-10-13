@@ -6,6 +6,9 @@ import {
   removeFromAllowlistIpc,
 } from '../lib/safety/allowlist';
 import { ControlOverlayState } from '../lib/types/actionIntent';
+import { McpServerConfig } from '../lib/mcp/types';
+import { globalMcpManager } from '../lib/mcp/mcpClient';
+import { registerGlobalHotkey } from '../lib/ipc';
 
 export type LLMProviderType = 'qwen-coder' | 'ollama' | 'claude' | 'openai' | 'gemini' | 'aeio-free';
 
@@ -69,6 +72,11 @@ export interface SettingsState {
   groundingModelType: 'ui-tars' | 'qwen2-vl' | 'custom';
   setGroundingEndpointUrl: (url: string) => void;
   setGroundingModelType: (modelType: 'ui-tars' | 'qwen2-vl' | 'custom') => void;
+  mcpServers: McpServerConfig[];
+  addMcpServer: (server: Omit<McpServerConfig, 'id'>) => McpServerConfig;
+  updateMcpServer: (id: string, updates: Partial<McpServerConfig>) => void;
+  removeMcpServer: (id: string) => void;
+  toggleMcpServer: (id: string) => Promise<void>;
 }
 
 const getStoredBool = (key: string, defaultVal: boolean): boolean => {
@@ -110,7 +118,7 @@ const getOrGenerateInstallationId = (): string => {
   }
 };
 
-export const useSettingsStore = create<SettingsState>((set) => ({
+export const useSettingsStore = create<SettingsState>((set, get) => ({
   activeTab: 'chat',
   activeProvider: 'gemini',
   theme: (getStoredString('aeio_theme_mode', 'light') as ThemeMode) || 'light',
@@ -154,6 +162,7 @@ export const useSettingsStore = create<SettingsState>((set) => ({
     const clean = hotkey.trim() || 'CommandOrControl+Shift+Space';
     try {
       localStorage.setItem('aeio_global_hotkey', clean);
+      registerGlobalHotkey(clean).catch(() => {});
     } catch {}
     set({ hotkey: clean });
   },
@@ -266,6 +275,49 @@ export const useSettingsStore = create<SettingsState>((set) => ({
       localStorage.setItem('aeio_grounding_model_type', modelType);
     } catch {}
     set({ groundingModelType: modelType });
+  },
+  mcpServers: getStoredJson<McpServerConfig[]>('aeio_mcp_servers', []),
+  addMcpServer: (serverData) => {
+    const newServer: McpServerConfig = {
+      ...serverData,
+      id: crypto.randomUUID(),
+    };
+    const updated = [...get().mcpServers, newServer];
+    try {
+      localStorage.setItem('aeio_mcp_servers', JSON.stringify(updated));
+    } catch {}
+    set({ mcpServers: updated });
+    if (newServer.enabled) {
+      globalMcpManager.connectServer(newServer).catch((err) => console.error('MCP connect error:', err));
+    }
+    return newServer;
+  },
+  updateMcpServer: (id, updates) => {
+    const updated = get().mcpServers.map((s) => (s.id === id ? { ...s, ...updates } : s));
+    try {
+      localStorage.setItem('aeio_mcp_servers', JSON.stringify(updated));
+    } catch {}
+    set({ mcpServers: updated });
+    const target = updated.find((s) => s.id === id);
+    if (target?.enabled) {
+      globalMcpManager.connectServer(target).catch(() => {});
+    } else {
+      globalMcpManager.disconnectServer(id);
+    }
+  },
+  removeMcpServer: (id) => {
+    globalMcpManager.disconnectServer(id);
+    const updated = get().mcpServers.filter((s) => s.id !== id);
+    try {
+      localStorage.setItem('aeio_mcp_servers', JSON.stringify(updated));
+    } catch {}
+    set({ mcpServers: updated });
+  },
+  toggleMcpServer: async (id) => {
+    const current = get().mcpServers.find((s) => s.id === id);
+    if (!current) return;
+    const newEnabled = !current.enabled;
+    get().updateMcpServer(id, { enabled: newEnabled });
   },
 }));
 

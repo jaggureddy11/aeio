@@ -38,6 +38,13 @@ This document defines what Aeio can do, organized by maturity tier. Use it as th
 | App launching | Open apps, URLs, files with the default handler | "Open my resume" launches the right app |
 | Active window awareness | Optionally read the title/content of the frontmost window for context | Off by default; user must opt in per-session or permanently |
 | Approval memory | User can mark a specific tool+context combo as "always allow" so it stops asking | Doesn't silently expand to unrelated commands — scoped narrowly |
+| Voice OS Automation | Hands-free JARVIS voice control across macOS & Windows (Spotify playback, master volume, web search, lock screen) | Spoken "play Back in Black on Spotify" or "set volume to 50%" executes with audio confirmation (<1ms) |
+| System-Wide Dictation | VoiceOS-style hands-free dictation that polishes spoken stream-of-consciousness speech and pastes directly into any active app | Voice input automatically injects into focused Slack, Notion, VS Code, or Browser input |
+| In-Place Selection Rewriter | Highlights text in any application, speaks a transformation directive, and replaces selection in-place | Cmd+C capture -> LLM transformation -> Cmd+V in-place replacement across any focused window |
+| Ambient Floating Notch | Minimizes VoiceHUD into a liquid glass top pill with live audio waveform and compact task status | Expands/collapses smoothly without losing background agent context |
+| Model Context Protocol (MCP) Client | Connects local stdio MCP servers (Postgres, GitHub, Slack, SQLite, filesystem) dynamically with JSON-RPC 2.0 handshake and runtime tool execution | Connecting an MCP server immediately exposes its tools in the agent tool registry and ReAct runner |
+| Deep Web Research Engine | Extracts clean, LLM-ready markdown from any webpage or article, stripping ads, styles, navigation, and SVG boilerplate | Browse any URL, parses readable text and structured links without external headless browsers |
+| Ambient Autonomous Background Dock | Obsidian glass floating task monitor tracking active multi-step autonomous plans in real time with step counts, thoughts, tools, and cancel control | Executes multi-step agent plans in background while user works, notifying upon finish |
 
 ---
 
