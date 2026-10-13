@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>NSMicrophoneUsageDescription</key>
+    <string>Aeio requires microphone access for offline voice dictation, hands-free automation, and wake-word detection.</string>
+    <key>NSSpeechRecognitionUsageDescription</key>
+    <string>Aeio uses speech recognition for local desktop dictation and hands-free voice commands.</string>
+    <key>NSAppleEventsUsageDescription</key>
+    <string>Aeio uses Apple Events for local OS automation, Spotify media control, and application window management.</string>
+    <key>NSScreenCaptureUsageDescription</key>
+    <string>Aeio uses screen recording to visually audit desktop automation actions and assist with computer control.</string>
+</dict>
+</plist>

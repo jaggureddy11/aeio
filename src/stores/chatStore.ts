@@ -938,10 +938,21 @@ export const useChatStore = create<ChatState>((set, get) => ({
     let failedStepIndex = -1;
     let failureError: string | null = null;
 
+    const broadcastStepUpdate = (stepText: string | null) => {
+      if (typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window) {
+        import('@tauri-apps/api/event')
+          .then(({ emit }) => {
+            emit('autonomous-step-update', { stepText });
+          })
+          .catch(() => {});
+      }
+    };
+
     for (let i = 0; i < steps.length; i++) {
       // Check if cancelled
       const freshMessage = get().messages.find((m) => m.id === messageId);
       if (!freshMessage || !freshMessage.plan || freshMessage.plan.status === 'cancelled') {
+        broadcastStepUpdate(null);
         set({ activeRunningPlanMessageId: null });
         return;
       }
@@ -949,6 +960,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       steps[i] = { ...steps[i], status: 'running' };
       plan.currentStepIndex = i;
       plan.steps = [...steps];
+      broadcastStepUpdate(`Step ${i + 1}/${steps.length}: ${steps[i].description}`);
       get().updateMessageContent(
         messageId,
         freshMessage.content,
@@ -1242,6 +1254,27 @@ export const useChatStore = create<ChatState>((set, get) => ({
       } catch (err: unknown) {
         isError = true;
         errorMsg = err instanceof Error ? err.message : String(err);
+
+        // Self-Correction Loop for read_file: If file not found, attempt locating file in current directory
+        if (step.toolName === 'read_file' && step.args?.path) {
+          try {
+            const rawPath = String(step.args.path);
+            const fileName = rawPath.split('/').pop()?.split('\\').pop();
+            if (fileName) {
+              const matches = await searchFiles('./', fileName);
+              if (matches && matches.length > 0) {
+                const correctedPath = matches[0].path;
+                const retryResult = await readFile(correctedPath);
+                stepResult = retryResult;
+                isError = false;
+                errorMsg = '';
+                step.args.path = correctedPath;
+              }
+            }
+          } catch {
+            // Keep original error if self-correction cannot resolve
+          }
+        }
       }
 
       // Add audit receipt to toolExecutions
@@ -1270,6 +1303,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       }
     }
 
+    broadcastStepUpdate(null);
     set({ activeRunningPlanMessageId: null });
     const freshMessage = get().messages.find((m) => m.id === messageId);
     if (!freshMessage) return;
