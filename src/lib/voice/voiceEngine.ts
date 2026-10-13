@@ -683,6 +683,94 @@ export class VoiceEngine {
     this.statusListeners.forEach((fn) => fn(message));
   }
 
+  private wakeWordRecognition: any = null;
+  private isWakeWordActive: boolean = false;
+  private wakeWordListeners: ((trigger: string, tail: string) => void)[] = [];
+
+  public startWakeWordListener(onWake?: (tail: string) => void): void {
+    if (typeof window === 'undefined') return;
+    const SpeechRecognition =
+      (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) return;
+
+    if (onWake) {
+      this.wakeWordListeners.push((_trig, tail) => onWake(tail));
+    }
+
+    if (this.isWakeWordActive) return;
+
+    try {
+      this.wakeWordRecognition = new SpeechRecognition();
+      this.wakeWordRecognition.continuous = true;
+      this.wakeWordRecognition.interimResults = true;
+      this.wakeWordRecognition.lang = 'en-US';
+
+      this.wakeWordRecognition.onresult = async (event: any) => {
+        if (this.isListening) return;
+
+        for (let i = event.resultIndex; i < event.results.length; ++i) {
+          const text = (event.results[i][0].transcript || '').trim();
+          const match = text.match(/\b(?:hey\s+aeio|aeio|okay\s+aeio|hi\s+aeio)\b(?:\s+(.*))?/i);
+          if (match) {
+            const commandTail = (match[1] || '').trim();
+            earcons.playWakeTone();
+            this.emitStatus('Wake word detected ("Hey Aeio")');
+            this.wakeWordListeners.forEach((fn) => fn('hey aeio', commandTail));
+            break;
+          }
+        }
+      };
+
+      this.wakeWordRecognition.onerror = () => {
+        if (this.isWakeWordActive && !this.isListening) {
+          setTimeout(() => {
+            try {
+              if (this.isWakeWordActive && !this.isListening) {
+                this.wakeWordRecognition?.start();
+              }
+            } catch {}
+          }, 1000);
+        }
+      };
+
+      this.wakeWordRecognition.onend = () => {
+        if (this.isWakeWordActive && !this.isListening) {
+          try {
+            this.wakeWordRecognition?.start();
+          } catch {}
+        }
+      };
+
+      this.wakeWordRecognition.start();
+      this.isWakeWordActive = true;
+      this.emitStatus('Ambient Wake-Word listener active ("Hey Aeio")');
+    } catch {
+      // Ignore
+    }
+  }
+
+  public stopWakeWordListener(): void {
+    this.isWakeWordActive = false;
+    if (this.wakeWordRecognition) {
+      try {
+        this.wakeWordRecognition.stop();
+      } catch {}
+      this.wakeWordRecognition = null;
+    }
+  }
+
+  public getIsWakeWordActive(): boolean {
+    return this.isWakeWordActive;
+  }
+
+  public onWakeWord(fn: (tail: string) => void): () => void {
+    const wrapped = (_trig: string, tail: string) => fn(tail);
+    this.wakeWordListeners.push(wrapped);
+    return () => {
+      this.wakeWordListeners = this.wakeWordListeners.filter((l) => l !== wrapped);
+    };
+  }
+
   public async transcribeAudioData(audioBase64: string, format?: string): Promise<TranscriptionResult> {
     const res = await transcribeAudioBuffer(audioBase64, format);
     if (res.success && res.text) {

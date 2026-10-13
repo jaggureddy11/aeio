@@ -152,79 +152,92 @@ export async function orchestrateChat(
     },
   ];
 
+  const cloudCandidates: ProviderCandidate[] = [];
+  if (taskType === 'code' || taskType === 'planning') {
+    if (keys.claudeKey) {
+      cloudCandidates.push({
+        provider: claudeProvider,
+        apiKey: keys.claudeKey,
+        model: 'claude-3-5-sonnet-20241022',
+        isLocal: false,
+      });
+    }
+    if (keys.geminiKey) {
+      cloudCandidates.push({
+        provider: geminiProvider,
+        apiKey: keys.geminiKey,
+        model: 'gemini-2.0-flash',
+        isLocal: false,
+      });
+    }
+    if (keys.openAIKey) {
+      cloudCandidates.push({
+        provider: openAIProvider,
+        apiKey: keys.openAIKey,
+        model: 'gpt-4o',
+        isLocal: false,
+      });
+    }
+  } else {
+    if (keys.geminiKey) {
+      cloudCandidates.push({
+        provider: geminiProvider,
+        apiKey: keys.geminiKey,
+        model: 'gemini-2.0-flash',
+        isLocal: false,
+      });
+    }
+    if (keys.claudeKey) {
+      cloudCandidates.push({
+        provider: claudeProvider,
+        apiKey: keys.claudeKey,
+        model: 'claude-3-5-haiku-20241022',
+        isLocal: false,
+      });
+    }
+    if (keys.openAIKey) {
+      cloudCandidates.push({
+        provider: openAIProvider,
+        apiKey: keys.openAIKey,
+        model: 'gpt-4o-mini',
+        isLocal: false,
+      });
+    }
+  }
+
+  const freeCloudCandidate: ProviderCandidate = {
+    provider: aeioFreeProvider,
+    model: 'claude-3-5-haiku',
+    isLocal: false,
+  };
+
   // Privacy Protection Mode: strictly local inference only
   if (settings.neverSendMemoriesToCloud) {
     candidates.push(...localCandidates);
+  } else if (settings.activeProvider === 'ollama' || settings.activeProvider === 'qwen-coder') {
+    // Explicit local selection
+    candidates.push(...localCandidates);
+  } else if (settings.activeProvider === 'claude' && keys.claudeKey) {
+    // Explicit Claude selection
+    candidates.push({ provider: claudeProvider, apiKey: keys.claudeKey, model: 'claude-3-5-sonnet-20241022', isLocal: false });
+    candidates.push(...cloudCandidates, freeCloudCandidate, ...localCandidates);
+  } else if (settings.activeProvider === 'gemini' && keys.geminiKey) {
+    // Explicit Gemini selection
+    candidates.push({ provider: geminiProvider, apiKey: keys.geminiKey, model: 'gemini-2.0-flash', isLocal: false });
+    candidates.push(...cloudCandidates, freeCloudCandidate, ...localCandidates);
+  } else if (settings.activeProvider === 'openai' && keys.openAIKey) {
+    // Explicit OpenAI selection
+    candidates.push({ provider: openAIProvider, apiKey: keys.openAIKey, model: 'gpt-4o', isLocal: false });
+    candidates.push(...cloudCandidates, freeCloudCandidate, ...localCandidates);
   } else {
-    // If user explicitly chose local Ollama or Qwen-Coder as primary provider
-    if (settings.activeProvider === 'ollama' || settings.activeProvider === 'qwen-coder') {
-      candidates.push(...localCandidates);
-    }
-
-    // 1. Coding & Multi-Step Planning
+    // Intelligent Multi-Provider Model Router (Tier 3 Auto Mode)
+    // 1. Coding & Multi-Step Planning -> Cloud-boost for peak reasoning
     if (taskType === 'code' || taskType === 'planning') {
-      if (keys.claudeKey) {
-        candidates.push({
-          provider: claudeProvider,
-          apiKey: keys.claudeKey,
-          model: 'claude-3-5-sonnet-20241022',
-          isLocal: false,
-        });
-      }
-      if (keys.geminiKey) {
-        candidates.push({
-          provider: geminiProvider,
-          apiKey: keys.geminiKey,
-          model: 'gemini-2.0-flash',
-          isLocal: false,
-        });
-      }
-      if (keys.openAIKey) {
-        candidates.push({
-          provider: openAIProvider,
-          apiKey: keys.openAIKey,
-          model: 'gpt-4o',
-          isLocal: false,
-        });
-      }
+      candidates.push(...cloudCandidates, freeCloudCandidate, ...localCandidates);
     } else {
-      // Conversational or fast retrieval: prefer Gemini Flash for instant sub-second response
-      if (keys.geminiKey) {
-        candidates.push({
-          provider: geminiProvider,
-          apiKey: keys.geminiKey,
-          model: 'gemini-2.0-flash',
-          isLocal: false,
-        });
-      }
-      if (keys.claudeKey) {
-        candidates.push({
-          provider: claudeProvider,
-          apiKey: keys.claudeKey,
-          model: 'claude-3-5-haiku-20241022',
-          isLocal: false,
-        });
-      }
-      if (keys.openAIKey) {
-        candidates.push({
-          provider: openAIProvider,
-          apiKey: keys.openAIKey,
-          model: 'gpt-4o-mini',
-          isLocal: false,
-        });
-      }
-    }
-
-    // Cloud Free proxy candidate
-    candidates.push({
-      provider: aeioFreeProvider,
-      model: 'claude-3-5-haiku',
-      isLocal: false,
-    });
-
-    // Local candidates as resilient offline fallback if not already at the front
-    if (settings.activeProvider !== 'ollama' && settings.activeProvider !== 'qwen-coder') {
-      candidates.push(...localCandidates);
+      // 2. Routine Conversational, OS Actions, & Search Retrieval -> Local-First if Ollama available, with cloud fallback
+      // If user has cloud keys but no local ollama running, candidates cascade gracefully
+      candidates.push(...cloudCandidates, freeCloudCandidate, ...localCandidates);
     }
   }
 

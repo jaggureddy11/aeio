@@ -7,10 +7,77 @@ import {
   Power,
   Wrench,
   AlertCircle,
+  Database,
+  FolderTree,
+  Globe,
+  GitBranch,
+  Cpu,
+  Check,
+  Sparkles,
 } from 'lucide-react';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { globalMcpManager } from '../../lib/mcp/mcpClient';
 import { McpServerConfig } from '../../lib/mcp/types';
+
+interface CuratedPreset {
+  name: string;
+  command: string;
+  args: string[];
+  category: string;
+  icon: any;
+  description: string;
+}
+
+const CURATED_PRESETS: CuratedPreset[] = [
+  {
+    name: 'GitHub MCP',
+    command: 'npx',
+    args: ['-y', '@modelcontextprotocol/server-github'],
+    category: 'Developer',
+    icon: GitBranch,
+    description: 'Search repositories, inspect files, check pull requests, and query issues.',
+  },
+  {
+    name: 'PostgreSQL MCP',
+    command: 'npx',
+    args: ['-y', '@modelcontextprotocol/server-postgres', 'postgresql://localhost:5432/postgres'],
+    category: 'Database',
+    icon: Database,
+    description: 'Inspect database tables, query records, and review table schemas.',
+  },
+  {
+    name: 'SQLite MCP',
+    command: 'npx',
+    args: ['-y', '@modelcontextprotocol/server-sqlite', '--db', './aeio.db'],
+    category: 'Database',
+    icon: Database,
+    description: 'Direct local SQL queries with zero setup or external server dependencies.',
+  },
+  {
+    name: 'Filesystem MCP',
+    command: 'npx',
+    args: ['-y', '@modelcontextprotocol/server-filesystem', '.'],
+    category: 'System',
+    icon: FolderTree,
+    description: 'Sandboxed folder exploration, file searching, and content extraction.',
+  },
+  {
+    name: 'Fetch MCP',
+    command: 'npx',
+    args: ['-y', '@modelcontextprotocol/server-fetch'],
+    category: 'Web',
+    icon: Globe,
+    description: 'Extract clean, LLM-ready markdown from web pages and technical documentation.',
+  },
+  {
+    name: 'Memory Graph MCP',
+    command: 'npx',
+    args: ['-y', '@modelcontextprotocol/server-memory'],
+    category: 'Knowledge',
+    icon: Cpu,
+    description: 'Knowledge graph engine tracking connected entities, relations, and facts.',
+  },
+];
 
 export const McpServerPanel: React.FC = () => {
   const { mcpServers, addMcpServer, removeMcpServer, toggleMcpServer } = useSettingsStore();
@@ -21,6 +88,7 @@ export const McpServerPanel: React.FC = () => {
   const [isAdding, setIsAdding] = useState(false);
   const [connectingId, setConnectingId] = useState<string | null>(null);
   const [expandedServerId, setExpandedServerId] = useState<string | null>(null);
+  const [showCuratedPresets, setShowCuratedPresets] = useState(true);
 
   const handleAddServer = (e: React.FormEvent) => {
     e.preventDefault();
@@ -52,7 +120,7 @@ export const McpServerPanel: React.FC = () => {
     }
   };
 
-  const addPresetTemplate = (preset: { name: string; command: string; args: string[] }) => {
+  const addPresetTemplate = (preset: CuratedPreset) => {
     addMcpServer({
       name: preset.name,
       command: preset.command,
@@ -69,53 +137,87 @@ export const McpServerPanel: React.FC = () => {
         <div className="mcp-title-group">
           <Server size={18} className="mcp-header-icon" />
           <div>
-            <h3 className="mcp-title">Model Context Protocol (MCP) Ecosystem</h3>
+            <h3 className="mcp-title">Model Context Protocol (MCP) Hub</h3>
             <p className="mcp-subtitle">
-              Connect external tools, databases, and APIs. Discovered tools are directly callable by Aeio's autonomous agent.
+              Connect local tools, databases, and APIs. Discovered tools are directly callable by Aeio's autonomous ReAct agent.
             </p>
           </div>
         </div>
 
-        <button
-          type="button"
-          className="mcp-add-btn"
-          onClick={() => setIsAdding(!isAdding)}
-        >
-          <Plus size={14} />
-          <span>Add Server</span>
-        </button>
+        <div className="mcp-header-actions">
+          <button
+            type="button"
+            className="mcp-preset-toggle-btn"
+            onClick={() => setShowCuratedPresets(!showCuratedPresets)}
+            title="Toggle Curated Presets Directory"
+          >
+            <Sparkles size={14} />
+            <span>{showCuratedPresets ? 'Hide Directory' : '1-Click Presets'}</span>
+          </button>
+          <button
+            type="button"
+            className="mcp-add-btn"
+            onClick={() => setIsAdding(!isAdding)}
+          >
+            <Plus size={14} />
+            <span>Add Custom</span>
+          </button>
+        </div>
       </div>
 
-      {/* Preset Quick Starters */}
-      {mcpServers.length === 0 && !isAdding && (
-        <div className="mcp-presets-container">
-          <span className="mcp-presets-label">Popular Starters:</span>
-          <button
-            type="button"
-            className="mcp-preset-pill"
-            onClick={() =>
-              addPresetTemplate({
-                name: 'Local SQLite MCP',
-                command: 'npx',
-                args: ['-y', '@modelcontextprotocol/server-sqlite', '--db', 'local.db'],
-              })
-            }
-          >
-            SQLite MCP
-          </button>
-          <button
-            type="button"
-            className="mcp-preset-pill"
-            onClick={() =>
-              addPresetTemplate({
-                name: 'Filesystem MCP',
-                command: 'npx',
-                args: ['-y', '@modelcontextprotocol/server-filesystem', '.'],
-              })
-            }
-          >
-            Filesystem MCP
-          </button>
+      {/* Curated 1-Click MCP Presets Grid */}
+      {showCuratedPresets && (
+        <div className="mcp-curated-section">
+          <div className="mcp-curated-header">
+            <span className="mcp-curated-title">Curated 1-Click MCP Servers</span>
+            <span className="mcp-curated-count">{CURATED_PRESETS.length} available</span>
+          </div>
+
+          <div className="mcp-presets-grid">
+            {CURATED_PRESETS.map((preset) => {
+              const isInstalled = mcpServers.some(
+                (s) => s.name.toLowerCase() === preset.name.toLowerCase()
+              );
+              const IconComp = preset.icon;
+
+              return (
+                <div key={preset.name} className="mcp-preset-card">
+                  <div className="mcp-preset-top">
+                    <div className="mcp-preset-icon-box">
+                      <IconComp size={16} />
+                    </div>
+                    <span className="mcp-preset-category">{preset.category}</span>
+                  </div>
+
+                  <h5 className="mcp-preset-name">{preset.name}</h5>
+                  <p className="mcp-preset-desc">{preset.description}</p>
+
+                  <div className="mcp-preset-cmd-snippet">
+                    <code>{preset.command} {preset.args.slice(0, 2).join(' ')}</code>
+                  </div>
+
+                  <button
+                    type="button"
+                    className={`mcp-preset-action-btn ${isInstalled ? 'installed' : ''}`}
+                    disabled={isInstalled}
+                    onClick={() => addPresetTemplate(preset)}
+                  >
+                    {isInstalled ? (
+                      <>
+                        <Check size={13} />
+                        <span>Installed</span>
+                      </>
+                    ) : (
+                      <>
+                        <Plus size={13} />
+                        <span>1-Click Add</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
 

@@ -475,6 +475,34 @@ export const SettingsPanel: React.FC<Props> = ({ isOpen, onClose, onOpenOnboardi
 
               <div className="settings-card" role="radiogroup" aria-label="Active Intelligence Engine">
                 <div className="settings-provider-list">
+                  {/* Intelligent Auto Router */}
+                  <div
+                    role="radio"
+                    tabIndex={0}
+                    aria-checked={activeProvider === 'auto'}
+                    className={`settings-provider-row ${activeProvider === 'auto' ? 'selected' : ''}`}
+                    onClick={() => setActiveProvider('auto')}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        setActiveProvider('auto');
+                      }
+                    }}
+                  >
+                    <div className="provider-row-left">
+                      <div className="provider-radio-circle">
+                        {activeProvider === 'auto' && <div className="provider-radio-dot" />}
+                      </div>
+                      <div className="provider-row-text">
+                        <div className="provider-row-title">Auto (Smart Multi-Provider Router)</div>
+                        <div className="provider-row-desc">
+                          Tier 3 calibrated router: runs routine chats & OS actions 100% locally on Ollama, and escalates complex code & planning to cloud frontier models.
+                        </div>
+                      </div>
+                    </div>
+                    <span className="provider-row-badge recommended">Tier 3 Smart</span>
+                  </div>
+
                   {/* Qwen3-Coder */}
                   <div
                     role="radio"

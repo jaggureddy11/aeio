@@ -8,6 +8,7 @@ import { aeioFreeProvider } from './aeioFree';
 import { LLMProviderType, useSettingsStore } from '../../stores/settingsStore';
 
 export const providers: Record<LLMProviderType, LLMProvider> = {
+  auto: qwenCoderProvider,
   'qwen-coder': qwenCoderProvider,
   ollama: ollamaProvider,
   claude: claudeProvider,

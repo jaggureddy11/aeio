@@ -10,7 +10,7 @@ import { McpServerConfig } from '../lib/mcp/types';
 import { globalMcpManager } from '../lib/mcp/mcpClient';
 import { registerGlobalHotkey } from '../lib/ipc';
 
-export type LLMProviderType = 'qwen-coder' | 'ollama' | 'claude' | 'openai' | 'gemini' | 'aeio-free';
+export type LLMProviderType = 'auto' | 'qwen-coder' | 'ollama' | 'claude' | 'openai' | 'gemini' | 'aeio-free';
 
 export type ActiveTab = 'chat' | 'memory' | 'settings';
 
@@ -120,7 +120,7 @@ const getOrGenerateInstallationId = (): string => {
 
 export const useSettingsStore = create<SettingsState>((set, get) => ({
   activeTab: 'chat',
-  activeProvider: 'gemini',
+  activeProvider: (getStoredString('aeio_active_provider', 'auto') as LLMProviderType) || 'auto',
   theme: (getStoredString('aeio_theme_mode', 'light') as ThemeMode) || 'light',
   ollamaModel: 'qwen3-coder',
   activeWindowAwareness: getStoredBool('aeio_active_window_awareness', false),
@@ -132,7 +132,12 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   installationId: getOrGenerateInstallationId(),
   hostedProxyUrl: getStoredString('aeio_hosted_proxy_url', 'https://aeio-free-proxy.aeio-free.workers.dev'),
   setActiveTab: (activeTab) => set({ activeTab }),
-  setActiveProvider: (activeProvider) => set({ activeProvider }),
+  setActiveProvider: (activeProvider) => {
+    try {
+      localStorage.setItem('aeio_active_provider', activeProvider);
+    } catch {}
+    set({ activeProvider });
+  },
   setTheme: (theme: ThemeMode) => {
     try {
       localStorage.setItem('aeio_theme_mode', theme);

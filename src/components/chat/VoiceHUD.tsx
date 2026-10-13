@@ -12,6 +12,7 @@ import {
   Send,
   FileEdit,
   AlertTriangle,
+  Radio,
 } from 'lucide-react';
 import {
   globalVoiceEngine,
@@ -23,6 +24,7 @@ import { executeDictation, DictationTone } from '../../lib/voice/dictationEngine
 import { executeInPlaceRewrite } from '../../lib/voice/editSelectionEngine';
 import { globalAutonomousRunner } from '../../lib/agent/autonomousAgent';
 import { useChatStore } from '../../stores/chatStore';
+import { useVoiceStore } from '../../stores/voiceStore';
 
 export type VoiceHUDMode = 'agent' | 'dictation' | 'rewrite';
 
@@ -51,6 +53,7 @@ export const VoiceHUD: React.FC<Props> = ({ isOpen, onClose }) => {
   const [pendingApproval, setPendingApproval] = useState<PendingActionApproval | null>(null);
 
   const sendMessage = useChatStore((state) => state.sendMessage);
+  const { wakeWordEnabled, toggleWakeWord } = useVoiceStore();
   const currentModeRef = useRef<VoiceHUDMode>(mode);
   currentModeRef.current = mode;
 
@@ -263,6 +266,8 @@ export const VoiceHUD: React.FC<Props> = ({ isOpen, onClose }) => {
               <span className="bar bar-1" />
               <span className="bar bar-2" />
               <span className="bar bar-3" />
+              <span className="bar bar-4" />
+              <span className="bar bar-5" />
             </div>
           )}
         </div>
@@ -308,6 +313,16 @@ export const VoiceHUD: React.FC<Props> = ({ isOpen, onClose }) => {
           </div>
 
           <div className="voice-hud-header-actions">
+            <button
+              type="button"
+              className={`voice-hud-action-btn ${wakeWordEnabled ? 'active' : ''}`}
+              onClick={toggleWakeWord}
+              title={wakeWordEnabled ? 'Wake-Word Active ("Hey Aeio" enabled)' : 'Turn On Wake-Word ("Hey Aeio")'}
+              aria-label="Toggle Wake Word"
+            >
+              <Radio size={14} className={wakeWordEnabled ? 'pulsing' : ''} />
+              <span className="wake-word-label">{wakeWordEnabled ? 'Hey Aeio' : 'Wake-Word'}</span>
+            </button>
             <button
               type="button"
               className="voice-hud-action-btn"
