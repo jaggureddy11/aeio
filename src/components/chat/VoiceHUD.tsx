@@ -68,8 +68,174 @@ export const VoiceHUD: React.FC<Props> = ({ isOpen, onClose }) => {
       return;
     }
 
-    // Auto-start listening on open
-    globalVoiceEngine.startListening();
+    const processCommand = async (text: string) => {
+      setVoiceState('processing');
+      const activeMode = currentModeRef.current;
+
+      try {
+        // MODE 1: VoiceOS System-Wide Dictation
+        if (activeMode === 'dictation') {
+          setFeedback('Polishing spoken transcript...');
+          const dictationResult = await executeDictation(text, {
+            polishWithAI: true,
+            tone: dictationTone,
+            autoInject: true,
+          });
+
+          if (dictationResult.success) {
+            setFeedback(`Injected into active window: "${dictationResult.polishedText}"`);
+            setVoiceState('speaking');
+            speakJARVISFeedback('Text injected.', () => {
+              setVoiceState('idle');
+              setTimeout(() => {
+                if (isOpen) {
+                  setFeedback(null);
+                  setTranscript('');
+                  globalVoiceEngine.startListening();
+                }
+              }, 1200);
+            });
+          } else {
+            setFeedback(dictationResult.error || 'Dictation injection failed.');
+            setVoiceState('idle');
+          }
+          return;
+        }
+
+        // MODE 2: VoiceOS In-Place Selection Rewrite
+        if (activeMode === 'rewrite') {
+          setFeedback(`Capturing selection and applying "${text}"...`);
+          const rewriteResult = await executeInPlaceRewrite(text);
+
+          if (rewriteResult.success) {
+            setFeedback(`Selection updated in active app!`);
+            setVoiceState('speaking');
+            speakJARVISFeedback('Selection updated.', () => {
+              setVoiceState('idle');
+              setTimeout(() => {
+                if (isOpen) {
+                  setFeedback(null);
+                  setTranscript('');
+                  globalVoiceEngine.startListening();
+                }
+              }, 1200);
+            });
+          } else {
+            setFeedback(rewriteResult.error || 'Selection rewrite failed.');
+            setVoiceState('idle');
+          }
+          return;
+        }
+
+        // MODE 3: JARVIS Autonomous Agent Mode
+        // 1. Attempt sub-millisecond fast-path intent match (<1ms)
+        const fastResult = await matchAndExecuteFastAction(text);
+
+        if (fastResult && fastResult.handledDeterministically) {
+          setFeedback(fastResult.feedbackText);
+          setVoiceState('speaking');
+
+          if (fastResult.actionType === 'inspect_screen' && fastResult.details) {
+            const res = fastResult.details;
+            useChatStore.getState().addMessage({
+              role: 'user',
+              content: text,
+              activeWindowContext: res.activeWindow || undefined,
+              screenSnapshot: res.screenData
+                ? {
+                    base64: res.screenData.base64,
+                    width: res.screenData.width,
+                    height: res.screenData.height,
+                    filePath: res.screenData.filePath,
+                  }
+                : undefined,
+            });
+            useChatStore.getState().addMessage({
+              role: 'assistant',
+              content: res.analysis || fastResult.feedbackText,
+              activeWindowContext: res.activeWindow || undefined,
+            });
+          }
+
+          speakJARVISFeedback(fastResult.feedbackText, async () => {
+            if (fastResult.followUp) {
+              setFeedback('JARVIS: Continuing with follow-up task...');
+              setActiveStepText('Formulating plan for follow-up...');
+              speakJARVISFeedback('Proceeding with the follow-up step.', () => {});
+
+              const followUpTask = await globalAutonomousRunner.runTask(fastResult.followUp, {
+                onStepStart: (stepNum, thought, tool) => {
+                  setActiveStepText(`Step ${stepNum}: [${tool}] ${thought}`);
+                },
+                onStepComplete: (step) => {
+                  setActiveStepText(`Completed step ${step.stepNumber} (${step.toolName})`);
+                },
+                onFinished: (report) => {
+                  setFeedback(report);
+                  setActiveStepText(null);
+                  setVoiceState('speaking');
+                },
+                onError: (err) => {
+                  setFeedback(`Error: ${err}`);
+                  setActiveStepText(null);
+                  setVoiceState('idle');
+                },
+              });
+
+              if (followUpTask.status === 'completed' && followUpTask.finalReport) {
+                setFeedback(followUpTask.finalReport);
+              }
+            } else {
+              setVoiceState('idle');
+              setTimeout(() => {
+                if (isOpen) {
+                  setFeedback(null);
+                  setTranscript('');
+                  globalVoiceEngine.startListening();
+                }
+              }, 1200);
+            }
+          });
+        } else {
+          // 2. Autonomous Multi-Step ReAct Loop
+          setFeedback('JARVIS: Planning & executing task...');
+          setActiveStepText('Formulating plan...');
+          speakJARVISFeedback('On it. Working on your task.', () => {});
+
+          const task = await globalAutonomousRunner.runTask(text, {
+            onStepStart: (stepNum, thought, tool) => {
+              setActiveStepText(`Step ${stepNum}: [${tool}] ${thought}`);
+            },
+            onStepComplete: (step) => {
+              setActiveStepText(`Completed step ${step.stepNumber} (${step.toolName})`);
+            },
+            onFinished: (report) => {
+              setFeedback(report);
+              setActiveStepText(null);
+              setVoiceState('speaking');
+            },
+            onError: (err) => {
+              setFeedback(`Error: ${err}`);
+              setActiveStepText(null);
+              setVoiceState('idle');
+            },
+          });
+
+          if (task.status === 'completed' && task.finalReport) {
+            setFeedback(task.finalReport);
+            setVoiceState('speaking');
+          } else if (task.status === 'failed') {
+            setFeedback(task.error || 'Task could not be completed.');
+          }
+
+          // Sync with workspace chat
+          await sendMessage(text);
+        }
+      } catch (err: any) {
+        setFeedback(`Error: ${err?.message || 'Execution failed'}`);
+        setVoiceState('idle');
+      }
+    };
 
     const unsubState = globalVoiceEngine.onStateChange((state) => {
       setVoiceState(state);
@@ -79,174 +245,18 @@ export const VoiceHUD: React.FC<Props> = ({ isOpen, onClose }) => {
       setTranscript(text);
 
       if (isFinal && text.trim().length > 0) {
-        setVoiceState('processing');
-        const activeMode = currentModeRef.current;
-
-        try {
-          // MODE 1: VoiceOS System-Wide Dictation
-          if (activeMode === 'dictation') {
-            setFeedback('Polishing spoken transcript...');
-            const dictationResult = await executeDictation(text, {
-              polishWithAI: true,
-              tone: dictationTone,
-              autoInject: true,
-            });
-
-            if (dictationResult.success) {
-              setFeedback(`Injected into active window: "${dictationResult.polishedText}"`);
-              setVoiceState('speaking');
-              speakJARVISFeedback('Text injected.', () => {
-                setVoiceState('idle');
-                setTimeout(() => {
-                  if (isOpen) {
-                    setFeedback(null);
-                    setTranscript('');
-                    globalVoiceEngine.startListening();
-                  }
-                }, 1200);
-              });
-            } else {
-              setFeedback(dictationResult.error || 'Dictation injection failed.');
-              setVoiceState('idle');
-            }
-            return;
-          }
-
-          // MODE 2: VoiceOS In-Place Selection Rewrite
-          if (activeMode === 'rewrite') {
-            setFeedback(`Capturing selection and applying "${text}"...`);
-            const rewriteResult = await executeInPlaceRewrite(text);
-
-            if (rewriteResult.success) {
-              setFeedback(`Selection updated in active app!`);
-              setVoiceState('speaking');
-              speakJARVISFeedback('Selection updated.', () => {
-                setVoiceState('idle');
-                setTimeout(() => {
-                  if (isOpen) {
-                    setFeedback(null);
-                    setTranscript('');
-                    globalVoiceEngine.startListening();
-                  }
-                }, 1200);
-              });
-            } else {
-              setFeedback(rewriteResult.error || 'Selection rewrite failed.');
-              setVoiceState('idle');
-            }
-            return;
-          }
-
-          // MODE 3: JARVIS Autonomous Agent Mode
-          // 1. Attempt sub-millisecond fast-path intent match (<1ms)
-          const fastResult = await matchAndExecuteFastAction(text);
-
-          if (fastResult && fastResult.handledDeterministically) {
-            setFeedback(fastResult.feedbackText);
-            setVoiceState('speaking');
-
-            if (fastResult.actionType === 'inspect_screen' && fastResult.details) {
-              const res = fastResult.details;
-              useChatStore.getState().addMessage({
-                role: 'user',
-                content: text,
-                activeWindowContext: res.activeWindow || undefined,
-                screenSnapshot: res.screenData
-                  ? {
-                      base64: res.screenData.base64,
-                      width: res.screenData.width,
-                      height: res.screenData.height,
-                      filePath: res.screenData.filePath,
-                    }
-                  : undefined,
-              });
-              useChatStore.getState().addMessage({
-                role: 'assistant',
-                content: res.analysis || fastResult.feedbackText,
-                activeWindowContext: res.activeWindow || undefined,
-              });
-            }
-
-            speakJARVISFeedback(fastResult.feedbackText, async () => {
-              if (fastResult.followUp) {
-                setFeedback('JARVIS: Continuing with follow-up task...');
-                setActiveStepText('Formulating plan for follow-up...');
-                speakJARVISFeedback('Proceeding with the follow-up step.', () => {});
-
-                const followUpTask = await globalAutonomousRunner.runTask(fastResult.followUp, {
-                  onStepStart: (stepNum, thought, tool) => {
-                    setActiveStepText(`Step ${stepNum}: [${tool}] ${thought}`);
-                  },
-                  onStepComplete: (step) => {
-                    setActiveStepText(`Completed step ${step.stepNumber} (${step.toolName})`);
-                  },
-                  onFinished: (report) => {
-                    setFeedback(report);
-                    setActiveStepText(null);
-                    setVoiceState('speaking');
-                  },
-                  onError: (err) => {
-                    setFeedback(`Error: ${err}`);
-                    setActiveStepText(null);
-                    setVoiceState('idle');
-                  },
-                });
-
-                if (followUpTask.status === 'completed' && followUpTask.finalReport) {
-                  setFeedback(followUpTask.finalReport);
-                }
-              } else {
-                setVoiceState('idle');
-                setTimeout(() => {
-                  if (isOpen) {
-                    setFeedback(null);
-                    setTranscript('');
-                    globalVoiceEngine.startListening();
-                  }
-                }, 1200);
-              }
-            });
-          } else {
-            // 2. Autonomous Multi-Step ReAct Loop
-            setFeedback('JARVIS: Planning & executing task...');
-            setActiveStepText('Formulating plan...');
-            speakJARVISFeedback('On it. Working on your task.', () => {});
-
-            const task = await globalAutonomousRunner.runTask(text, {
-              onStepStart: (stepNum, thought, tool) => {
-                setActiveStepText(`Step ${stepNum}: [${tool}] ${thought}`);
-              },
-              onStepComplete: (step) => {
-                setActiveStepText(`Completed step ${step.stepNumber} (${step.toolName})`);
-              },
-              onFinished: (report) => {
-                setFeedback(report);
-                setActiveStepText(null);
-                setVoiceState('speaking');
-              },
-              onError: (err) => {
-                setFeedback(`Error: ${err}`);
-                setActiveStepText(null);
-                setVoiceState('idle');
-              },
-            });
-
-            if (task.status === 'completed' && task.finalReport) {
-              setFeedback(task.finalReport);
-              setVoiceState('speaking');
-            } else if (task.status === 'failed') {
-              setFeedback(task.error || 'Task could not be completed.');
-            }
-
-            // Sync with workspace chat
-            await sendMessage(text);
-          }
-        } catch (err: any) {
-          setFeedback(`Error: ${err?.message || 'Execution failed'}`);
-          setVoiceState('idle');
-        }
+        await processCommand(text);
       }
     });
+
+    // Automatically execute pending hands-free voice command if triggered by wake-word
+    const pendingCmd = useVoiceStore.getState().consumePendingCommand();
+    if (pendingCmd && pendingCmd.trim().length > 0) {
+      setTranscript(pendingCmd);
+      processCommand(pendingCmd);
+    } else {
+      globalVoiceEngine.startListening();
+    }
 
     return () => {
       unsubState();

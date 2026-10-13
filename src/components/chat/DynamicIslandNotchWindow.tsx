@@ -33,7 +33,7 @@ export const DynamicIslandNotchWindow: React.FC = () => {
   const [feedback, setFeedback] = useState<string | null>(null);
   const [nudge, setNudge] = useState<ProactiveNudge | null>(null);
 
-  const { wakeWordEnabled, toggleWakeWord } = useVoiceStore();
+  const { wakeWordEnabled, toggleWakeWord, vadSpeaking } = useVoiceStore();
   const sendMessage = useChatStore((state) => state.sendMessage);
 
   const isListening = voiceState === 'listening';
@@ -193,11 +193,11 @@ export const DynamicIslandNotchWindow: React.FC = () => {
             </button>
 
             <div className="dynamic-island-waveform">
-              <span className={`bar bar-1 ${isListening ? 'active' : ''}`} />
-              <span className={`bar bar-2 ${isListening ? 'active' : ''}`} />
-              <span className={`bar bar-3 ${isListening ? 'active' : ''}`} />
-              <span className={`bar bar-4 ${isListening ? 'active' : ''}`} />
-              <span className={`bar bar-5 ${isListening ? 'active' : ''}`} />
+              <span className={`bar bar-1 ${isListening || vadSpeaking ? 'active' : ''}`} />
+              <span className={`bar bar-2 ${isListening || vadSpeaking ? 'active' : ''}`} />
+              <span className={`bar bar-3 ${isListening || vadSpeaking ? 'active' : ''}`} />
+              <span className={`bar bar-4 ${isListening || vadSpeaking ? 'active' : ''}`} />
+              <span className={`bar bar-5 ${isListening || vadSpeaking ? 'active' : ''}`} />
             </div>
           </div>
 
@@ -221,6 +221,8 @@ export const DynamicIslandNotchWindow: React.FC = () => {
               <span className="dynamic-island-status-text idle">
                 {isListening
                   ? 'Listening for command...'
+                  : vadSpeaking
+                  ? 'Voice detected...'
                   : wakeWordEnabled
                   ? 'Hey Aeio active'
                   : 'Aeio Ambient Notch'}
