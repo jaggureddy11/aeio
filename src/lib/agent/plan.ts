@@ -159,6 +159,10 @@ export function normalizeToolName(name: string): string {
   if (lower === 'gui_scroll' || lower === 'scroll' || lower === 'mouse_scroll') return 'gui_scroll';
   if (lower === 'gui_drag' || lower === 'drag' || lower === 'mouse_drag') return 'gui_drag';
   if (lower === 'gui_inspect_screen' || lower === 'inspect_screen' || lower === 'look_at_screen') return 'gui_inspect_screen';
+  if (lower === 'browser_inspect' || lower === 'inspect_page' || lower === 'inspect_webpage') return 'browser_inspect';
+  if (lower === 'browser_click' || lower === 'click_element' || lower === 'click_browser_element') return 'browser_click';
+  if (lower === 'browser_fill' || lower === 'fill_field' || lower === 'fill_form' || lower === 'fill_browser_field') return 'browser_fill';
+  if (lower === 'verify_page_state' || lower === 'verify_page' || lower === 'verify_state') return 'verify_page_state';
   return lower;
 }
 

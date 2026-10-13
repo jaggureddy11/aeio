@@ -34,6 +34,12 @@ import {
   guiDrag,
   guiInspectScreen,
 } from './tools/guiVisionTool';
+import {
+  inspectInteractivePage,
+  clickBrowserElement,
+  fillBrowserField,
+  verifyPageState,
+} from './tools/visualBrowserTool';
 import { globalMcpManager } from '../mcp/mcpClient';
 
 export interface AgentToolDefinition {
@@ -396,6 +402,55 @@ export const AVAILABLE_AGENT_TOOLS: AgentToolDefinition[] = [
     },
   },
   {
+    name: 'browser_inspect',
+    description: 'Visually and structurally inspects an interactive web page (URL), discovering buttons, inputs, links, and capturing an optional screenshot.',
+    parameters: {
+      type: 'object',
+      properties: {
+        url: { type: 'string', description: 'Web page URL to inspect' },
+        takeScreenshot: { type: 'boolean', description: 'Whether to capture desktop visual screenshot' },
+      },
+      required: ['url'],
+    },
+  },
+  {
+    name: 'browser_click',
+    description: 'Simulates clicking an interactive DOM element on a webpage by selector or target index.',
+    parameters: {
+      type: 'object',
+      properties: {
+        url: { type: 'string', description: 'Target webpage URL' },
+        target: { description: 'Target element index number (e.g. 1) or CSS selector' },
+      },
+      required: ['url', 'target'],
+    },
+  },
+  {
+    name: 'browser_fill',
+    description: 'Simulates filling a form input field on a webpage with a specified value by selector or element index.',
+    parameters: {
+      type: 'object',
+      properties: {
+        url: { type: 'string', description: 'Target webpage URL' },
+        target: { description: 'Target input field index number or CSS selector' },
+        value: { type: 'string', description: 'Text value to fill into the input field' },
+      },
+      required: ['url', 'target', 'value'],
+    },
+  },
+  {
+    name: 'verify_page_state',
+    description: 'Verifies whether a page response or output contains expected state markers or confirmation text.',
+    parameters: {
+      type: 'object',
+      properties: {
+        expected: { type: 'string', description: 'Expected text or confirmation phrase to verify' },
+        content: { type: 'string', description: 'Page content or HTML text to check against' },
+      },
+      required: ['expected', 'content'],
+    },
+  },
+  {
     name: 'finish',
     description: 'Call this tool when the overall goal has been completely achieved, providing a concise final summary.',
     parameters: {
@@ -600,6 +655,31 @@ export async function executeAgentTool(toolName: string, args: Record<string, an
         app: args.app || args.appName,
         instruction: args.instruction || args.query,
       });
+    }
+
+    case 'browser_inspect': {
+      const url = args.url || '';
+      const takeScreenshot = Boolean(args.takeScreenshot ?? args.screenshot);
+      return await inspectInteractivePage(url, takeScreenshot);
+    }
+
+    case 'browser_click': {
+      const url = args.url || '';
+      const target = args.target ?? args.selector ?? args.index ?? '';
+      return await clickBrowserElement(url, target);
+    }
+
+    case 'browser_fill': {
+      const url = args.url || '';
+      const target = args.target ?? args.selector ?? args.index ?? '';
+      const value = args.value !== undefined ? String(args.value) : '';
+      return await fillBrowserField(url, target, value);
+    }
+
+    case 'verify_page_state': {
+      const expected = args.expected ?? args.expectedSubstring ?? '';
+      const content = args.content ?? args.html ?? '';
+      return verifyPageState(expected, content);
     }
 
     case 'finish': {

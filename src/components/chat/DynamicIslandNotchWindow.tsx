@@ -10,8 +10,11 @@ import {
   Volume2,
   CheckCircle2,
   Sparkles,
+  Lightbulb,
+  Play,
 } from 'lucide-react';
 import { globalVoiceEngine, VoiceState } from '../../lib/voice/voiceEngine';
+import { globalProactiveCopilot, ProactiveNudge } from '../../lib/agent/proactiveCopilot';
 import { useVoiceStore } from '../../stores/voiceStore';
 import { useChatStore } from '../../stores/chatStore';
 import {
@@ -26,6 +29,7 @@ export const DynamicIslandNotchWindow: React.FC = () => {
   const [transcript, setTranscript] = useState('');
   const [activeStepText, setActiveStepText] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
+  const [nudge, setNudge] = useState<ProactiveNudge | null>(null);
 
   const { wakeWordEnabled, toggleWakeWord } = useVoiceStore();
   const sendMessage = useChatStore((state) => state.sendMessage);
@@ -33,6 +37,24 @@ export const DynamicIslandNotchWindow: React.FC = () => {
   const isListening = voiceState === 'listening';
   const isExpandedRef = useRef(isExpanded);
   isExpandedRef.current = isExpanded;
+
+  // Run proactive copilot suggestion
+  const handleRunNudge = async (targetNudge: ProactiveNudge) => {
+    globalProactiveCopilot.dismissNudge();
+    setNudge(null);
+    setFeedback(`Running: ${targetNudge.title}`);
+    playSystemEarcon('processing').catch(() => {});
+    try {
+      await sendMessage(targetNudge.suggestedPrompt);
+      playSystemEarcon('success').catch(() => {});
+      setTimeout(() => {
+        setFeedback(null);
+      }, 3500);
+    } catch {
+      setFeedback('Failed to run suggestion');
+      playSystemEarcon('error').catch(() => {});
+    }
+  };
 
   // Toggle expand / collapse height in Tauri
   const handleToggleExpand = async () => {
@@ -73,8 +95,12 @@ export const DynamicIslandNotchWindow: React.FC = () => {
     }
   };
 
-  // Wire Voice Engine listeners
+  // Wire Voice Engine & Proactive Copilot listeners
   useEffect(() => {
+    const unsubNudge = globalProactiveCopilot.subscribe((n) => {
+      setNudge(n);
+    });
+
     const unsubState = globalVoiceEngine.onStateChange((state) => {
       setVoiceState(state);
     });
@@ -120,6 +146,7 @@ export const DynamicIslandNotchWindow: React.FC = () => {
       .catch(() => {});
 
     return () => {
+      unsubNudge();
       unsubState();
       unsubTranscript();
       if (unlistenStep) unlistenStep();
@@ -155,7 +182,7 @@ export const DynamicIslandNotchWindow: React.FC = () => {
             </div>
           </div>
 
-          {/* Center: Live label / transcript / autonomous step */}
+          {/* Center: Live label / transcript / autonomous step / proactive nudge */}
           <div className="dynamic-island-center" onClick={handleToggleExpand}>
             {feedback ? (
               <span className="dynamic-island-status-text success">
@@ -167,6 +194,10 @@ export const DynamicIslandNotchWindow: React.FC = () => {
               </span>
             ) : transcript ? (
               <span className="dynamic-island-status-text transcript">"{transcript}"</span>
+            ) : nudge ? (
+              <span className="dynamic-island-status-text proactive-nudge" title={nudge.detail}>
+                <Lightbulb size={12} className="nudge-icon" /> {nudge.title}
+              </span>
             ) : (
               <span className="dynamic-island-status-text idle">
                 {isListening
@@ -226,19 +257,48 @@ export const DynamicIslandNotchWindow: React.FC = () => {
         {isExpanded && (
           <div className="dynamic-island-expanded-drawer">
             <div className="dynamic-island-expanded-content">
+              {nudge && (
+                <div className="dynamic-island-expanded-nudge">
+                  <div className="nudge-header">
+                    <span className="nudge-tag">{nudge.category}</span>
+                    <span className="nudge-app">{nudge.appName}</span>
+                  </div>
+                  <p className="nudge-detail">{nudge.detail}</p>
+                  <div className="nudge-actions">
+                    <button
+                      type="button"
+                      className="nudge-run-btn"
+                      onClick={() => handleRunNudge(nudge)}
+                    >
+                      <Play size={10} /> Run Suggestion
+                    </button>
+                    <button
+                      type="button"
+                      className="nudge-dismiss-btn"
+                      onClick={() => {
+                        globalProactiveCopilot.dismissNudge();
+                        setNudge(null);
+                      }}
+                    >
+                      Dismiss
+                    </button>
+                  </div>
+                </div>
+              )}
+
               {transcript ? (
                 <div className="dynamic-island-expanded-transcript">
                   <span className="drawer-label">Spoken:</span>
                   <p className="drawer-text">"{transcript}"</p>
                 </div>
-              ) : (
+              ) : !nudge ? (
                 <div className="dynamic-island-expanded-hint">
                   <Volume2 size={14} />
                   <span>
                     Speak naturally or say <strong style={{ color: 'var(--claude-accent)' }}>"Hey Aeio"</strong> followed by your command.
                   </span>
                 </div>
-              )}
+              ) : null}
 
               {activeStepText && (
                 <div className="dynamic-island-expanded-step">

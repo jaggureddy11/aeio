@@ -16,6 +16,7 @@ import { VoiceHUD } from './components/chat/VoiceHUD';
 import { BackgroundDock } from './components/chat/BackgroundDock';
 import { DynamicIslandNotchWindow } from './components/chat/DynamicIslandNotchWindow';
 import { useVoiceStore } from './stores/voiceStore';
+import { globalProactiveCopilot } from './lib/agent/proactiveCopilot';
 import './App.css';
 
 export const App: React.FC = () => {
@@ -204,6 +205,14 @@ export const App: React.FC = () => {
       if (unlisten) unlisten();
     };
   }, [setOverlayState]);
+
+  // Start Contextual Desktop Proactive Copilot (polls active window and suggests actions)
+  useEffect(() => {
+    globalProactiveCopilot.start(4000);
+    return () => {
+      globalProactiveCopilot.stop();
+    };
+  }, []);
 
   useEffect(() => {
     const handleGlobalKeyDown = (e: KeyboardEvent) => {
