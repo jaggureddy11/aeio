@@ -35,7 +35,10 @@ import {
   simulateScroll,
   openApp,
   injectTextToActiveApp,
+  captureScreenData,
+  playSystemEarcon,
 } from '../lib/ipc';
+import { inspectActiveScreen } from '../lib/vision/screenInspector';
 import { evaluateMath, solveEquation, solveSystem } from '../lib/agent/tools/mathTool';
 import { browsePage, extractPageLinks } from '../lib/agent/tools/browserTool';
 import { executeAgentTool } from '../lib/agent/toolRegistry';
@@ -111,6 +114,12 @@ export interface ChatMessage {
   workspaceId?: string;
   activeWindowContext?: ActiveWindowInfo;
   plan?: ExecutionPlan;
+  screenSnapshot?: {
+    base64: string;
+    width: number;
+    height: number;
+    filePath?: string;
+  };
 }
 
 export interface ChatState {
@@ -143,6 +152,7 @@ export interface ChatState {
     userContent: string,
     options?: { isAgenticContinuation?: boolean; role?: 'user' | 'system' }
   ) => Promise<void>;
+  inspectCurrentScreen: (customPrompt?: string) => Promise<void>;
   continueAgenticTurn: (
     assistantMessageId: string,
     completedTool: ToolExecution
@@ -1999,6 +2009,60 @@ export const useChatStore = create<ChatState>((set, get) => ({
     } finally {
       if (slowNoticeTimer) clearTimeout(slowNoticeTimer);
       if (slowWarnTimer) clearTimeout(slowWarnTimer);
+      set({ isLoading: false });
+    }
+  },
+
+  inspectCurrentScreen: async (customPrompt?: string) => {
+    set({ isLoading: true, error: null });
+    const userPrompt = customPrompt?.trim() || 'What am I looking at right now?';
+
+    try {
+      playSystemEarcon('processing').catch(() => {});
+      const screenData = await captureScreenData();
+      let activeWinInfo: ActiveWindowInfo | undefined = undefined;
+      try {
+        activeWinInfo = await getActiveWindow();
+      } catch {}
+
+      get().addMessage({
+        role: 'user',
+        content: userPrompt,
+        activeWindowContext: activeWinInfo,
+        screenSnapshot: {
+          base64: screenData.base64,
+          width: screenData.width,
+          height: screenData.height,
+          filePath: screenData.filePath,
+        },
+      });
+
+      const assistantId = get().addMessage({
+        role: 'assistant',
+        content: 'Analyzing visual screen layout and active window context...',
+        isStreaming: true,
+        activeWindowContext: activeWinInfo,
+      });
+
+      const result = await inspectActiveScreen(userPrompt, screenData);
+
+      get().updateMessageContent(
+        assistantId,
+        result.analysis,
+        false,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        activeWinInfo
+      );
+
+      playSystemEarcon('success').catch(() => {});
+    } catch (err: unknown) {
+      const errStr = err instanceof Error ? err.message : String(err);
+      playSystemEarcon('error').catch(() => {});
+      set({ error: `Visual screen inspection failed: ${errStr}` });
+    } finally {
       set({ isLoading: false });
     }
   },

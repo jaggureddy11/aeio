@@ -56,10 +56,18 @@ export class QwenCoderProvider implements LLMProvider {
       });
     }
 
+    const formattedMessages = payloadMessages.map((m) => {
+      const msgObj: Record<string, any> = { role: m.role, content: m.content };
+      if (m.images && m.images.length > 0) {
+        msgObj.images = m.images.map((img) => img.replace(/^data:image\/\w+;base64,/, ''));
+      }
+      return msgObj;
+    });
+
     // Local inference hyperparameters calibrated for Qwen3-Coder
     const requestBody = {
       model,
-      messages: payloadMessages,
+      messages: formattedMessages,
       stream: !!options?.onChunk,
       keep_alive: options?.keepAlive || '60m', // Keep model resident in Apple Silicon unified memory / GPU VRAM
       options: {

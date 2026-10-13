@@ -21,10 +21,27 @@ export class ClaudeProvider implements LLMProvider {
     const model = options.model || 'claude-3-5-sonnet-20241022';
     const formattedMessages = messages
       .filter((m) => m.role === 'user' || m.role === 'assistant')
-      .map((m) => ({
-        role: m.role as 'user' | 'assistant',
-        content: m.content,
-      }));
+      .map((m) => {
+        if (m.images && m.images.length > 0) {
+          const contentBlocks: any[] = m.images.map((img) => ({
+            type: 'image',
+            source: {
+              type: 'base64',
+              media_type: 'image/png',
+              data: img.replace(/^data:image\/\w+;base64,/, ''),
+            },
+          }));
+          contentBlocks.push({ type: 'text', text: m.content });
+          return {
+            role: m.role as 'user' | 'assistant',
+            content: contentBlocks,
+          };
+        }
+        return {
+          role: m.role as 'user' | 'assistant',
+          content: m.content,
+        };
+      });
 
     const body: Record<string, unknown> = {
       model,

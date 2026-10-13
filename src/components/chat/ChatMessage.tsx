@@ -10,6 +10,9 @@ import {
   Cpu,
   Copy,
   Bot,
+  Eye,
+  Maximize2,
+  Minimize2,
 } from 'lucide-react';
 import { ToolApprovalCard } from './ToolApproval';
 import { PlanExecutionCard } from './PlanExecutionCard';
@@ -83,6 +86,7 @@ export const ChatMessageItem: React.FC<Props> = React.memo(({ message }) => {
 
   const [showRecalled, setShowRecalled] = useState(false);
   const [showReasoning, setShowReasoning] = useState(false);
+  const [zoomOpen, setZoomOpen] = useState(false);
 
   const hasRecalled = !isUser && message.recalledMemories && message.recalledMemories.length > 0;
   const hasProposed = !isUser && message.proposedMemories && message.proposedMemories.length > 0;
@@ -97,6 +101,40 @@ export const ChatMessageItem: React.FC<Props> = React.memo(({ message }) => {
     return (
       <div className="claude-message-row user-row">
         <div className="claude-user-bubble">
+          {message.screenSnapshot && (
+            <div className="claude-screen-snapshot-card">
+              <div className="snapshot-header">
+                <div className="snapshot-title-group">
+                  <Eye size={12} className="snapshot-badge-icon" />
+                  <span className="snapshot-label">Screen Capture</span>
+                  <span className="snapshot-dims">
+                    {message.screenSnapshot.width} × {message.screenSnapshot.height}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  className="snapshot-zoom-btn"
+                  onClick={() => setZoomOpen(!zoomOpen)}
+                  title={zoomOpen ? 'Collapse screenshot' : 'Expand screenshot'}
+                >
+                  {zoomOpen ? <Minimize2 size={12} /> : <Maximize2 size={12} />}
+                  <span>{zoomOpen ? 'Collapse' : 'Expand'}</span>
+                </button>
+              </div>
+              <div className={`snapshot-image-container ${zoomOpen ? 'expanded' : ''}`}>
+                <img
+                  src={
+                    message.screenSnapshot.base64.startsWith('data:')
+                      ? message.screenSnapshot.base64
+                      : `data:image/png;base64,${message.screenSnapshot.base64}`
+                  }
+                  alt="Captured active screen"
+                  className="snapshot-image-preview"
+                  onClick={() => setZoomOpen(!zoomOpen)}
+                />
+              </div>
+            </div>
+          )}
           <div className="user-message-text">{message.content}</div>
           <div className="user-message-meta">{formattedTime}</div>
         </div>

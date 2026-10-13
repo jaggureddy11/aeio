@@ -27,10 +27,24 @@ export class GeminiProvider implements LLMProvider {
     // Convert messages to Gemini format (roles: 'user' | 'model')
     const contents = messages
       .filter((m) => m.role === 'user' || m.role === 'assistant')
-      .map((m) => ({
-        role: m.role === 'assistant' ? 'model' : 'user',
-        parts: [{ text: m.content }],
-      }));
+      .map((m) => {
+        const parts: any[] = [];
+        if (m.images && m.images.length > 0) {
+          m.images.forEach((img) => {
+            parts.push({
+              inlineData: {
+                mimeType: 'image/png',
+                data: img.replace(/^data:image\/\w+;base64,/, ''),
+              },
+            });
+          });
+        }
+        parts.push({ text: m.content });
+        return {
+          role: m.role === 'assistant' ? 'model' : 'user',
+          parts,
+        };
+      });
 
     const body: Record<string, unknown> = {
       contents,

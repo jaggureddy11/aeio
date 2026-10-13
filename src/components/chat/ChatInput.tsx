@@ -1,8 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { ArrowUp, Loader2, ShieldCheck, AlertTriangle, Mic } from 'lucide-react';
+import { ArrowUp, Loader2, ShieldCheck, AlertTriangle, Mic, Eye } from 'lucide-react';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { useWorkspaceStore } from '../../stores/workspaceStore';
 import { useVoiceStore } from '../../stores/voiceStore';
+import { useChatStore } from '../../stores/chatStore';
 import { searchMemories } from '../../lib/ipc';
 
 interface Props {
@@ -18,8 +19,16 @@ export const ChatInput: React.FC<Props> = ({ onSend, isLoading }) => {
 
   const { isVoiceHUDOpen, toggleVoiceHUD } = useVoiceStore();
   const { activeProvider, neverSendMemoriesToCloud } = useSettingsStore();
+  const inspectCurrentScreen = useChatStore((state) => state.inspectCurrentScreen);
   const activeWs = useWorkspaceStore((state) => state.activeWorkspace);
   const wsId = activeWs?.id || 'default';
+
+  const handleInspectScreen = async () => {
+    if (isLoading) return;
+    const prompt = input.trim() || undefined;
+    setInput('');
+    await inspectCurrentScreen(prompt);
+  };
 
   const isCloudProvider = activeProvider === 'claude' || activeProvider === 'openai' || activeProvider === 'aeio-free' || activeProvider === 'gemini';
   const cloudProviderName =
@@ -143,6 +152,17 @@ export const ChatInput: React.FC<Props> = ({ onSend, isLoading }) => {
           <div className="composer-toolbar-right">
             <button
               type="button"
+              className="claude-inspect-btn"
+              onClick={handleInspectScreen}
+              disabled={isLoading}
+              title="Inspect Active Screen (Cmd+Shift+O)"
+              aria-label="Inspect active screen"
+            >
+              <Eye size={16} />
+            </button>
+
+            <button
+              type="button"
               className={`claude-voice-btn ${isVoiceHUDOpen ? 'active' : ''}`}
               onClick={() => toggleVoiceHUD()}
               title="Voice Automation / JARVIS Mode (Cmd+Shift+V)"
@@ -169,7 +189,7 @@ export const ChatInput: React.FC<Props> = ({ onSend, isLoading }) => {
       </div>
 
       <div className="claude-composer-subtext">
-        <span>Aeio runs locally with persistent long-term memory. Return to send · Cmd+Shift+V for voice</span>
+        <span>Aeio runs locally with persistent long-term memory. Return to send · Cmd+Shift+V for voice · Cmd+Shift+O to inspect screen</span>
       </div>
     </div>
   );

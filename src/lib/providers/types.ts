@@ -1,6 +1,7 @@
 export interface ProviderMessage {
   role: 'user' | 'assistant' | 'system';
   content: string;
+  images?: string[];
 }
 
 export interface ChatOptions {

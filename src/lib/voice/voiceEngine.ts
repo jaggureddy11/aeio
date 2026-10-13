@@ -38,6 +38,7 @@ export interface VoiceActionResult {
 
 import { evaluateMath, solveEquation } from '../agent/tools/mathTool';
 import { cleanDirective, matchUiCommand, executeMatchedUiCommand } from '../agent/uiCommands';
+import { inspectActiveScreen } from '../vision/screenInspector';
 
 const NEXT_STEP_REGEX = /\s*(?:,\s*)?(?:and then|and|then)\s+(?=(?:browse|open|click|show|tell|read|check|look|go|see|book|order|compare|select|choose|pick|get|list|summari[sz]e|call|reserve|scroll|view|download|save|play|listen|watch|analyze|calculate|explain|find|write|summarize)\b)/i;
 
@@ -542,6 +543,27 @@ export async function matchAndExecuteFastAction(transcript: string): Promise<Voi
       } catch {
         // Fall through
       }
+    }
+  }
+
+  // 14. Multi-Modal Visual Screen Inspector ("What am I looking at?", "Inspect my screen", "What's on my screen")
+  if (
+    /^(?:hey\s+aeio\s+|aeio\s+)?(?:what\s+am\s+i\s+looking\s+at(?:\s+right\s+now)?|what(?:'s|\s+is)\s+on\s+my\s+screen|inspect\s+(?:my\s+)?screen|analyze\s+(?:my\s+)?screen|explain\s+(?:my\s+)?screen|diagnose\s+(?:my\s+)?screen)/i.test(
+      trimmed
+    )
+  ) {
+    try {
+      const inspectRes = await inspectActiveScreen(trimmed);
+      earcons.playSuccessTone();
+      return {
+        handledDeterministically: true,
+        actionType: 'inspect_screen',
+        feedbackText: inspectRes.summary || 'Visual screen inspection complete.',
+        rawTranscript: transcript,
+        details: inspectRes,
+      };
+    } catch {
+      // Fall through to agent
     }
   }
 

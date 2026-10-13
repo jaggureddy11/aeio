@@ -12,9 +12,11 @@ import {
   Sparkles,
   Lightbulb,
   Play,
+  Eye,
 } from 'lucide-react';
 import { globalVoiceEngine, VoiceState } from '../../lib/voice/voiceEngine';
 import { globalProactiveCopilot, ProactiveNudge } from '../../lib/agent/proactiveCopilot';
+import { inspectActiveScreen } from '../../lib/vision/screenInspector';
 import { useVoiceStore } from '../../stores/voiceStore';
 import { useChatStore } from '../../stores/chatStore';
 import {
@@ -52,6 +54,23 @@ export const DynamicIslandNotchWindow: React.FC = () => {
       }, 3500);
     } catch {
       setFeedback('Failed to run suggestion');
+      playSystemEarcon('error').catch(() => {});
+    }
+  };
+
+  // Run Visual Screen Inspection ("What am I looking at?")
+  const handleInspectScreen = async () => {
+    setFeedback('Inspecting screen...');
+    playSystemEarcon('processing').catch(() => {});
+    try {
+      const res = await inspectActiveScreen();
+      setFeedback(res.summary);
+      playSystemEarcon('success').catch(() => {});
+      setTimeout(() => {
+        setFeedback(null);
+      }, 5000);
+    } catch {
+      setFeedback('Screen inspection failed');
       playSystemEarcon('error').catch(() => {});
     }
   };
@@ -219,6 +238,16 @@ export const DynamicIslandNotchWindow: React.FC = () => {
               aria-label="Toggle Wake Word"
             >
               <Radio size={13} className={wakeWordEnabled ? 'pulsing' : ''} />
+            </button>
+
+            <button
+              type="button"
+              className="dynamic-island-action-btn"
+              onClick={handleInspectScreen}
+              title="Inspect Active Screen (What am I looking at?)"
+              aria-label="Inspect Active Screen"
+            >
+              <Eye size={13} />
             </button>
 
             <button

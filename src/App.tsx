@@ -153,6 +153,11 @@ export const App: React.FC = () => {
         }).then((unsub) => {
           unlistenVoice = unsub;
         });
+
+        listen('inspect-screen', () => {
+          setActiveTab('chat');
+          useChatStore.getState().inspectCurrentScreen();
+        });
       })
       .catch(() => {});
 
@@ -245,6 +250,14 @@ export const App: React.FC = () => {
       if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 'e') {
         e.preventDefault();
         toggleVoiceHUD('rewrite');
+        return;
+      }
+
+      // Visual Screen Inspector hotkey: Cmd/Ctrl + Shift + O
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 'o') {
+        e.preventDefault();
+        setActiveTab('chat');
+        useChatStore.getState().inspectCurrentScreen();
         return;
       }
 

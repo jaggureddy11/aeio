@@ -23,7 +23,7 @@ fn greet(name: &str) -> String {
 pub fn run() {
     let _ = dotenvy::dotenv();
     let global_shortcut_plugin = GlobalShortcutBuilder::new()
-        .with_shortcuts(["CmdOrCtrl+Shift+Space", "CmdOrCtrl+Shift+V"])
+        .with_shortcuts(["CmdOrCtrl+Shift+Space", "CmdOrCtrl+Shift+V", "CmdOrCtrl+Shift+O"])
         .expect("Failed to parse global shortcuts")
         .with_handler(|app, shortcut, event| {
             if event.state() == ShortcutState::Pressed {
@@ -42,6 +42,8 @@ pub fn run() {
                 } else if shortcut_str.contains("V") || shortcut_str.contains("KeyV") {
                     let _ = crate::tools::notch::toggle_notch_window(app);
                     let _ = app.emit("open-voice-hud", ());
+                } else if shortcut_str.contains("O") || shortcut_str.contains("KeyO") {
+                    let _ = app.emit("inspect-screen", ());
                 }
             }
         })

@@ -32,13 +32,21 @@ export class OllamaProvider implements LLMProvider {
       });
     }
 
+    const formattedMessages = payloadMessages.map((m) => {
+      const msgObj: Record<string, any> = { role: m.role, content: m.content };
+      if (m.images && m.images.length > 0) {
+        msgObj.images = m.images.map((img) => img.replace(/^data:image\/\w+;base64,/, ''));
+      }
+      return msgObj;
+    });
+
     try {
       const response = await fetch(`${OLLAMA_BASE_URL}/api/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           model,
-          messages: payloadMessages,
+          messages: formattedMessages,
           stream: !!options?.onChunk,
           options: {
             temperature: options?.temperature ?? 0.7,

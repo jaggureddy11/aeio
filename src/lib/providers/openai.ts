@@ -28,6 +28,27 @@ export class OpenAIProvider implements LLMProvider {
       });
     }
 
+    const formattedMessages = payloadMessages.map((m) => {
+      if (m.images && m.images.length > 0) {
+        return {
+          role: m.role,
+          content: [
+            ...m.images.map((img) => ({
+              type: 'image_url',
+              image_url: {
+                url: img.startsWith('data:') ? img : `data:image/png;base64,${img}`,
+              },
+            })),
+            { type: 'text', text: m.content },
+          ],
+        };
+      }
+      return {
+        role: m.role,
+        content: m.content,
+      };
+    });
+
     let response: Response;
     try {
       response = await fetch(OPENAI_ENDPOINT, {
@@ -38,7 +59,7 @@ export class OpenAIProvider implements LLMProvider {
         },
         body: JSON.stringify({
           model,
-          messages: payloadMessages,
+          messages: formattedMessages,
           stream: !!options.onChunk,
           temperature: options.temperature ?? 0.7,
         }),

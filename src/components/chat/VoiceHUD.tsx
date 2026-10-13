@@ -144,6 +144,29 @@ export const VoiceHUD: React.FC<Props> = ({ isOpen, onClose }) => {
           if (fastResult && fastResult.handledDeterministically) {
             setFeedback(fastResult.feedbackText);
             setVoiceState('speaking');
+
+            if (fastResult.actionType === 'inspect_screen' && fastResult.details) {
+              const res = fastResult.details;
+              useChatStore.getState().addMessage({
+                role: 'user',
+                content: text,
+                activeWindowContext: res.activeWindow || undefined,
+                screenSnapshot: res.screenData
+                  ? {
+                      base64: res.screenData.base64,
+                      width: res.screenData.width,
+                      height: res.screenData.height,
+                      filePath: res.screenData.filePath,
+                    }
+                  : undefined,
+              });
+              useChatStore.getState().addMessage({
+                role: 'assistant',
+                content: res.analysis || fastResult.feedbackText,
+                activeWindowContext: res.activeWindow || undefined,
+              });
+            }
+
             speakJARVISFeedback(fastResult.feedbackText, async () => {
               if (fastResult.followUp) {
                 setFeedback('JARVIS: Continuing with follow-up task...');
