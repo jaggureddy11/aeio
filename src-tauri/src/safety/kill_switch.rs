@@ -125,6 +125,11 @@ pub fn register_kill_switch_app_handle(app: AppHandle) {
     let _ = APP_HANDLE.set(app);
 }
 
+#[cfg(target_os = "macos")]
+extern "C" {
+    fn CGEventSourceKeyState(state_id: i32, keycode: u16) -> bool;
+}
+
 /// Starts the native low-level key listener on a dedicated OS thread.
 /// Runs independently of the Tauri main event loop.
 pub fn start_kill_switch_listener() {
@@ -133,51 +138,96 @@ pub fn start_kill_switch_listener() {
     }
 
     let tracker = Arc::new(Mutex::new(KeyHoldTracker::new()));
-    let tracker_ticker = Arc::clone(&tracker);
 
-    // Dedicated high-resolution ticker thread to detect hold expiration even without key-repeat
-    std::thread::Builder::new()
-        .name("kill-switch-ticker".to_string())
-        .spawn(move || {
-            loop {
-                std::thread::sleep(Duration::from_millis(25));
-                let should_halt = {
-                    let mut t = tracker_ticker.lock().unwrap();
-                    t.check_elapsed(Instant::now(), KILL_KEY_HOLD_DURATION)
+    #[cfg(target_os = "macos")]
+    {
+        // On macOS Sonoma/Sequoia, rdev::listen runs a background CGEventTap that calls
+        // TSMGetInputSourceProperty, triggering an internal macOS assertion failure
+        // (_dispatch_assert_queue_fail) because HIToolbox requires input source queries
+        // to be on the main queue.
+        // Instead, we use CoreGraphics' CGEventSourceKeyState(0, 53) to query the physical
+        // Escape key state atomically without layout conversions or queue assertions.
+        std::thread::Builder::new()
+            .name("kill-switch-ticker".to_string())
+            .spawn(move || {
+                const ESCAPE_KEYCODE: u16 = 53;
+                const STATE_COMBINED_SESSION: i32 = 0;
+
+                loop {
+                    std::thread::sleep(Duration::from_millis(25));
+                    let is_down = unsafe { CGEventSourceKeyState(STATE_COMBINED_SESSION, ESCAPE_KEYCODE) };
+
+                    let should_halt = {
+                        let mut t = tracker.lock().unwrap();
+                        if is_down {
+                            if !t.is_held() {
+                                t.handle_key_down(Instant::now(), KILL_KEY_HOLD_DURATION);
+                            }
+                            t.check_elapsed(Instant::now(), KILL_KEY_HOLD_DURATION)
+                        } else {
+                            if t.is_held() {
+                                t.handle_key_up();
+                            }
+                            false
+                        }
+                    };
+
+                    if should_halt {
+                        trigger_kill_switch("Escape key held for >= 300ms");
+                    }
+                }
+            })
+            .expect("Failed to spawn macOS kill switch ticker thread");
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        let tracker_ticker = Arc::clone(&tracker);
+
+        // Dedicated high-resolution ticker thread to detect hold expiration even without key-repeat
+        std::thread::Builder::new()
+            .name("kill-switch-ticker".to_string())
+            .spawn(move || {
+                loop {
+                    std::thread::sleep(Duration::from_millis(25));
+                    let should_halt = {
+                        let mut t = tracker_ticker.lock().unwrap();
+                        t.check_elapsed(Instant::now(), KILL_KEY_HOLD_DURATION)
+                    };
+
+                    if should_halt {
+                        trigger_kill_switch("Escape key held for >= 300ms");
+                    }
+                }
+            })
+            .expect("Failed to spawn kill switch ticker thread");
+
+        // Dedicated OS thread running native event hook
+        std::thread::Builder::new()
+            .name("kill-switch-listener".to_string())
+            .spawn(move || {
+                let callback = move |event: rdev::Event| {
+                    match event.event_type {
+                        rdev::EventType::KeyPress(rdev::Key::Escape) => {
+                            let mut t = tracker.lock().unwrap();
+                            if !t.is_held() {
+                                t.handle_key_down(Instant::now(), KILL_KEY_HOLD_DURATION);
+                            }
+                        }
+                        rdev::EventType::KeyRelease(rdev::Key::Escape) => {
+                            let mut t = tracker.lock().unwrap();
+                            t.handle_key_up();
+                        }
+                        _ => {}
+                    }
                 };
 
-                if should_halt {
-                    trigger_kill_switch("Escape key held for >= 300ms");
+                if let Err(err) = rdev::listen(callback) {
+                    eprintln!("[KillSwitch] Native OS event listener returned error: {:?}", err);
                 }
-            }
-        })
-        .expect("Failed to spawn kill switch ticker thread");
-
-    // Dedicated OS thread running native event hook
-    std::thread::Builder::new()
-        .name("kill-switch-listener".to_string())
-        .spawn(move || {
-            let callback = move |event: rdev::Event| {
-                match event.event_type {
-                    rdev::EventType::KeyPress(rdev::Key::Escape) => {
-                        let mut t = tracker.lock().unwrap();
-                        if !t.is_held() {
-                            t.handle_key_down(Instant::now(), KILL_KEY_HOLD_DURATION);
-                        }
-                    }
-                    rdev::EventType::KeyRelease(rdev::Key::Escape) => {
-                        let mut t = tracker.lock().unwrap();
-                        t.handle_key_up();
-                    }
-                    _ => {}
-                }
-            };
-
-            if let Err(err) = rdev::listen(callback) {
-                eprintln!("[KillSwitch] Native OS event listener returned error: {:?}", err);
-            }
-        })
-        .expect("Failed to spawn kill switch listener thread");
+            })
+            .expect("Failed to spawn kill switch listener thread");
+    }
 }
 
 /// Executes an action loop, asserting that before EVERY single action
