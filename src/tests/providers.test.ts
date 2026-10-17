@@ -62,7 +62,7 @@ describe('LLM Providers Unit Tests', () => {
       );
       const healthWithQwen = await provider.checkHealth();
       expect(healthWithQwen.ok).toBe(true);
-      expect(healthWithQwen.message).toContain('Qwen3-Coder is installed');
+      expect(healthWithQwen.message).toContain('Qwen is ready');
 
       // Healthy without Qwen weights
       globalThis.fetch = vi.fn().mockResolvedValueOnce(

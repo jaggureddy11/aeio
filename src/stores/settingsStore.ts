@@ -126,7 +126,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   activeTab: 'chat',
   activeProvider: (getStoredString('aeio_active_provider', 'auto') as LLMProviderType) || 'auto',
   theme: (getStoredString('aeio_theme_mode', 'light') as ThemeMode) || 'light',
-  ollamaModel: 'qwen3-coder',
+  ollamaModel: getStoredString('aeio_ollama_model', 'qwen2.5:7b'),
   bedrockRegion: getStoredString('aeio_bedrock_region', 'ap-southeast-2'),
   bedrockModel: getStoredString('aeio_bedrock_model', 'anthropic.claude-3-5-sonnet-20241022-v2:0'),
   activeWindowAwareness: getStoredBool('aeio_active_window_awareness', false),
@@ -150,7 +150,12 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     } catch {}
     set({ theme });
   },
-  setOllamaModel: (ollamaModel) => set({ ollamaModel }),
+  setOllamaModel: (ollamaModel) => {
+    try {
+      localStorage.setItem('aeio_ollama_model', ollamaModel);
+    } catch {}
+    set({ ollamaModel });
+  },
   setBedrockRegion: (bedrockRegion: string) => {
     try {
       localStorage.setItem('aeio_bedrock_region', bedrockRegion);

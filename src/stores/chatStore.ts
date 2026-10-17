@@ -1505,7 +1505,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     const providerId = settings.activeProvider;
     const modelName =
       providerId === 'qwen-coder'
-        ? settings.ollamaModel || 'qwen3-coder'
+        ? settings.ollamaModel || 'qwen2.5:7b'
         : providerId === 'ollama'
         ? settings.ollamaModel || 'llama3.2'
         : providerId === 'claude'

@@ -554,16 +554,16 @@ export const SettingsPanel: React.FC<Props> = ({ isOpen, onClose, onOpenOnboardi
                     className={`settings-provider-row ${activeProvider === 'qwen-coder' ? 'selected' : ''}`}
                     onClick={() => {
                       setActiveProvider('qwen-coder');
-                      if (!ollamaModel || ollamaModel === 'llama3.2') {
-                        setOllamaModel('qwen3-coder');
+                      if (!ollamaModel || ollamaModel === 'llama3.2' || ollamaModel === 'qwen3-coder') {
+                        setOllamaModel('qwen2.5:7b');
                       }
                     }}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter' || e.key === ' ') {
                         e.preventDefault();
                         setActiveProvider('qwen-coder');
-                        if (!ollamaModel || ollamaModel === 'llama3.2') {
-                          setOllamaModel('qwen3-coder');
+                        if (!ollamaModel || ollamaModel === 'llama3.2' || ollamaModel === 'qwen3-coder') {
+                          setOllamaModel('qwen2.5:7b');
                         }
                       }
                     }}

@@ -1,12 +1,45 @@
 import { ChatOptions, LLMProvider, ProviderHealth, ProviderMessage } from './types';
 
 const OLLAMA_BASE_URL = 'http://localhost:11434';
-export const DEFAULT_QWEN_MODEL = 'qwen3-coder';
+export const DEFAULT_QWEN_MODEL = 'qwen2.5:7b';
+
+export async function getInstalledOllamaModels(): Promise<string[]> {
+  try {
+    const res = await fetch(`${OLLAMA_BASE_URL}/api/tags`);
+    if (!res.ok) return [];
+    const data = await res.json();
+    return (data.models || []).map((m: { name: string }) => m.name);
+  } catch {
+    return [];
+  }
+}
+
+export async function resolveInstalledOllamaModel(requestedModel: string): Promise<string> {
+  const installed = await getInstalledOllamaModels();
+  if (installed.length === 0) return requestedModel;
+
+  // 1. Exact match or tag prefix
+  const exact = installed.find(
+    (m) => m === requestedModel || m === `${requestedModel}:latest` || m.startsWith(`${requestedModel}:`)
+  );
+  if (exact) return exact;
+
+  // 2. Matching requested prefix (e.g. "qwen2.5" matching "qwen2.5:7b")
+  const prefixMatch = installed.find((m) => m.toLowerCase().includes(requestedModel.toLowerCase()));
+  if (prefixMatch) return prefixMatch;
+
+  // 3. Fallback to any installed qwen model
+  const anyQwen = installed.find((m) => m.toLowerCase().includes('qwen'));
+  if (anyQwen) return anyQwen;
+
+  // 4. Fallback to first available installed model
+  return installed[0];
+}
 
 /**
  * QwenCoderProvider
  * 
- * Specialized local-first provider for Qwen3-Coder models.
+ * Specialized local-first provider for Qwen models.
  * Isolated behind the clean LLMProvider abstraction so the underlying
  * inference engine (Ollama, vLLM, llama.cpp, or custom local server)
  * can be swapped transparently without modifying business logic.
@@ -16,7 +49,7 @@ export const DEFAULT_QWEN_MODEL = 'qwen3-coder';
  */
 export class QwenCoderProvider implements LLMProvider {
   readonly id = 'qwen-coder';
-  readonly name = 'Qwen3-Coder (Local)';
+  readonly name = 'Qwen 2.5 Coder (Local)';
 
   async checkHealth(): Promise<ProviderHealth> {
     try {
@@ -37,8 +70,8 @@ export class QwenCoderProvider implements LLMProvider {
         ok: true,
         installedModels: models,
         message: hasQwen
-          ? 'Qwen3-Coder is installed and ready for local inference.'
-          : 'Ollama is running, but Qwen model is not pulled yet. Run `ollama run qwen3:8b` or `ollama run qwen2.5:7b` to pull the weights.',
+          ? 'Qwen is ready for local inference.'
+          : `Ollama is running, but Qwen model is not pulled yet. Run \`ollama pull qwen2.5:7b\` to pull the weights.`,
       };
     } catch {
       return {
@@ -67,7 +100,7 @@ export class QwenCoderProvider implements LLMProvider {
       return msgObj;
     });
 
-    // Local inference hyperparameters calibrated for Qwen3-Coder
+    // Local inference hyperparameters calibrated for Qwen models
     const requestBody = {
       model,
       messages: formattedMessages,
@@ -91,11 +124,22 @@ export class QwenCoderProvider implements LLMProvider {
       if (!response.ok) {
         const errorText = await response.text();
         if (response.status === 404 && errorText.includes('not found')) {
+          const installed = await getInstalledOllamaModels();
+          if (installed.length > 0) {
+            throw new Error(
+              `Model "${model}" not found in Ollama. Available installed models: [${installed.join(', ')}]. Select one in Settings or run \`ollama pull ${model}\`.`
+            );
+          }
           throw new Error(
             `Model "${model}" not found locally. Run \`ollama pull ${model}\` in your terminal to download it.`
           );
         }
-        throw new Error(`Qwen3-Coder error (${response.status}): ${errorText || response.statusText}`);
+        if (errorText.includes('llama-server binary not found')) {
+          throw new Error(
+            `Ollama server error: llama-server is missing from your local Ollama installation. Run \`brew install ollama\` or download the official app from https://ollama.com/download.`
+          );
+        }
+        throw new Error(`Qwen error (${response.status}): ${errorText || response.statusText}`);
       }
 
       if (options?.onChunk && response.body) {
