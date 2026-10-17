@@ -1,4 +1,113 @@
-import { invoke } from '@tauri-apps/api/core';
+import { invoke as tauriInvoke } from '@tauri-apps/api/core';
+
+export const isTauri = (): boolean => {
+  const g = globalThis as unknown as { process?: { env?: Record<string, string | undefined> } };
+  if (g?.process?.env?.VITEST) {
+    return true;
+  }
+  return typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
+};
+
+async function invoke<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
+  if (!isTauri()) {
+    return handleWebFallback<T>(cmd, args);
+  }
+  return args !== undefined ? tauriInvoke<T>(cmd, args) : tauriInvoke<T>(cmd);
+}
+
+function handleWebFallback<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
+  if (cmd === 'list_workspaces') {
+    return Promise.resolve([
+      {
+        id: 'default',
+        name: 'Default',
+        icon: '💼',
+        description: 'Default Workspace',
+        is_active: true,
+        is_archived: false,
+        created_at: Date.now(),
+        updated_at: Date.now(),
+      },
+    ] as unknown as T);
+  }
+  if (cmd === 'get_active_workspace') {
+    return Promise.resolve({
+      id: 'default',
+      name: 'Default',
+      icon: '💼',
+      description: 'Default Workspace',
+      is_active: true,
+      is_archived: false,
+      created_at: Date.now(),
+      updated_at: Date.now(),
+    } as unknown as T);
+  }
+  if (cmd === 'load_chat_messages') {
+    try {
+      const stored = typeof localStorage !== 'undefined' ? localStorage.getItem('aeio_browser_chat_history') : null;
+      return Promise.resolve(stored ? JSON.parse(stored) : ([] as unknown as T));
+    } catch {
+      return Promise.resolve([] as unknown as T);
+    }
+  }
+  if (cmd === 'save_chat_message') {
+    try {
+      if (typeof localStorage !== 'undefined') {
+        const stored = localStorage.getItem('aeio_browser_chat_history');
+        const list = stored ? JSON.parse(stored) : [];
+        if (args && args.message) {
+          list.push(args.message);
+          localStorage.setItem('aeio_browser_chat_history', JSON.stringify(list));
+        }
+      }
+    } catch {}
+    return Promise.resolve(undefined as unknown as T);
+  }
+  if (cmd === 'clear_chat_history') {
+    try {
+      if (typeof localStorage !== 'undefined') {
+        localStorage.removeItem('aeio_browser_chat_history');
+      }
+    } catch {}
+    return Promise.resolve(undefined as unknown as T);
+  }
+  if (cmd === 'search_memories' || cmd === 'list_memories' || cmd === 'list_audit_receipts') {
+    return Promise.resolve([] as unknown as T);
+  }
+  if (cmd === 'get_system_status') {
+    return Promise.resolve({
+      os_name: 'macos',
+      battery_level: 100,
+      is_charging: true,
+      active_app: 'Browser',
+      dark_mode: true,
+      disk_available_gb: 128,
+      disk_percent_used: 50,
+      memory_available_mb: 8192,
+    } as unknown as T);
+  }
+  if (
+    cmd === 'is_ai_grounding_available' ||
+    cmd === 'has_api_key' ||
+    cmd === 'delete_api_key' ||
+    cmd === 'delete_memory' ||
+    cmd === 'check_destructive_command' ||
+    cmd === 'get_kill_switch_state'
+  ) {
+    return Promise.resolve(false as unknown as T);
+  }
+  if (
+    cmd === 'get_api_key' ||
+    cmd === 'read_clipboard' ||
+    cmd === 'open_target' ||
+    cmd === 'ping' ||
+    cmd === 'get_local_logs' ||
+    cmd === 'get_telemetry_logs'
+  ) {
+    return Promise.resolve('' as unknown as T);
+  }
+  return Promise.resolve({} as unknown as T);
+}
 
 export type MemoryCategory = 'fact' | 'preference' | 'project' | 'person';
 

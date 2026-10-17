@@ -138,8 +138,12 @@ export const App: React.FC = () => {
   }, []);
 
   useEffect(() => {
+    const isTauriEnv = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
+    if (!isTauriEnv) return;
+
     let unlistenSettings: (() => void) | undefined;
     let unlistenVoice: (() => void) | undefined;
+    let unlistenInspect: (() => void) | undefined;
 
     import('@tauri-apps/api/event')
       .then(({ listen }) => {
@@ -158,6 +162,8 @@ export const App: React.FC = () => {
         listen('inspect-screen', () => {
           setActiveTab('chat');
           useChatStore.getState().inspectCurrentScreen();
+        }).then((unsub) => {
+          unlistenInspect = unsub;
         });
       })
       .catch(() => {});
@@ -165,6 +171,7 @@ export const App: React.FC = () => {
     return () => {
       if (unlistenSettings) unlistenSettings();
       if (unlistenVoice) unlistenVoice();
+      if (unlistenInspect) unlistenInspect();
     };
   }, [setActiveTab, toggleVoiceHUD]);
 
@@ -218,15 +225,18 @@ export const App: React.FC = () => {
     globalProactiveHeartbeat.start(20000);
 
     let unlistenHealth: (() => void) | undefined;
-    import('@tauri-apps/api/event')
-      .then(({ listen }) => {
-        listen('run-system-health-check', () => {
-          globalProactiveHeartbeat.checkNow(true).catch(() => {});
-        }).then((unsub) => {
-          unlistenHealth = unsub;
-        });
-      })
-      .catch(() => {});
+    const isTauriEnv = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
+    if (isTauriEnv) {
+      import('@tauri-apps/api/event')
+        .then(({ listen }) => {
+          listen('run-system-health-check', () => {
+            globalProactiveHeartbeat.checkNow(true).catch(() => {});
+          }).then((unsub) => {
+            unlistenHealth = unsub;
+          });
+        })
+        .catch(() => {});
+    }
 
     return () => {
       globalProactiveCopilot.stop();
