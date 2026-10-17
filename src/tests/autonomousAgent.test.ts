@@ -156,4 +156,27 @@ describe('AutonomousTaskRunner Loop', () => {
     expect(task.plan?.steps[0].isDestructive).toBe(false);
     expect(task.plan?.summary).toBe('File written.');
   });
+
+  it('leverages hosted Bedrock agent endpoint (/v1/agent/step) seamlessly', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        success: true,
+        decision: {
+          thought: 'Task completed via Bedrock Nova Pro',
+          toolName: 'finish',
+          isTerminal: true,
+          finalReport: 'All steps executed through cloud agent.',
+        },
+      }),
+    } as any);
+
+    const task = await runner.runTask('Automate desktop cleanup');
+    expect(fetchMock).toHaveBeenCalled();
+    expect(task.status).toBe('completed');
+    expect(task.finalReport).toContain('All steps executed through cloud agent');
+
+    fetchMock.mockRestore();
+  });
 });
+

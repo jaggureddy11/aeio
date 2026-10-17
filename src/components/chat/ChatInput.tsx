@@ -30,7 +30,7 @@ export const ChatInput: React.FC<Props> = ({ onSend, isLoading }) => {
     await inspectCurrentScreen(prompt);
   };
 
-  const isCloudProvider = activeProvider === 'claude' || activeProvider === 'openai' || activeProvider === 'aeio-free' || activeProvider === 'gemini';
+  const isCloudProvider = activeProvider === 'claude' || activeProvider === 'openai' || activeProvider === 'aeio-free' || activeProvider === 'gemini' || activeProvider === 'bedrock';
   const cloudProviderName =
     activeProvider === 'claude'
       ? 'Claude'
@@ -38,6 +38,8 @@ export const ChatInput: React.FC<Props> = ({ onSend, isLoading }) => {
       ? 'OpenAI'
       : activeProvider === 'gemini'
       ? 'Gemini'
+      : activeProvider === 'bedrock'
+      ? 'AWS Bedrock'
       : 'Aeio Free';
 
   useEffect(() => {

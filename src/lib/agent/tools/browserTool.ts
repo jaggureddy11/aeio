@@ -31,8 +31,8 @@ function resolveUrl(base: string, relative: string): string {
  */
 export function decodeHtmlEntities(text: string): string {
   return text
-    .replace(/&nbsp;/g, ' ')
     .replace(/&amp;/g, '&')
+    .replace(/&nbsp;/g, ' ')
     .replace(/&lt;/g, '<')
     .replace(/&gt;/g, '>')
     .replace(/&quot;/g, '"')

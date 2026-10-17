@@ -205,19 +205,27 @@ DO NOT generate conversational chat or explanations. Output ONLY valid JSON matc
       );
 
       for (const opt of optionKeys) {
-        const optText = `${opt} ${q.options[opt] || ''}`.toLowerCase();
+        // Evaluate against the option's semantic description
+        const optText = (q.options[opt] || '').toLowerCase();
         const optTokens = optText.split(/[^a-z0-9_-]+/).filter((w) => w.length > 2);
         let matchCount = 0;
 
+        // If the exact option key appears in state (e.g. 'git' in 'git status'), award strong match
+        if (stateTokens.has(opt.toLowerCase())) {
+          matchCount += 10;
+        }
+
         for (const token of optTokens) {
           if (stateTokens.has(token)) {
-            matchCount += 3;
+            matchCount += 5;
             continue;
           }
           for (const sToken of stateTokens) {
+            // Strict prefix match: minimum 6 chars and must share substantial root
             if (
-              (token.length >= 4 && sToken.startsWith(token.slice(0, 4))) ||
-              (sToken.length >= 4 && token.startsWith(sToken.slice(0, 4)))
+              token.length >= 6 &&
+              sToken.length >= 6 &&
+              (sToken.startsWith(token) || token.startsWith(sToken))
             ) {
               matchCount += 2;
               break;

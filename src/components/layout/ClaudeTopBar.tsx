@@ -34,6 +34,8 @@ export const ClaudeTopBar: React.FC<Props> = ({
       ? 'Gemini 2.5 Flash'
       : activeProvider === 'openai'
       ? 'GPT-4o'
+      : activeProvider === 'bedrock'
+      ? 'AWS Bedrock'
       : activeProvider === 'aeio-free'
       ? 'Claude 3.5 Haiku'
       : activeProvider === 'ollama'

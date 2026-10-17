@@ -2,6 +2,7 @@ import { getAvailableAgentTools, executeAgentTool } from './toolRegistry';
 import { orchestrateChat, ProviderMessage } from '../providers';
 import { speakJARVISFeedback, earcons } from '../voice/voiceEngine';
 import { ExecutionPlan, PlanStep, isDestructiveCommandClient } from './plan';
+import { useSettingsStore } from '../../stores/settingsStore';
 
 export type TaskStatus =
   | 'planning'
@@ -158,26 +159,95 @@ export class AutonomousTaskRunner {
       this.notifyListeners();
 
       // 1. Model Request — Decide next action
+      // Attempts hosted Bedrock agent endpoint (/v1/agent/step) first if in auto / aeio-free / bedrock mode,
+      // falling back seamlessly to local multi-provider orchestrator.
+      let decision: { thought: string; tool: string; args: any } | null = null;
       let responseText = '';
-      try {
-        const result = await orchestrateChat(messages, {
-          systemPrompt: getSystemAutonomousPrompt(),
-          temperature: 0.1, // Calibrated for deterministic tool selection
-        });
-        responseText = result.content;
-      } catch (err: any) {
-        task.status = 'failed';
-        task.error = `Model error: ${err.message || String(err)}`;
-        if (task.plan) {
-          task.plan.status = 'failed';
-          task.plan.stoppedReason = task.error;
+
+      const settings = useSettingsStore.getState();
+      const proxyUrl = settings.hostedProxyUrl?.trim();
+      const isCloudAgentEligible =
+        (settings.activeProvider === 'auto' ||
+          settings.activeProvider === 'aeio-free' ||
+          settings.activeProvider === 'bedrock') &&
+        !settings.neverSendMemoriesToCloud &&
+        !!proxyUrl;
+
+      if (isCloudAgentEligible) {
+        try {
+          const stepHistoryPayload = task.steps.map((s) => ({
+            stepNumber: s.stepNumber,
+            thought: s.thought,
+            toolName: s.toolName,
+            toolArgs: s.toolArgs,
+            result: s.result,
+            error: s.error,
+          }));
+
+          const res = await fetch(`${proxyUrl}/v1/agent/step`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Installation-Id': settings.installationId,
+            },
+            body: JSON.stringify({
+              goal,
+              stepsHistory: stepHistoryPayload,
+              availableTools: getAvailableAgentTools().map((t) => ({
+                name: t.name,
+                description: t.description,
+                parameters: t.parameters,
+              })),
+              systemContext: 'macOS Desktop Autonomous Task',
+            }),
+          });
+
+          if (res.ok) {
+            const data = await res.json();
+            if (data?.decision) {
+              const d = data.decision;
+              if (d.isTerminal || d.toolName === 'none' || d.toolName === 'finish') {
+                decision = {
+                  thought: d.thought || 'Goal finished',
+                  tool: 'finish',
+                  args: { summary: d.finalReport || d.thought || 'Goal completed.' },
+                };
+              } else if (d.toolName) {
+                decision = {
+                  thought: d.thought || 'Executing next step',
+                  tool: d.toolName,
+                  args: d.toolArgs || {},
+                };
+              }
+            }
+          }
+        } catch (backendErr) {
+          console.warn('[AutonomousAgent] Hosted Bedrock step failed, falling back to local orchestrator:', backendErr);
         }
-        callbacks?.onError?.(task.error);
-        return task;
       }
 
-      // 2. Parse Decision JSON
-      const decision = this.parseDecisionJson(responseText);
+      // If hosted backend step didn't succeed, use orchestrateChat
+      if (!decision) {
+        try {
+          const result = await orchestrateChat(messages, {
+            systemPrompt: getSystemAutonomousPrompt(),
+            temperature: 0.1, // Calibrated for deterministic tool selection
+          });
+          responseText = result.content;
+          decision = this.parseDecisionJson(responseText);
+        } catch (err: any) {
+          task.status = 'failed';
+          task.error = `Model error: ${err.message || String(err)}`;
+          if (task.plan) {
+            task.plan.status = 'failed';
+            task.plan.stoppedReason = task.error;
+          }
+          callbacks?.onError?.(task.error);
+          return task;
+        }
+      }
+
+      // 2. Validate Decision
       if (!decision) {
         // Retry prompt if model output failed schema
         messages.push({

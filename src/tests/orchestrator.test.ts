@@ -165,10 +165,11 @@ describe('Backend AI Orchestrator', () => {
           } as any;
         }
         // Fallback to Free proxy
-        if (url.includes('aeio') || url.includes('/v1/chat/completions') || url.includes('/api/')) {
+        if (url.includes('aeio') || url.includes('/v1/chat') || url.includes('/v1/chat/completions') || url.includes('/api/')) {
           return {
             ok: true,
             json: async () => ({
+              content: [{ type: 'text', text: 'Resilient fallback response' }],
               choices: [{ message: { content: 'Resilient fallback response' } }],
             }),
           } as any;
@@ -176,6 +177,7 @@ describe('Backend AI Orchestrator', () => {
         return {
           ok: true,
           json: async () => ({
+            content: [{ type: 'text', text: 'Fallback response' }],
             message: { content: 'Fallback response' },
           }),
         } as any;

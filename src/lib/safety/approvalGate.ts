@@ -30,7 +30,11 @@ export function subscribeToApprovalRequests(
   callback: (request: GuiActionApprovalRequest | null) => void
 ): () => void {
   listeners.add(callback);
-  callback(pendingApproval ? pendingApproval.request : null);
+  try {
+    callback(pendingApproval ? pendingApproval.request : null);
+  } catch (err) {
+    console.error('[ApprovalGate] Initial subscriber error:', err);
+  }
   return () => {
     listeners.delete(callback);
   };

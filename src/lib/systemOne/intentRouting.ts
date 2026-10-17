@@ -30,17 +30,17 @@ export async function routeUserIntent(
     'What is the primary technical capability required to fulfill this user request?',
     {
       planning:
-        'plan planning step-by-step workflow organize automate multi-step migration orchestration execute',
+        'plan planning step-by-step workflow organize automate roadmap migration orchestration architect rollout checklist schedule pipeline release breakdown launch-plan',
       code:
-        'code coding script fix error bug compile typescript javascript python rust programming syntax terminal',
+        'code coding script fix error bug compile typescript javascript python rust programming syntax terminal implement algorithm function binary tree query package npm sql c++',
       os_control:
-        'volume brightness spotify music song play pause mute unmute launch open close screenshot click scroll dock battery system',
+        'volume brightness spotify music song play pause mute unmute launch-app start-app close-window screenshot click scroll dock battery system window desktop finder chrome',
       private_notes:
-        'private note save note note down diary journal secret password credential personal',
+        'private note save note note down diary journal secret password credential personal pin confidential storage vault',
       search_retrieval:
-        'search find retrieve memory memories recall remember saved lookup document inspect files',
+        'search find retrieve memory memories recall remember saved lookup document inspect files history search files lookup notes past',
       conversational:
-        'conversational chat discuss explain philosophy talk greeting hello thoughts perspective general',
+        'conversational chat discuss explain philosophy talk greeting hello morning afternoon thoughts perspective joke casual informal chit-chat meaning discussion',
     }
   );
 

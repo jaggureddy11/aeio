@@ -220,9 +220,10 @@ export const Sidebar: React.FC<Props> = ({
               {activeProvider === 'claude' && 'Claude 3.5 Sonnet'}
               {activeProvider === 'gemini' && 'Gemini 2.5 Flash'}
               {activeProvider === 'openai' && 'GPT-4o'}
+              {activeProvider === 'bedrock' && 'AWS Bedrock'}
               {activeProvider === 'aeio-free' && 'Claude 3.5 Haiku'}
               {activeProvider === 'ollama' && (ollamaModel || 'Local Ollama')}
-              {!['qwen-coder', 'claude', 'gemini', 'openai', 'aeio-free', 'ollama'].includes(activeProvider) && 'Active Engine'}
+              {!['qwen-coder', 'claude', 'gemini', 'openai', 'bedrock', 'aeio-free', 'ollama'].includes(activeProvider) && 'Active Engine'}
             </span>
           </div>
           <span className="engine-manage-link">Settings</span>

@@ -59,6 +59,15 @@ const MODEL_OPTIONS: ModelOption[] = [
     requiresKey: true,
     freeTier: false,
   },
+  {
+    id: 'bedrock',
+    name: 'AWS Bedrock',
+    badge: 'AWS Enterprise',
+    tagline: 'Claude 3.5/3.7 & Nova Pro via AWS credits & zero-retention privacy',
+    isLocal: false,
+    requiresKey: true,
+    freeTier: false,
+  },
 ];
 
 interface Props {
@@ -80,7 +89,11 @@ export const ModelSelector: React.FC<Props> = ({ onOpenSettings, compact }) => {
       for (const opt of MODEL_OPTIONS) {
         if (opt.requiresKey) {
           try {
-            status[opt.id] = await hasApiKey(opt.id);
+            let has = await hasApiKey(opt.id);
+            if (!has && opt.id === 'bedrock') {
+              has = await hasApiKey('bedrock_access_key');
+            }
+            status[opt.id] = has;
           } catch {
             status[opt.id] = false;
           }

@@ -60,7 +60,9 @@ export function extractInteractiveElements(html: string, _baseUrl?: string): Int
     const nameMatch = /name=["']([^"']*)["']/i.exec(attrs);
     const placeholderMatch = /placeholder=["']([^"']*)["']/i.exec(attrs);
 
-    const label = placeholderMatch ? placeholderMatch[1] : nameMatch ? nameMatch[1] : idMatch ? idMatch[1] : `${type} input`;
+    const label = decodeHtmlEntities(
+      placeholderMatch ? placeholderMatch[1] : nameMatch ? nameMatch[1] : idMatch ? idMatch[1] : `${type} input`
+    );
     const selector = idMatch ? `#${idMatch[1]}` : nameMatch ? `input[name="${nameMatch[1]}"]` : `input[type="${type}"]`;
 
     elements.push({

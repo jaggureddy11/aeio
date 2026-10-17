@@ -10,7 +10,7 @@ import { McpServerConfig } from '../lib/mcp/types';
 import { globalMcpManager } from '../lib/mcp/mcpClient';
 import { registerGlobalHotkey } from '../lib/ipc';
 
-export type LLMProviderType = 'auto' | 'qwen-coder' | 'ollama' | 'claude' | 'openai' | 'gemini' | 'aeio-free';
+export type LLMProviderType = 'auto' | 'qwen-coder' | 'ollama' | 'claude' | 'openai' | 'gemini' | 'aeio-free' | 'bedrock';
 
 export type ActiveTab = 'chat' | 'memory' | 'settings';
 
@@ -21,6 +21,8 @@ export interface SettingsState {
   activeProvider: LLMProviderType;
   theme: ThemeMode;
   ollamaModel: string;
+  bedrockRegion: string;
+  bedrockModel: string;
   activeWindowAwareness: boolean;
   ambientProactive: boolean;
   hasCompletedOnboarding: boolean;
@@ -33,6 +35,8 @@ export interface SettingsState {
   setActiveProvider: (provider: LLMProviderType) => void;
   setTheme: (theme: ThemeMode) => void;
   setOllamaModel: (model: string) => void;
+  setBedrockRegion: (region: string) => void;
+  setBedrockModel: (model: string) => void;
   setActiveWindowAwareness: (enabled: boolean) => void;
   setAmbientProactive: (enabled: boolean) => void;
   setHasCompletedOnboarding: (completed: boolean) => void;
@@ -123,6 +127,8 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   activeProvider: (getStoredString('aeio_active_provider', 'auto') as LLMProviderType) || 'auto',
   theme: (getStoredString('aeio_theme_mode', 'light') as ThemeMode) || 'light',
   ollamaModel: 'qwen3-coder',
+  bedrockRegion: getStoredString('aeio_bedrock_region', 'ap-southeast-2'),
+  bedrockModel: getStoredString('aeio_bedrock_model', 'anthropic.claude-3-5-sonnet-20241022-v2:0'),
   activeWindowAwareness: getStoredBool('aeio_active_window_awareness', false),
   ambientProactive: getStoredBool('aeio_ambient_proactive', false),
   hasCompletedOnboarding: getStoredBool('aeio_first_run_completed', false),
@@ -145,6 +151,18 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     set({ theme });
   },
   setOllamaModel: (ollamaModel) => set({ ollamaModel }),
+  setBedrockRegion: (bedrockRegion: string) => {
+    try {
+      localStorage.setItem('aeio_bedrock_region', bedrockRegion);
+    } catch {}
+    set({ bedrockRegion });
+  },
+  setBedrockModel: (bedrockModel: string) => {
+    try {
+      localStorage.setItem('aeio_bedrock_model', bedrockModel);
+    } catch {}
+    set({ bedrockModel });
+  },
   setActiveWindowAwareness: (enabled) => {
     try {
       localStorage.setItem('aeio_active_window_awareness', String(enabled));

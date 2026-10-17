@@ -524,7 +524,13 @@ export function solveSystem(texts: string[]): SystemSolution {
     }
   }
 
-  const values: Record<string, number> = Object.fromEntries(names.map((n, i) => [n, rows[i][m] / rows[i][i]]));
+  const values: Record<string, number> = Object.fromEntries(
+    names.map((n, i) => {
+      const raw = rows[i][m] / rows[i][i];
+      const cleaned = Math.abs(raw - Math.round(raw)) < 1e-12 ? Math.round(raw) : Number(raw.toPrecision(12));
+      return [n, Object.is(cleaned, -0) ? 0 : cleaned];
+    })
+  );
   names.forEach((n, i) => {
     if (Math.abs(rows[i][i] - 1) > 1e-12) {
       steps.push(`Solve: ${n} = ${niceRatioOrDecimal(values[n])}`);

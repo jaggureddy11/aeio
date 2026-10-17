@@ -5,6 +5,7 @@ import { openAIProvider } from './openai';
 import { qwenCoderProvider } from './qwenCoder';
 import { ollamaProvider } from './ollama';
 import { aeioFreeProvider } from './aeioFree';
+import { bedrockProvider } from './bedrock';
 import { getApiKey, classifyUserTask as ipcClassifyUserTask } from '../ipc';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { routeUserIntent } from '../systemOne/intentRouting';
@@ -185,10 +186,12 @@ async function getAvailableKeys(): Promise<{
   geminiKey?: string;
   claudeKey?: string;
   openAIKey?: string;
+  bedrockKey?: string;
 }> {
   let geminiKey: string | undefined;
   let claudeKey: string | undefined;
   let openAIKey: string | undefined;
+  let bedrockKey: string | undefined;
 
   try {
     const key = await getApiKey('gemini');
@@ -205,7 +208,21 @@ async function getAvailableKeys(): Promise<{
     if (key && key.trim()) openAIKey = key.trim();
   } catch {}
 
-  return { geminiKey, claudeKey, openAIKey };
+  try {
+    const key = await getApiKey('bedrock');
+    if (key && key.trim()) bedrockKey = key.trim();
+  } catch {}
+  if (!bedrockKey) {
+    try {
+      const ak = await getApiKey('bedrock_access_key');
+      const sk = await getApiKey('bedrock_secret_key');
+      if (ak && sk && ak.trim() && sk.trim()) {
+        bedrockKey = `${ak.trim()}:${sk.trim()}`;
+      }
+    } catch {}
+  }
+
+  return { geminiKey, claudeKey, openAIKey, bedrockKey };
 }
 
 /**
@@ -256,6 +273,14 @@ export async function orchestrateChat(
         isLocal: false,
       });
     }
+    if (keys.bedrockKey) {
+      cloudCandidates.push({
+        provider: bedrockProvider,
+        apiKey: keys.bedrockKey,
+        model: settings.bedrockModel || 'anthropic.claude-3-5-sonnet-20241022-v2:0',
+        isLocal: false,
+      });
+    }
     if (keys.geminiKey) {
       cloudCandidates.push({
         provider: geminiProvider,
@@ -289,6 +314,14 @@ export async function orchestrateChat(
         isLocal: false,
       });
     }
+    if (keys.bedrockKey) {
+      cloudCandidates.push({
+        provider: bedrockProvider,
+        apiKey: keys.bedrockKey,
+        model: settings.bedrockModel || 'anthropic.claude-3-5-sonnet-20241022-v2:0',
+        isLocal: false,
+      });
+    }
     if (keys.openAIKey) {
       cloudCandidates.push({
         provider: openAIProvider,
@@ -315,6 +348,10 @@ export async function orchestrateChat(
     // Explicit Claude selection
     candidates.push({ provider: claudeProvider, apiKey: keys.claudeKey, model: 'claude-3-5-sonnet-20241022', isLocal: false });
     candidates.push(...cloudCandidates, freeCloudCandidate, ...localCandidates);
+  } else if (settings.activeProvider === 'bedrock' && keys.bedrockKey) {
+    // Explicit Bedrock selection
+    candidates.push({ provider: bedrockProvider, apiKey: keys.bedrockKey, model: settings.bedrockModel || 'anthropic.claude-3-5-sonnet-20241022-v2:0', isLocal: false });
+    candidates.push(...cloudCandidates, freeCloudCandidate, ...localCandidates);
   } else if (settings.activeProvider === 'gemini' && keys.geminiKey) {
     // Explicit Gemini selection
     candidates.push({ provider: geminiProvider, apiKey: keys.geminiKey, model: 'gemini-2.0-flash', isLocal: false });
@@ -323,6 +360,9 @@ export async function orchestrateChat(
     // Explicit OpenAI selection
     candidates.push({ provider: openAIProvider, apiKey: keys.openAIKey, model: 'gpt-4o', isLocal: false });
     candidates.push(...cloudCandidates, freeCloudCandidate, ...localCandidates);
+  } else if (settings.activeProvider === 'aeio-free') {
+    // Explicit Aeio Free hosted selection
+    candidates.push(freeCloudCandidate, ...cloudCandidates, ...localCandidates);
   } else {
     // Intelligent Multi-Provider Model Router (Tier 3 Auto Mode)
     if (recommendedRoute === 'cloud_boost') {

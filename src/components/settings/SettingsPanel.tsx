@@ -12,6 +12,7 @@ import {
 } from '../../lib/ipc';
 import { ollamaProvider } from '../../lib/providers/ollama';
 import { qwenCoderProvider } from '../../lib/providers/qwenCoder';
+import { BEDROCK_AVAILABLE_MODELS } from '../../lib/providers/bedrock';
 import {
   X,
   Cpu,
@@ -43,6 +44,8 @@ export const SettingsPanel: React.FC<Props> = ({ isOpen, onClose, onOpenOnboardi
   const {
     activeProvider,
     ollamaModel,
+    bedrockRegion,
+    bedrockModel,
     activeWindowAwareness,
     hotkey,
     telemetryOptIn,
@@ -51,6 +54,8 @@ export const SettingsPanel: React.FC<Props> = ({ isOpen, onClose, onOpenOnboardi
     hostedProxyUrl,
     setActiveProvider,
     setOllamaModel,
+    setBedrockRegion,
+    setBedrockModel,
     setActiveWindowAwareness,
     setHotkey,
     setTelemetryOptIn,
@@ -84,9 +89,12 @@ export const SettingsPanel: React.FC<Props> = ({ isOpen, onClose, onOpenOnboardi
   const [claudeInput, setClaudeInput] = useState('');
   const [openaiInput, setOpenaiInput] = useState('');
   const [geminiInput, setGeminiInput] = useState('');
+  const [bedrockAccessKeyInput, setBedrockAccessKeyInput] = useState('');
+  const [bedrockSecretKeyInput, setBedrockSecretKeyInput] = useState('');
   const [hasClaudeStored, setHasClaudeStored] = useState(false);
   const [hasOpenaiStored, setHasOpenaiStored] = useState(false);
   const [hasGeminiStored, setHasGeminiStored] = useState(false);
+  const [hasBedrockStored, setHasBedrockStored] = useState(false);
 
   const [groundingEndpointInput, setGroundingEndpointInput] = useState(groundingEndpointUrl);
   const [groundingKeyInput, setGroundingKeyInput] = useState('');
@@ -117,6 +125,10 @@ export const SettingsPanel: React.FC<Props> = ({ isOpen, onClose, onOpenOnboardi
       setHasOpenaiStored(openaiExists);
       const geminiExists = await hasApiKey('gemini');
       setHasGeminiStored(geminiExists);
+      const bedrockAk = await hasApiKey('bedrock_access_key');
+      const bedrockSk = await hasApiKey('bedrock_secret_key');
+      const bedrockRaw = await hasApiKey('bedrock');
+      setHasBedrockStored((bedrockAk && bedrockSk) || bedrockRaw);
       const groundingExists = await hasApiKey('grounding');
       setHasGroundingStored(groundingExists);
     } catch (err) {
@@ -208,6 +220,37 @@ export const SettingsPanel: React.FC<Props> = ({ isOpen, onClose, onOpenOnboardi
       showSuccess('Google Gemini API key removed from OS Keychain');
     } catch (err: unknown) {
       alert(`Failed to remove key: ${err}`);
+    }
+  };
+
+  const handleSaveBedrockKeys = async () => {
+    const ak = bedrockAccessKeyInput.trim();
+    const sk = bedrockSecretKeyInput.trim();
+    if (!ak || !sk) {
+      alert('Both AWS Access Key ID and Secret Access Key are required.');
+      return;
+    }
+    try {
+      await setApiKey('bedrock_access_key', ak);
+      await setApiKey('bedrock_secret_key', sk);
+      setBedrockAccessKeyInput('');
+      setBedrockSecretKeyInput('');
+      setHasBedrockStored(true);
+      showSuccess('AWS Bedrock credentials secured in OS Keychain');
+    } catch (err: unknown) {
+      alert(`Failed to save AWS Bedrock keys: ${err}`);
+    }
+  };
+
+  const handleDeleteBedrockKeys = async () => {
+    try {
+      await deleteApiKey('bedrock_access_key');
+      await deleteApiKey('bedrock_secret_key');
+      await deleteApiKey('bedrock');
+      setHasBedrockStored(false);
+      showSuccess('AWS Bedrock credentials removed from OS Keychain');
+    } catch (err: unknown) {
+      alert(`Failed to remove AWS Bedrock keys: ${err}`);
     }
   };
 
@@ -623,6 +666,34 @@ export const SettingsPanel: React.FC<Props> = ({ isOpen, onClose, onOpenOnboardi
                     <span className="provider-row-badge">BYOK</span>
                   </div>
 
+                  {/* AWS Bedrock */}
+                  <div
+                    role="radio"
+                    tabIndex={0}
+                    aria-checked={activeProvider === 'bedrock'}
+                    className={`settings-provider-row ${activeProvider === 'bedrock' ? 'selected' : ''}`}
+                    onClick={() => setActiveProvider('bedrock')}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        setActiveProvider('bedrock');
+                      }
+                    }}
+                  >
+                    <div className="provider-row-left">
+                      <div className="provider-radio-circle">
+                        {activeProvider === 'bedrock' && <div className="provider-radio-dot" />}
+                      </div>
+                      <div className="provider-row-text">
+                        <div className="provider-row-title">AWS Bedrock (Claude 3.5/3.7, Nova Pro)</div>
+                        <div className="provider-row-desc">
+                          Enterprise cloud credits, zero data retention privacy, and unified access to Claude, Nova & Llama.
+                        </div>
+                      </div>
+                    </div>
+                    <span className="provider-row-badge">AWS SigV4</span>
+                  </div>
+
                   {/* Aeio Free */}
                   <div
                     role="radio"
@@ -935,6 +1006,126 @@ export const SettingsPanel: React.FC<Props> = ({ isOpen, onClose, onOpenOnboardi
                         <Trash2 size={13} />
                       </button>
                     )}
+                  </div>
+                </div>
+
+                {/* AWS Bedrock Credentials */}
+                <div className="settings-row" style={{ alignItems: 'flex-start' }}>
+                  <div className="settings-row-info">
+                    <div className="settings-row-title">AWS Bedrock Credentials</div>
+                    <div className="settings-row-desc">
+                      {hasBedrockStored ? (
+                        <span style={{ color: 'var(--status-success)', display: 'inline-flex', alignItems: 'center', gap: '4px', fontWeight: 500 }}>
+                          <Check size={12} /> Stored in OS Keychain
+                        </span>
+                      ) : (
+                        <span style={{ color: 'var(--text-muted)' }}>No AWS credentials configured</span>
+                      )}
+                      <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px' }}>
+                        Requires <code style={{ fontSize: '10px' }}>bedrock:InvokeModel</code> permission
+                      </div>
+                    </div>
+                  </div>
+                  <div className="settings-row-control" style={{ flexDirection: 'column', alignItems: 'flex-end', gap: '6px' }}>
+                    <div style={{ display: 'flex', gap: '6px' }}>
+                      <input
+                        type="password"
+                        className="settings-text-input mono"
+                        style={{ width: '130px' }}
+                        placeholder={hasBedrockStored ? '••••••••••••••••' : 'Access Key ID'}
+                        value={bedrockAccessKeyInput}
+                        onChange={(e) => setBedrockAccessKeyInput(e.target.value)}
+                        aria-label="AWS Access Key ID"
+                      />
+                      <input
+                        type="password"
+                        className="settings-text-input mono"
+                        style={{ width: '140px' }}
+                        placeholder={hasBedrockStored ? '••••••••••••••••' : 'Secret Access Key'}
+                        value={bedrockSecretKeyInput}
+                        onChange={(e) => setBedrockSecretKeyInput(e.target.value)}
+                        aria-label="AWS Secret Access Key"
+                      />
+                      <button
+                        type="button"
+                        className="btn-primary"
+                        onClick={handleSaveBedrockKeys}
+                        disabled={!bedrockAccessKeyInput.trim() || !bedrockSecretKeyInput.trim()}
+                        aria-label="Save AWS Bedrock credentials"
+                      >
+                        Save
+                      </button>
+                      {hasBedrockStored && (
+                        <button
+                          type="button"
+                          className="btn-danger-ghost"
+                          onClick={handleDeleteBedrockKeys}
+                          title="Remove AWS Bedrock keys from keychain"
+                          aria-label="Delete AWS Bedrock keys from keychain"
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Group: AWS Bedrock Model & Region Configuration */}
+            <div className="settings-group">
+              <div className="settings-group-header">
+                <div className="settings-group-title">AWS Bedrock Configuration</div>
+                <div className="settings-group-desc">
+                  Select your assigned project region and default foundation model for AWS Bedrock.
+                </div>
+              </div>
+
+              <div className="settings-group-content">
+                <div className="settings-row">
+                  <div className="settings-row-info">
+                    <div className="settings-row-title">AWS Region</div>
+                    <div className="settings-row-desc">
+                      Target region where Bedrock model access is enabled.
+                    </div>
+                  </div>
+                  <div className="settings-row-control">
+                    <select
+                      className="settings-select"
+                      value={bedrockRegion}
+                      onChange={(e) => setBedrockRegion(e.target.value)}
+                      aria-label="AWS Bedrock Region"
+                    >
+                      <option value="ap-southeast-2">ap-southeast-2 (Sydney, Assigned Region)</option>
+                      <option value="us-east-1">us-east-1 (N. Virginia)</option>
+                      <option value="us-west-2">us-west-2 (Oregon)</option>
+                      <option value="ap-south-1">ap-south-1 (Mumbai)</option>
+                      <option value="eu-central-1">eu-central-1 (Frankfurt)</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="settings-row">
+                  <div className="settings-row-info">
+                    <div className="settings-row-title">Foundation Model</div>
+                    <div className="settings-row-desc">
+                      Default model invoked for reasoning, coding, and chat.
+                    </div>
+                  </div>
+                  <div className="settings-row-control">
+                    <select
+                      className="settings-select"
+                      style={{ maxWidth: '280px' }}
+                      value={bedrockModel}
+                      onChange={(e) => setBedrockModel(e.target.value)}
+                      aria-label="AWS Bedrock Foundation Model"
+                    >
+                      {BEDROCK_AVAILABLE_MODELS.map((m) => (
+                        <option key={m.id} value={m.id}>
+                          {m.name} ({m.provider})
+                        </option>
+                      ))}
+                    </select>
                   </div>
                 </div>
               </div>

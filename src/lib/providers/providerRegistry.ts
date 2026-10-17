@@ -5,6 +5,7 @@ import { claudeProvider } from './claude';
 import { openAIProvider } from './openai';
 import { geminiProvider } from './gemini';
 import { aeioFreeProvider } from './aeioFree';
+import { bedrockProvider } from './bedrock';
 import { LLMProviderType, useSettingsStore } from '../../stores/settingsStore';
 
 export const providers: Record<LLMProviderType, LLMProvider> = {
@@ -15,6 +16,7 @@ export const providers: Record<LLMProviderType, LLMProvider> = {
   openai: openAIProvider,
   gemini: geminiProvider,
   'aeio-free': aeioFreeProvider,
+  bedrock: bedrockProvider,
 };
 
 export function getProvider(type: LLMProviderType): LLMProvider {
@@ -55,6 +57,12 @@ export async function chatWithActiveProvider(
       } catch {
         // not found in keychain
       }
+    } else if (provider.id === 'bedrock') {
+      try {
+        resolvedApiKey = await getApiKey('bedrock');
+      } catch {
+        // not found in keychain
+      }
     }
   }
 
@@ -62,7 +70,11 @@ export async function chatWithActiveProvider(
     ...options,
     model:
       options?.model ||
-      (provider.id === 'qwen-coder' || provider.id === 'ollama' ? settings.ollamaModel : undefined),
+      (provider.id === 'bedrock'
+        ? settings.bedrockModel
+        : provider.id === 'qwen-coder' || provider.id === 'ollama'
+        ? settings.ollamaModel
+        : undefined),
     apiKey: resolvedApiKey,
   };
 

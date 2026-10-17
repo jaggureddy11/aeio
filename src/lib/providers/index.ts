@@ -4,5 +4,7 @@ export * from './claude';
 export * from './openai';
 export * from './gemini';
 export * from './aeioFree';
+export * from './awsSigV4';
+export * from './bedrock';
 export * from './providerRegistry';
 export * from './orchestrator';
