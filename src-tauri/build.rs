@@ -11,5 +11,15 @@ fn main() {
             );
         }
     }
+
+    #[cfg(target_os = "windows")]
+    {
+        let manifest_path = Path::new("windows/comctl-v6.manifest");
+        if manifest_path.exists() {
+            println!("cargo:rustc-link-arg-tests=/MANIFEST:EMBED");
+            println!("cargo:rustc-link-arg-tests=/MANIFESTINPUT:{}", manifest_path.display());
+        }
+    }
+
     tauri_build::build()
 }

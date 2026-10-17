@@ -23,6 +23,9 @@ jobs:
       - name: Setup Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Setup MSVC Developer Command Prompt
+        uses: ilammy/msvc-dev-cmd@v1
+
       - name: Rust Cache
         uses: swatinem/rust-cache@v2
         with:
@@ -42,7 +45,26 @@ jobs:
           Get-ChildItem -Path src-tauri\resources\models -Recurse | Where-Object { -not $_.PSIsContainer } | Select-Object FullName, Length | Format-Table -AutoSize
 
       - name: Run Full Backend Test Suite on Windows
-        run: cargo test --manifest-path src-tauri/Cargo.toml -- --nocapture
+        shell: pwsh
+        run: |
+          Write-Host "=== Compiling Backend Test Suite ==="
+          cargo test --manifest-path src-tauri/Cargo.toml --lib --no-run
+
+          Write-Host "=== Embedding Windows Common Controls v6 Manifest on Test Binaries ==="
+          $testBins = Get-ChildItem -Path src-tauri\target\debug\deps -Filter "aeio_lib-*.exe"
+          foreach ($bin in $testBins) {
+            Write-Host "Injecting manifest into $($bin.FullName)"
+            mt.exe -nologo -manifest src-tauri\windows\comctl-v6.manifest -outputresource:"$($bin.FullName);#1"
+          }
+
+          Write-Host "=== Running Backend Tests on Windows ==="
+          foreach ($bin in $testBins) {
+            Write-Host "Running: $($bin.Name)"
+            & $bin.FullName --nocapture
+            if ($LASTEXITCODE -ne 0) {
+              throw "Test executable $($bin.Name) failed with exit code $LASTEXITCODE"
+            }
+          }
 
       - name: Build Unsigned Production Bundle (NSIS & MSI)
         run: npm run tauri build

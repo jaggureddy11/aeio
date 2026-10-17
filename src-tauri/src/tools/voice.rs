@@ -34,16 +34,15 @@ pub fn stop_speaking() -> Result<(), String> {
 
 /// Plays a native audio earcon chime (wake, success, error, processing) via the OS audio subsystem.
 pub fn play_system_earcon(kind: &str) -> Result<(), String> {
-    let sound_name = match kind.trim().to_lowercase().as_str() {
-        "wake" | "listening" => "Ping.aiff",
-        "success" | "done" => "Hero.aiff",
-        "error" | "refused" => "Basso.aiff",
-        "processing" | "subtle" => "Tink.aiff",
-        _ => "Glass.aiff",
-    };
-
     #[cfg(target_os = "macos")]
     {
+        let sound_name = match kind.trim().to_lowercase().as_str() {
+            "wake" | "listening" => "Ping.aiff",
+            "success" | "done" => "Hero.aiff",
+            "error" | "refused" => "Basso.aiff",
+            "processing" | "subtle" => "Tink.aiff",
+            _ => "Glass.aiff",
+        };
         let sound_path = format!("/System/Library/Sounds/{}", sound_name);
         std::thread::spawn(move || {
             let _ = Command::new("afplay").arg(&sound_path).output();
@@ -91,10 +90,10 @@ pub fn speak_text(
     let _ = stop_speaking();
 
     let chosen_voice = voice.unwrap_or_else(|| "Samantha".to_string());
-    let words_per_minute = rate.unwrap_or(185);
 
     #[cfg(target_os = "macos")]
     {
+        let words_per_minute = rate.unwrap_or(185);
         let mut cmd = Command::new("say");
         cmd.arg("-v").arg(&chosen_voice);
         cmd.arg("-r").arg(words_per_minute.to_string());

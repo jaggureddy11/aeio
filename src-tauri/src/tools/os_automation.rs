@@ -718,6 +718,7 @@ pub struct SystemStatusInfo {
 }
 
 /// Retrieves system status including battery percentage, charging state, frontmost app, dark mode, and disk space.
+#[allow(unused_mut)]
 pub fn get_system_status() -> Result<SystemStatusInfo, String> {
     let os_name = std::env::consts::OS.to_string();
     let mut battery_level: Option<u8> = None;
