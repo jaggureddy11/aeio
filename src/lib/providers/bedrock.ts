@@ -4,7 +4,7 @@ import { getApiKey } from '../ipc';
 import { useSettingsStore } from '../../stores/settingsStore';
 
 export const DEFAULT_BEDROCK_REGION = 'ap-southeast-2';
-export const DEFAULT_BEDROCK_MODEL = 'anthropic.claude-3-5-sonnet-20241022-v2:0';
+export const DEFAULT_BEDROCK_MODEL = 'amazon.nova-lite-v1:0';
 
 export interface BedrockModelOption {
   id: string;
@@ -15,40 +15,46 @@ export interface BedrockModelOption {
 
 export const BEDROCK_AVAILABLE_MODELS: BedrockModelOption[] = [
   {
-    id: 'anthropic.claude-3-5-sonnet-20241022-v2:0',
-    name: 'Claude 3.5 Sonnet v2',
-    provider: 'Anthropic',
-    description: 'Most intelligent model for complex coding, reasoning, and agents',
-  },
-  {
-    id: 'anthropic.claude-3-7-sonnet-20250219-v1:0',
-    name: 'Claude 3.7 Sonnet',
-    provider: 'Anthropic',
-    description: 'Hybrid reasoning and frontier intelligence',
-  },
-  {
-    id: 'anthropic.claude-3-5-haiku-20241022-v1:0',
-    name: 'Claude 3.5 Haiku',
-    provider: 'Anthropic',
-    description: 'High speed, lightweight, and cost efficient',
+    id: 'amazon.nova-lite-v1:0',
+    name: 'Amazon Nova Lite',
+    provider: 'Amazon',
+    description: 'Blazing fast (250ms), cost-effective intelligence in Sydney Region (Recommended)',
   },
   {
     id: 'amazon.nova-pro-v1:0',
     name: 'Amazon Nova Pro',
     provider: 'Amazon',
-    description: 'Flagship multimodal model with deep reasoning',
+    description: 'Flagship multimodal reasoning and complex problem solving in Sydney Region',
   },
   {
-    id: 'amazon.nova-lite-v1:0',
-    name: 'Amazon Nova Lite',
+    id: 'amazon.nova-micro-v1:0',
+    name: 'Amazon Nova Micro',
     provider: 'Amazon',
-    description: 'Fast and cost-optimized for routine tasks',
+    description: 'Ultra-lightweight instant responses (200ms) with minimal latency',
+  },
+  {
+    id: 'apac.amazon.nova-lite-v1:0',
+    name: 'Amazon Nova Lite (APAC Router)',
+    provider: 'Amazon',
+    description: 'Cross-zone resilience with APAC regional router',
+  },
+  {
+    id: 'apac.amazon.nova-pro-v1:0',
+    name: 'Amazon Nova Pro (APAC Router)',
+    provider: 'Amazon',
+    description: 'Cross-zone high-performance reasoning with APAC regional router',
+  },
+  {
+    id: 'anthropic.claude-3-5-sonnet-20241022-v2:0',
+    name: 'Claude 3.5 Sonnet v2',
+    provider: 'Anthropic',
+    description: 'Frontier Anthropic model (requires Bedrock model access grant in AWS Console)',
   },
   {
     id: 'meta.llama3-3-70b-instruct-v1:0',
     name: 'Llama 3.3 70B',
     provider: 'Meta',
-    description: 'State of the art open weights model hosted on AWS',
+    description: 'State of the art open weights model hosted on AWS Bedrock',
   },
 ];
 
@@ -127,6 +133,32 @@ export async function resolveBedrockCredentials(
   if (!sessionToken) {
     try {
       sessionToken = await getApiKey('bedrock_session_token');
+    } catch {}
+  }
+
+  // 3. Browser preview fallback via localStorage
+  if (!accessKeyId || !secretAccessKey) {
+    try {
+      if (typeof localStorage !== 'undefined') {
+        const stored = localStorage.getItem('aeio_bedrock_credentials') || localStorage.getItem('aeio_key_bedrock');
+        if (stored) {
+          try {
+            const parsed = JSON.parse(stored);
+            if (parsed.accessKeyId && parsed.secretAccessKey) {
+              accessKeyId = parsed.accessKeyId;
+              secretAccessKey = parsed.secretAccessKey;
+              if (parsed.sessionToken) sessionToken = parsed.sessionToken;
+            }
+          } catch {
+            if (stored.includes(':')) {
+              const parts = stored.split(':');
+              accessKeyId = parts[0];
+              secretAccessKey = parts[1];
+              if (parts[2]) sessionToken = parts[2];
+            }
+          }
+        }
+      }
     } catch {}
   }
 

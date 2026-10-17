@@ -221,6 +221,14 @@ async function getAvailableKeys(): Promise<{
       }
     } catch {}
   }
+  if (!bedrockKey) {
+    try {
+      if (typeof localStorage !== 'undefined') {
+        const stored = localStorage.getItem('aeio_bedrock_credentials') || localStorage.getItem('aeio_key_bedrock');
+        if (stored && stored.trim()) bedrockKey = stored.trim();
+      }
+    } catch {}
+  }
 
   return { geminiKey, claudeKey, openAIKey, bedrockKey };
 }
@@ -265,19 +273,19 @@ export async function orchestrateChat(
 
   const cloudCandidates: ProviderCandidate[] = [];
   if (taskType === 'code' || taskType === 'planning') {
+    if (keys.bedrockKey) {
+      cloudCandidates.push({
+        provider: bedrockProvider,
+        apiKey: keys.bedrockKey,
+        model: settings.bedrockModel || 'amazon.nova-lite-v1:0',
+        isLocal: false,
+      });
+    }
     if (keys.claudeKey) {
       cloudCandidates.push({
         provider: claudeProvider,
         apiKey: keys.claudeKey,
         model: 'claude-3-5-sonnet-20241022',
-        isLocal: false,
-      });
-    }
-    if (keys.bedrockKey) {
-      cloudCandidates.push({
-        provider: bedrockProvider,
-        apiKey: keys.bedrockKey,
-        model: settings.bedrockModel || 'anthropic.claude-3-5-sonnet-20241022-v2:0',
         isLocal: false,
       });
     }
@@ -298,6 +306,14 @@ export async function orchestrateChat(
       });
     }
   } else {
+    if (keys.bedrockKey) {
+      cloudCandidates.push({
+        provider: bedrockProvider,
+        apiKey: keys.bedrockKey,
+        model: settings.bedrockModel || 'amazon.nova-lite-v1:0',
+        isLocal: false,
+      });
+    }
     if (keys.geminiKey) {
       cloudCandidates.push({
         provider: geminiProvider,
@@ -311,14 +327,6 @@ export async function orchestrateChat(
         provider: claudeProvider,
         apiKey: keys.claudeKey,
         model: 'claude-3-5-haiku-20241022',
-        isLocal: false,
-      });
-    }
-    if (keys.bedrockKey) {
-      cloudCandidates.push({
-        provider: bedrockProvider,
-        apiKey: keys.bedrockKey,
-        model: settings.bedrockModel || 'anthropic.claude-3-5-sonnet-20241022-v2:0',
         isLocal: false,
       });
     }
@@ -344,13 +352,18 @@ export async function orchestrateChat(
   } else if (settings.activeProvider === 'ollama' || settings.activeProvider === 'qwen-coder') {
     // Explicit local selection
     candidates.push(...localCandidates);
+  } else if (settings.activeProvider === 'bedrock') {
+    // Explicit Bedrock selection
+    candidates.push({
+      provider: bedrockProvider,
+      apiKey: keys.bedrockKey,
+      model: settings.bedrockModel || 'amazon.nova-lite-v1:0',
+      isLocal: false,
+    });
+    candidates.push(...cloudCandidates.filter((c) => c.provider.id !== 'bedrock'), freeCloudCandidate, ...localCandidates);
   } else if (settings.activeProvider === 'claude' && keys.claudeKey) {
     // Explicit Claude selection
     candidates.push({ provider: claudeProvider, apiKey: keys.claudeKey, model: 'claude-3-5-sonnet-20241022', isLocal: false });
-    candidates.push(...cloudCandidates, freeCloudCandidate, ...localCandidates);
-  } else if (settings.activeProvider === 'bedrock' && keys.bedrockKey) {
-    // Explicit Bedrock selection
-    candidates.push({ provider: bedrockProvider, apiKey: keys.bedrockKey, model: settings.bedrockModel || 'anthropic.claude-3-5-sonnet-20241022-v2:0', isLocal: false });
     candidates.push(...cloudCandidates, freeCloudCandidate, ...localCandidates);
   } else if (settings.activeProvider === 'gemini' && keys.geminiKey) {
     // Explicit Gemini selection

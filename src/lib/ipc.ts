@@ -96,8 +96,39 @@ function handleWebFallback<T>(cmd: string, args?: Record<string, unknown>): Prom
   ) {
     return Promise.resolve(false as unknown as T);
   }
+  if (cmd === 'get_api_key') {
+    try {
+      if (typeof localStorage !== 'undefined' && args?.target) {
+        const val =
+          localStorage.getItem(`aeio_key_${args.target}`) ||
+          localStorage.getItem(`aeio_${args.target}`) ||
+          (args.target === 'bedrock' ? localStorage.getItem('aeio_bedrock_credentials') : null);
+        if (val) return Promise.resolve(val as unknown as T);
+      }
+    } catch {}
+    return Promise.resolve('' as unknown as T);
+  }
+  if (cmd === 'set_api_key') {
+    try {
+      if (typeof localStorage !== 'undefined' && args?.target) {
+        localStorage.setItem(`aeio_key_${args.target}`, args.key);
+      }
+    } catch {}
+    return Promise.resolve(undefined as unknown as T);
+  }
+  if (cmd === 'has_api_key') {
+    try {
+      if (typeof localStorage !== 'undefined' && args?.target) {
+        const val =
+          localStorage.getItem(`aeio_key_${args.target}`) ||
+          localStorage.getItem(`aeio_${args.target}`) ||
+          (args.target === 'bedrock' ? localStorage.getItem('aeio_bedrock_credentials') : null);
+        return Promise.resolve(!!val as unknown as T);
+      }
+    } catch {}
+    return Promise.resolve(false as unknown as T);
+  }
   if (
-    cmd === 'get_api_key' ||
     cmd === 'read_clipboard' ||
     cmd === 'open_target' ||
     cmd === 'ping' ||

@@ -122,13 +122,21 @@ const getOrGenerateInstallationId = (): string => {
   }
 };
 
+const getInitialBedrockModel = (): string => {
+  const stored = getStoredString('aeio_bedrock_model', 'amazon.nova-lite-v1:0');
+  if (!stored || stored === 'anthropic.claude-3-5-sonnet-20241022-v2:0') {
+    return 'amazon.nova-lite-v1:0';
+  }
+  return stored;
+};
+
 export const useSettingsStore = create<SettingsState>((set, get) => ({
   activeTab: 'chat',
-  activeProvider: (getStoredString('aeio_active_provider', 'auto') as LLMProviderType) || 'auto',
+  activeProvider: (getStoredString('aeio_active_provider', 'bedrock') as LLMProviderType) || 'bedrock',
   theme: (getStoredString('aeio_theme_mode', 'light') as ThemeMode) || 'light',
   ollamaModel: getStoredString('aeio_ollama_model', 'qwen2.5:7b'),
   bedrockRegion: getStoredString('aeio_bedrock_region', 'ap-southeast-2'),
-  bedrockModel: getStoredString('aeio_bedrock_model', 'anthropic.claude-3-5-sonnet-20241022-v2:0'),
+  bedrockModel: getInitialBedrockModel(),
   activeWindowAwareness: getStoredBool('aeio_active_window_awareness', false),
   ambientProactive: getStoredBool('aeio_ambient_proactive', false),
   hasCompletedOnboarding: getStoredBool('aeio_first_run_completed', false),

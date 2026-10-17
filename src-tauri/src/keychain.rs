@@ -2,8 +2,131 @@ use keyring::Entry;
 
 const SERVICE_NAME: &str = "com.aeio.assistant";
 
+fn get_aws_cli_credentials() -> Option<(String, String, Option<String>)> {
+    let home = std::env::var("HOME").unwrap_or_default();
+    let local_bin = if !home.is_empty() {
+        format!("{}/.local/bin/aws", home)
+    } else {
+        "/Users/apple/.local/bin/aws".to_string()
+    };
+    let candidates = [
+        "aws",
+        local_bin.as_str(),
+        "/usr/local/bin/aws",
+        "/opt/homebrew/bin/aws",
+    ];
+
+    for bin in candidates {
+        let output = std::process::Command::new(bin)
+            .args(["configure", "export-credentials"])
+            .output();
+        if let Ok(out) = output {
+            if out.status.success() {
+                if let Ok(text) = String::from_utf8(out.stdout) {
+                    if let Ok(val) = serde_json::from_str::<serde_json::Value>(&text) {
+                        let ak = val.get("AccessKeyId").and_then(|v| v.as_str());
+                        let sk = val.get("SecretAccessKey").and_then(|v| v.as_str());
+                        let token = val.get("SessionToken").and_then(|v| v.as_str()).map(|s| s.to_string());
+                        if let (Some(ak_str), Some(sk_str)) = (ak, sk) {
+                            if !ak_str.trim().is_empty() && !sk_str.trim().is_empty() {
+                                return Some((ak_str.trim().to_string(), sk_str.trim().to_string(), token));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    None
+}
+
 fn get_env_fallback(target: &str) -> Option<String> {
-    let keys = match target.to_lowercase().as_str() {
+    let lower = target.to_lowercase();
+
+    // 1. Bedrock full JSON credentials
+    if lower == "bedrock" {
+        if let (Ok(ak), Ok(sk)) = (std::env::var("AWS_ACCESS_KEY_ID"), std::env::var("AWS_SECRET_ACCESS_KEY")) {
+            if !ak.trim().is_empty() && !sk.trim().is_empty() {
+                let token = std::env::var("AWS_SESSION_TOKEN").ok();
+                let region = std::env::var("AWS_REGION").unwrap_or_else(|_| "ap-southeast-2".to_string());
+                let json = serde_json::json!({
+                    "accessKeyId": ak.trim(),
+                    "secretAccessKey": sk.trim(),
+                    "sessionToken": token.as_deref(),
+                    "region": region.trim()
+                });
+                return Some(json.to_string());
+            }
+        }
+        if let Some((ak, sk, token)) = get_aws_cli_credentials() {
+            let json = serde_json::json!({
+                "accessKeyId": ak,
+                "secretAccessKey": sk,
+                "sessionToken": token,
+                "region": "ap-southeast-2"
+            });
+            return Some(json.to_string());
+        }
+        return None;
+    }
+
+    // 2. Individual Bedrock components
+    if lower == "bedrock_access_key" {
+        for key in ["AWS_ACCESS_KEY_ID", "AWS_ACCESS_KEY"] {
+            if let Ok(val) = std::env::var(key) {
+                let trimmed = val.trim();
+                if !trimmed.is_empty() {
+                    return Some(trimmed.to_string());
+                }
+            }
+        }
+        if let Some((ak, _, _)) = get_aws_cli_credentials() {
+            return Some(ak);
+        }
+    }
+
+    if lower == "bedrock_secret_key" {
+        for key in ["AWS_SECRET_ACCESS_KEY", "AWS_SECRET_KEY"] {
+            if let Ok(val) = std::env::var(key) {
+                let trimmed = val.trim();
+                if !trimmed.is_empty() {
+                    return Some(trimmed.to_string());
+                }
+            }
+        }
+        if let Some((_, sk, _)) = get_aws_cli_credentials() {
+            return Some(sk);
+        }
+    }
+
+    if lower == "bedrock_session_token" {
+        for key in ["AWS_SESSION_TOKEN", "AWS_SECURITY_TOKEN"] {
+            if let Ok(val) = std::env::var(key) {
+                let trimmed = val.trim();
+                if !trimmed.is_empty() {
+                    return Some(trimmed.to_string());
+                }
+            }
+        }
+        if let Some((_, _, token)) = get_aws_cli_credentials() {
+            return token;
+        }
+    }
+
+    if lower == "bedrock_region" {
+        for key in ["AWS_REGION", "AWS_DEFAULT_REGION"] {
+            if let Ok(val) = std::env::var(key) {
+                let trimmed = val.trim();
+                if !trimmed.is_empty() {
+                    return Some(trimmed.to_string());
+                }
+            }
+        }
+        return Some("ap-southeast-2".to_string());
+    }
+
+    // 3. Other third-party API providers
+    let keys = match lower.as_str() {
         "claude" | "anthropic" => vec!["ANTHROPIC_API_KEY", "CLAUDE_API_KEY"],
         "openai" => vec!["OPENAI_API_KEY"],
         "gemini" | "google" => vec!["GEMINI_API_KEY", "GOOGLE_API_KEY"],
@@ -79,4 +202,16 @@ mod tests {
         println!("del_res: {:?}", del_res);
         assert!(del_res.unwrap());
     }
+
+    #[test]
+    fn test_bedrock_resolution() {
+        let res = get_api_key("bedrock");
+        // Should resolve credentials if AWS is configured in the environment or CLI
+        if let Ok(json_str) = res {
+            assert!(json_str.contains("accessKeyId"));
+            assert!(json_str.contains("secretAccessKey"));
+            assert!(json_str.contains("region"));
+        }
+    }
 }
+
