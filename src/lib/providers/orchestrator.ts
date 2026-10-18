@@ -340,11 +340,18 @@ export async function orchestrateChat(
     }
   }
 
+  const proxyUrl = settings.hostedProxyUrl?.trim();
+  const isCustomProxy = Boolean(proxyUrl && !proxyUrl.includes('aeio-free-proxy.aeio-free.workers.dev'));
+
   const freeCloudCandidate: ProviderCandidate = {
     provider: aeioFreeProvider,
     model: 'claude-3-5-haiku',
     isLocal: false,
   };
+
+  const cloudFallbackList: ProviderCandidate[] = isCustomProxy
+    ? [...cloudCandidates, freeCloudCandidate]
+    : [...cloudCandidates];
 
   // Privacy Protection Mode: strictly local inference only
   if (settings.neverSendMemoriesToCloud) {
@@ -360,19 +367,19 @@ export async function orchestrateChat(
       model: settings.bedrockModel || 'amazon.nova-lite-v1:0',
       isLocal: false,
     });
-    candidates.push(...cloudCandidates.filter((c) => c.provider.id !== 'bedrock'), freeCloudCandidate, ...localCandidates);
+    candidates.push(...cloudFallbackList.filter((c) => c.provider.id !== 'bedrock'), ...localCandidates);
   } else if (settings.activeProvider === 'claude' && keys.claudeKey) {
     // Explicit Claude selection
     candidates.push({ provider: claudeProvider, apiKey: keys.claudeKey, model: 'claude-3-5-sonnet-20241022', isLocal: false });
-    candidates.push(...cloudCandidates, freeCloudCandidate, ...localCandidates);
+    candidates.push(...cloudFallbackList, ...localCandidates);
   } else if (settings.activeProvider === 'gemini' && keys.geminiKey) {
     // Explicit Gemini selection
     candidates.push({ provider: geminiProvider, apiKey: keys.geminiKey, model: 'gemini-2.0-flash', isLocal: false });
-    candidates.push(...cloudCandidates, freeCloudCandidate, ...localCandidates);
+    candidates.push(...cloudFallbackList, ...localCandidates);
   } else if (settings.activeProvider === 'openai' && keys.openAIKey) {
     // Explicit OpenAI selection
     candidates.push({ provider: openAIProvider, apiKey: keys.openAIKey, model: 'gpt-4o', isLocal: false });
-    candidates.push(...cloudCandidates, freeCloudCandidate, ...localCandidates);
+    candidates.push(...cloudFallbackList, ...localCandidates);
   } else if (settings.activeProvider === 'aeio-free') {
     // Explicit Aeio Free hosted selection
     candidates.push(freeCloudCandidate, ...cloudCandidates, ...localCandidates);
@@ -380,12 +387,11 @@ export async function orchestrateChat(
     // Intelligent Multi-Provider Model Router (Tier 3 Auto Mode)
     if (recommendedRoute === 'cloud_boost') {
       // 1. Coding & Multi-Step Planning -> Cloud-boost for peak reasoning with local fallback
-      candidates.push(...cloudCandidates, freeCloudCandidate, ...localCandidates);
+      candidates.push(...cloudFallbackList, ...localCandidates);
     } else {
       // 2. Routine Conversational, OS Actions, Private Notes, & Search Retrieval
-      // -> Strictly Local-First (Ollama qwen2.5:7b / llama3.1 / qwen2.5-coder)
-      // Zero API cost, private offline execution. If local Ollama is offline/uninstalled, smoothly cascades to cloud fallback.
-      candidates.push(...localCandidates, ...cloudCandidates, freeCloudCandidate);
+      // -> Strictly Local-First (Ollama qwen2.5:7b / llama3.2)
+      candidates.push(...localCandidates, ...cloudFallbackList);
     }
   }
 

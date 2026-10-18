@@ -42,6 +42,7 @@ import {
 import { inspectActiveScreen } from '../lib/vision/screenInspector';
 import { evaluateMath, solveEquation, solveSystem } from '../lib/agent/tools/mathTool';
 import { browsePage, extractPageLinks } from '../lib/agent/tools/browserTool';
+import { speakJARVISFeedback } from '../lib/voice/voiceEngine';
 import { executeAgentTool } from '../lib/agent/toolRegistry';
 import {
   ExecutionPlan,
@@ -1341,11 +1342,12 @@ export const useChatStore = create<ChatState>((set, get) => ({
         finalPlan
       );
     } else {
+      const planSummary = `Plan executed successfully: all ${steps.length} steps completed.`;
       const finalPlan: ExecutionPlan = {
         ...plan,
         status: 'completed',
         steps,
-        summary: `Plan executed successfully: all ${steps.length} steps completed.`,
+        summary: planSummary,
       };
       get().updateMessageContent(
         messageId,
@@ -1359,6 +1361,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
         freshMessage.reasoning,
         finalPlan
       );
+
+      speakJARVISFeedback(planSummary);
     }
   },
 

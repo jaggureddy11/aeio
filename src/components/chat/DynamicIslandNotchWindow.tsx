@@ -15,7 +15,7 @@ import {
   Eye,
   Activity,
 } from 'lucide-react';
-import { globalVoiceEngine, VoiceState, matchAndExecuteFastAction } from '../../lib/voice/voiceEngine';
+import { globalVoiceEngine, VoiceState, matchAndExecuteFastAction, speakJARVISFeedback } from '../../lib/voice/voiceEngine';
 import { globalProactiveCopilot, ProactiveNudge } from '../../lib/agent/proactiveCopilot';
 import { globalProactiveHeartbeat } from '../../lib/agent/proactiveHeartbeat';
 import { inspectActiveScreen } from '../../lib/vision/screenInspector';
@@ -157,15 +157,23 @@ export const DynamicIslandNotchWindow: React.FC = () => {
           showMainWindow().catch(() => {});
 
           await sendMessage(text, { autoApproveSafeTools: true });
-          setFeedback('Executed command');
+
+          const msgs = useChatStore.getState().messages;
+          const lastAssistant = [...msgs].reverse().find((m) => m.role === 'assistant');
+          const report = lastAssistant?.content || 'Task completed successfully, sir.';
+
+          setFeedback(report);
           setVoiceState('speaking');
           playSystemEarcon('success').catch(() => {});
+          speakJARVISFeedback(report, () => {
+            setVoiceState('idle');
+          });
 
           setTimeout(() => {
             setFeedback(null);
             setVoiceState('idle');
             setTranscript('');
-          }, 3500);
+          }, 4000);
         } catch (err) {
           setFeedback('Failed to execute');
           setVoiceState('idle');

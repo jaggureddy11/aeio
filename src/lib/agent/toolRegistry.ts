@@ -23,7 +23,7 @@ import {
   captureScreen,
 } from '../ipc';
 import { useWorkspaceStore } from '../../stores/workspaceStore';
-import { isDestructiveCommandClient } from './plan';
+import { isDestructiveCommandClient, normalizeToolName } from './plan';
 import { evaluateMath, solveEquation, solveSystem } from './tools/mathTool';
 import { browsePage, extractPageLinks } from './tools/browserTool';
 import {
@@ -464,39 +464,39 @@ export const AVAILABLE_AGENT_TOOLS: AgentToolDefinition[] = [
 ];
 
 export async function executeAgentTool(toolName: string, args: Record<string, any>): Promise<any> {
-  const cleanName = toolName.toLowerCase().trim();
+  const cleanName = normalizeToolName(toolName);
 
   switch (cleanName) {
     case 'search_web': {
-      const query = args.query || args.search || '';
+      const query = args.query || args.search || args.q || '';
       const platform = args.platform || 'google';
       return await searchWebPlatform(query, platform);
     }
 
     case 'fetch_url': {
-      const url = args.url || '';
+      const url = args.url || args.link || '';
       return await fetchUrl(url);
     }
 
     case 'read_file': {
-      const path = args.path || args.filepath || '';
+      const path = args.path || args.filepath || args.file || args.filename || '';
       return await readFile(path);
     }
 
     case 'write_file': {
-      const path = args.path || args.filepath || '';
-      const content = args.content ?? '';
+      const path = args.path || args.filepath || args.file || args.filename || '';
+      const content = args.content ?? args.text ?? args.code ?? '';
       return await writeFile(path, content);
     }
 
     case 'search_files': {
-      const dir = args.dir || args.directory || './';
-      const query = args.query || '';
+      const dir = args.dir || args.directory || args.path || './';
+      const query = args.query || args.pattern || '';
       return await searchFiles(dir, query);
     }
 
     case 'run_shell': {
-      const command = args.command || '';
+      const command = args.command || args.cmd || args.script || '';
       if (isDestructiveCommandClient(command)) {
         throw new Error(`Refused: Destructive command detected ('${command}'). Requires explicit manual authorization.`);
       }

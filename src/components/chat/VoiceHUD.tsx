@@ -192,36 +192,22 @@ export const VoiceHUD: React.FC<Props> = ({ isOpen, onClose }) => {
           // 2. Autonomous Multi-Step ReAct Loop
           setFeedback('JARVIS: Planning & executing task...');
           setActiveStepText('Formulating plan...');
-          speakJARVISFeedback('On it. Working on your task.', () => {});
+          speakJARVISFeedback('On it, sir. Working on your task.', () => {});
 
-          const task = await globalAutonomousRunner.runTask(text, {
-            onStepStart: (stepNum, thought, tool) => {
-              setActiveStepText(`Step ${stepNum}: [${tool}] ${thought}`);
-            },
-            onStepComplete: (step) => {
-              setActiveStepText(`Completed step ${step.stepNumber} (${step.toolName})`);
-            },
-            onFinished: (report) => {
-              setFeedback(report);
-              setActiveStepText(null);
-              setVoiceState('speaking');
-            },
-            onError: (err) => {
-              setFeedback(`Error: ${err}`);
-              setActiveStepText(null);
-              setVoiceState('idle');
-            },
+          // Execute task seamlessly via chat store with hands-free tool auto-approval
+          await sendMessage(text, { autoApproveSafeTools: true });
+
+          // Retrieve latest assistant response for voice report
+          const msgs = useChatStore.getState().messages;
+          const lastAssistant = [...msgs].reverse().find((m) => m.role === 'assistant');
+          const report = lastAssistant?.content || 'Task completed successfully, sir.';
+
+          setFeedback(report);
+          setActiveStepText(null);
+          setVoiceState('speaking');
+          speakJARVISFeedback(report, () => {
+            setVoiceState('idle');
           });
-
-          if (task.status === 'completed' && task.finalReport) {
-            setFeedback(task.finalReport);
-            setVoiceState('speaking');
-          } else if (task.status === 'failed') {
-            setFeedback(task.error || 'Task could not be completed.');
-          }
-
-          // Sync with workspace chat
-          await sendMessage(text);
         }
       } catch (err: any) {
         setFeedback(`Error: ${err?.message || 'Execution failed'}`);

@@ -89,15 +89,46 @@ pub fn speak_text(
     // Stop any existing utterance first to avoid overlapping audio
     let _ = stop_speaking();
 
+    // Sanitize text for speech: strip markdown code blocks, backticks, asterisks, brackets, and raw JSON
+    let mut sanitized = clean_text.to_string();
+    // Strip code blocks ```...```
+    while let Some(start) = sanitized.find("```") {
+        if let Some(end) = sanitized[start + 3..].find("```") {
+            sanitized.replace_range(start..start + 3 + end + 3, " ");
+        } else {
+            sanitized.truncate(start);
+            break;
+        }
+    }
+    // Strip XML/HTML tags like <tool_call>...</tool_call>
+    while let Some(start) = sanitized.find('<') {
+        if let Some(end) = sanitized[start..].find('>') {
+            sanitized.replace_range(start..=start + end, " ");
+        } else {
+            break;
+        }
+    }
+    // Strip symbols that cause text-to-speech to stutter or read symbols aloud
+    sanitized = sanitized
+        .replace(['`', '*', '#', '_', '~', '|', '{', '}', '[', ']'], " ")
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+
+    let spoken_payload = if sanitized.is_empty() { clean_text } else { &sanitized };
+
+    #[cfg(target_os = "macos")]
+    let chosen_voice = voice.unwrap_or_else(|| "Daniel".to_string());
+    #[cfg(not(target_os = "macos"))]
     let chosen_voice = voice.unwrap_or_else(|| "Samantha".to_string());
 
     #[cfg(target_os = "macos")]
     {
-        let words_per_minute = rate.unwrap_or(185);
+        let words_per_minute = rate.unwrap_or(175);
         let mut cmd = Command::new("say");
         cmd.arg("-v").arg(&chosen_voice);
         cmd.arg("-r").arg(words_per_minute.to_string());
-        cmd.arg(clean_text);
+        cmd.arg(spoken_payload);
 
         let child = cmd.spawn().map_err(|e| format!("Failed to spawn 'say' command: {}", e))?;
 

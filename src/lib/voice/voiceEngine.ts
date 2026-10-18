@@ -149,9 +149,66 @@ export const earcons = new EarconSynthesizer();
  * Text-to-Speech vocal synthesizer prioritizing native OS audio subsystem,
  * with graceful browser SpeechSynthesis fallback.
  */
+/**
+ * Sanitizes markdown, code blocks, JSON, and URLs into clean, natural spoken English.
+ * Caps spoken sentences to avoid robotic droning on huge outputs.
+ */
+export function cleanTextForSpeech(raw: string): string {
+  if (!raw) return '';
+  let s = raw;
+
+  // 1. Strip think / reasoning blocks
+  s = s.replace(/<(?:think|thought)>[\s\S]*?<\/(?:think|thought)>/gi, ' ');
+  // 2. Strip plan and tool_call blocks
+  s = s.replace(/<plan(?:\s+[^>]*)?>[\s\S]*?<\/plan>/gi, ' ');
+  s = s.replace(/<tool_call(?:\s+[^>]*)?>[\s\S]*?<\/tool_call>/gi, ' ');
+  s = s.replace(/<tool_call(?:\s+[^>]*)\/>/gi, ' ');
+  s = s.replace(/<remember(?:\s+[^>]*)?>[\s\S]*?<\/remember>/gi, ' ');
+  // 3. Strip markdown code blocks
+  s = s.replace(/```[\s\S]*?```/g, ' ');
+  // 4. Strip inline code, markdown symbols, headers, bullet points
+  s = s.replace(/`([^`]+)`/g, '$1');
+  s = s.replace(/https?:\/\/\S+/gi, 'the website');
+  s = s.replace(/(?:^|\n)\s*#{1,6}\s+/g, ' ');
+  s = s.replace(/\*\*([^*]+)\*\*/g, '$1');
+  s = s.replace(/\*([^*]+)\*/g, '$1');
+  s = s.replace(/__([^_]+)__/g, '$1');
+  s = s.replace(/_([^_]+)_/g, '$1');
+  s = s.replace(/[#*~|>]/g, ' ');
+  s = s.replace(/\{[\s\S]*?\}/g, ' '); // Strip raw JSON blocks
+  s = s.replace(/\s+/g, ' ').trim();
+
+  // 5. Keep first 2-3 sentences or max ~250 characters for crisp spoken JARVIS delivery
+  if (s.length > 250) {
+    const sentences = s.match(/[^.!?]+[.!?]+/g);
+    if (sentences && sentences.length > 0) {
+      let combined = '';
+      for (const sent of sentences) {
+        if ((combined + sent).length > 250 && combined.length > 0) break;
+        combined += ' ' + sent.trim();
+      }
+      s = combined.trim() || s.slice(0, 240) + '...';
+    } else {
+      s = s.slice(0, 240) + '...';
+    }
+  }
+
+  return s;
+}
+
+/**
+ * Text-to-Speech vocal synthesizer prioritizing native OS audio subsystem,
+ * with graceful browser SpeechSynthesis fallback.
+ */
 export function speakJARVISFeedback(text: string, onEnd?: () => void): void {
+  const spokenText = cleanTextForSpeech(text);
+  if (!spokenText) {
+    if (onEnd) onEnd();
+    return;
+  }
+
   // First attempt native OS speech synthesis (works in background, minimized, locked)
-  speakText(text)
+  speakText(spokenText)
     .then((res) => {
       if (res && res.success) {
         if (onEnd) onEnd();
@@ -168,20 +225,18 @@ export function speakJARVISFeedback(text: string, onEnd?: () => void): void {
 
       try {
         window.speechSynthesis.cancel();
-        const utterance = new SpeechSynthesisUtterance(text);
-        utterance.rate = 1.05;
+        const utterance = new SpeechSynthesisUtterance(spokenText);
+        utterance.rate = 1.0;
         utterance.pitch = 1.0;
-        utterance.volume = 0.9;
+        utterance.volume = 0.95;
 
         const voices = window.speechSynthesis.getVoices();
         const preferredVoice = voices.find(
           (v) =>
-            (v.name.includes('Samantha') ||
-              v.name.includes('Daniel') ||
-              v.name.includes('Alex') ||
-              v.name.includes('Natural') ||
-              v.lang.startsWith('en')) &&
-            !v.name.includes('Bad')
+            v.name.includes('Daniel') ||
+            (v.lang.startsWith('en') && (v.name.includes('UK') || v.name.includes('Oliver') || v.name.includes('Arthur'))) ||
+            v.name.includes('Samantha') ||
+            v.name.includes('Alex')
         );
         if (preferredVoice) {
           utterance.voice = preferredVoice;

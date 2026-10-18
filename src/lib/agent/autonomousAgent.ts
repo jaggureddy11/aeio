@@ -1,7 +1,7 @@
 import { getAvailableAgentTools, executeAgentTool } from './toolRegistry';
 import { orchestrateChat, ProviderMessage } from '../providers';
 import { speakJARVISFeedback, earcons } from '../voice/voiceEngine';
-import { ExecutionPlan, PlanStep, isDestructiveCommandClient } from './plan';
+import { ExecutionPlan, PlanStep, isDestructiveCommandClient, normalizeToolName } from './plan';
 import { useSettingsStore } from '../../stores/settingsStore';
 
 export type TaskStatus =
@@ -186,6 +186,7 @@ export class AutonomousTaskRunner {
 
           const res = await fetch(`${proxyUrl}/v1/agent/step`, {
             method: 'POST',
+            signal: AbortSignal.timeout(2500),
             headers: {
               'Content-Type': 'application/json',
               'X-Installation-Id': settings.installationId,
@@ -282,9 +283,10 @@ export class AutonomousTaskRunner {
       }
 
       // Classify safety / destructiveness of step
+      const normalizedTool = normalizeToolName(decision.tool);
       const isDestructive = isDestructiveCommandClient(
-        decision.tool === 'run_bash' || decision.tool === 'bash' || decision.tool === 'execute_command'
-          ? (decision.args?.command || '')
+        normalizedTool === 'run_shell'
+          ? (decision.args?.command || decision.args?.cmd || '')
           : ''
       );
 
@@ -292,7 +294,7 @@ export class AutonomousTaskRunner {
         id: crypto.randomUUID(),
         stepNumber: stepIndex,
         description: decision.thought,
-        toolName: decision.tool,
+        toolName: normalizedTool,
         args: decision.args || {},
         isDestructive,
         status: 'running',
@@ -311,7 +313,7 @@ export class AutonomousTaskRunner {
       let stepError: string | undefined = undefined;
 
       try {
-        stepResult = await executeAgentTool(decision.tool, decision.args || {});
+        stepResult = await executeAgentTool(normalizedTool, decision.args || {});
         planStep.status = 'completed';
         planStep.result = stepResult;
       } catch (err: any) {
@@ -323,7 +325,7 @@ export class AutonomousTaskRunner {
       const stepRecord: AutonomousStep = {
         stepNumber: stepIndex,
         thought: decision.thought,
-        toolName: decision.tool,
+        toolName: normalizedTool,
         toolArgs: decision.args || {},
         result: stepResult,
         error: stepError,
@@ -368,24 +370,58 @@ export class AutonomousTaskRunner {
 
     try {
       const parsed = JSON.parse(textToParse);
-      if (parsed && typeof parsed.tool === 'string') {
+      const toolField = parsed.tool || parsed.name || parsed.action;
+      if (parsed && typeof toolField === 'string') {
         return {
-          thought: parsed.thought || 'Executing next step',
-          tool: parsed.tool.trim(),
-          args: parsed.args || {},
+          thought: parsed.thought || parsed.reasoning || parsed.description || 'Executing next step',
+          tool: normalizeToolName(toolField.trim()),
+          args: parsed.args || parsed.arguments || parsed.parameters || {},
         };
       }
     } catch {
-      // 2. Try regex extraction of JSON object
-      const objectMatch = /\{[\s\S]*"tool"\s*:\s*"([^"]+)"[\s\S]*\}/.exec(rawText);
+      // 2. Try XML <tool_call> tags: <tool_call name="..." args='...'>
+      const xmlMatch = /<tool_call\s+name=["']?([^"'\s>]+)["']?(?:\s+args=(?:'([^']*)'|"([^"]*)"))?\s*(?:\/>|>([\s\S]*?)<\/tool_call>)/i.exec(rawText);
+      if (xmlMatch) {
+        const rawTool = xmlMatch[1];
+        const argsStr = xmlMatch[2] || xmlMatch[3] || xmlMatch[4] || '{}';
+        let args = {};
+        try { args = JSON.parse(argsStr.trim()); } catch { args = { raw: argsStr.trim() }; }
+        return {
+          thought: 'Executing tool call',
+          tool: normalizeToolName(rawTool),
+          args,
+        };
+      }
+
+      // 3. Try <tool_call>{"name": ..., "arguments": ...}</tool_call>
+      const jsonTagMatch = /<tool_call>\s*(\{[\s\S]*?\})\s*<\/tool_call>/i.exec(rawText);
+      if (jsonTagMatch) {
+        try {
+          const parsed = JSON.parse(jsonTagMatch[1].trim());
+          const name = parsed.name || parsed.tool || parsed.action;
+          if (name) {
+            return {
+              thought: parsed.thought || 'Executing tool',
+              tool: normalizeToolName(String(name)),
+              args: parsed.arguments || parsed.args || parsed.parameters || {},
+            };
+          }
+        } catch {}
+      }
+
+      // 4. Try regex extraction of JSON object
+      const objectMatch = /\{[\s\S]*"(?:tool|name|action)"\s*:\s*"([^"]+)"[\s\S]*\}/.exec(rawText);
       if (objectMatch) {
         try {
           const parsed = JSON.parse(objectMatch[0]);
-          return {
-            thought: parsed.thought || 'Executing next step',
-            tool: parsed.tool.trim(),
-            args: parsed.args || {},
-          };
+          const name = parsed.tool || parsed.name || parsed.action;
+          if (name) {
+            return {
+              thought: parsed.thought || parsed.reasoning || 'Executing next step',
+              tool: normalizeToolName(String(name).trim()),
+              args: parsed.args || parsed.arguments || parsed.parameters || {},
+            };
+          }
         } catch {}
       }
     }
