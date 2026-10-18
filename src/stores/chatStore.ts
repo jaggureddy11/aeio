@@ -740,7 +740,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
           break;
         }
         case 'open_app': {
-          const appName = execution.args.name || execution.args.app || execution.args.appName || '';
+          const appName = execution.args.name || execution.args.app || execution.args.appName || execution.args.target || '';
           result = await openApp(appName);
           break;
         }
@@ -1259,6 +1259,65 @@ export const useChatStore = create<ChatState>((set, get) => ({
             stepResult = await lockScreen();
             break;
           }
+          case 'open_app': {
+            const appName = step.args.name || step.args.app || step.args.appName || step.args.target || '';
+            stepResult = await openApp(appName);
+            break;
+          }
+          case 'simulate_key_press': {
+            const key = step.args.key || step.args.keyName || 'enter';
+            stepResult = await simulateKeyPress(key);
+            break;
+          }
+          case 'simulate_scroll': {
+            const direction = step.args.direction || 'down';
+            const amount = typeof step.args.amount === 'number' ? step.args.amount : 6;
+            stepResult = await simulateScroll(direction, amount);
+            break;
+          }
+          case 'inject_text': {
+            const text = step.args.text || step.args.content || '';
+            stepResult = await injectTextToActiveApp(text);
+            break;
+          }
+          case 'math_evaluate': {
+            const expr = step.args.expression || step.args.expr || '';
+            stepResult = evaluateMath(expr, { angle: step.args.angle });
+            break;
+          }
+          case 'math_solve': {
+            if (Array.isArray(step.args.equations) && step.args.equations.length > 0) {
+              stepResult = solveSystem(step.args.equations);
+            } else {
+              const eq = step.args.equation || step.args.eq || '';
+              stepResult = solveEquation(eq);
+            }
+            break;
+          }
+          case 'ui_command': {
+            const action = step.args.action || 'key';
+            if (action === 'key') {
+              stepResult = await simulateKeyPress(step.args.key || 'enter');
+            } else if (action === 'scroll') {
+              stepResult = await simulateScroll(step.args.direction || 'down', step.args.amount || 6);
+            } else if (action === 'open_app') {
+              stepResult = await openApp(step.args.app || step.args.appName || step.args.name || '');
+            } else {
+              throw new Error(`Unknown UI command action: ${action}`);
+            }
+            break;
+          }
+          case 'browse_page': {
+            const url = step.args.url || '';
+            stepResult = await browsePage(url);
+            break;
+          }
+          case 'extract_links': {
+            const url = step.args.url || '';
+            const sameDomainOnly = Boolean(step.args.sameDomainOnly ?? step.args.same_domain_only);
+            stepResult = await extractPageLinks(url, sameDomainOnly);
+            break;
+          }
           default: {
             stepResult = await executeAgentTool(step.toolName, step.args);
             break;
@@ -1576,6 +1635,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       '   <tool_call name="tool_name" args=\'{"param":"val"}\'></tool_call> or\n' +
       '   <tool_call>{"name": "tool_name", "arguments": {"param":"val"}}</tool_call>\n' +
       '4. Available host tools:\n' +
+      '   - search_web: Search the web (Google, YouTube, GitHub). To search or play music/videos on YouTube, use: {"query": "...", "platform": "youtube"}\n' +
       '   - run_shell: Execute shell commands. Arguments: {"command": "...", "cwd": "optional_path"}\n' +
       '   - read_file: Read file contents. Arguments: {"path": "..."}\n' +
       '   - write_file: Write or create a file with specified contents. Arguments: {"path": "...", "content": "..."}\n' +
@@ -1588,7 +1648,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       '   - open_target: Open file, directory, application, or URL with default OS handler. Arguments: {"target": "..."}\n' +
       '   - read_clipboard: Inspect clipboard text. Arguments: {}\n' +
       '   - write_clipboard: Copy text to clipboard. Arguments: {"text": "..."}\n' +
-      '   - open_app: Launch or focus desktop applications by name. Arguments: {"name": "..."}\n' +
+      '   - open_app: Launch or focus desktop applications, websites, or services (e.g. YouTube, Spotify, Chrome, Terminal). Arguments: {"name": "..."}\n' +
       '   - simulate_key_press: Press keys (enter, escape, tab, space, backspace, up, down). Arguments: {"key": "enter"}\n' +
       '   - simulate_scroll: Scroll active window up or down. Arguments: {"direction": "up"|"down", "amount": 6}\n' +
       '   - inject_text: Type or paste text into active focused application. Arguments: {"text": "..."}\n' +
@@ -1604,10 +1664,11 @@ export const useChatStore = create<ChatState>((set, get) => ({
       '5. When tool execution outputs are fed back to you, analyze the result and deliver the synthesized answer or next action.\n' +
       '6. When a user goal requires multiple steps or sequential tool operations, emit a structured plan:\n' +
       '   <plan title="Descriptive title of the overall plan">\n' +
-      '     <step number="1" tool="run_shell" description="Explanation of step">{"command": "..."}</step>\n' +
+      '     <step number="1" tool="search_web" description="Explanation of step">{"query": "...", "platform": "youtube"}</step>\n' +
       '     <step number="2" tool="run_shell" description="Explanation of step">{"command": "..."}</step>\n' +
       '   </plan>\n' +
-      '   Aeio will classify the plan and execute it safely or present it for upfront approval.';
+      '   Aeio will classify the plan and execute it safely or present it for upfront approval.\n' +
+      '7. Direct execution: When the user asks to open an app, website, search, or play media (e.g. "open YouTube and play X"), EXECUTE IT DIRECTLY using host tools or <plan>. Never ask confirmation or clarifying questions like "Do you want to proceed with this plan?" or "Could you confirm the song name?". Take immediate action with sensible defaults.';
 
     if (activeWs) {
       systemPrompt += `\nCurrent Workspace: "${activeWs.name}". Keep context focused on this workspace.`;

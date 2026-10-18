@@ -8,6 +8,8 @@ import {
   openTarget,
   playSpotify,
   setSystemVolume,
+  getSystemVolume,
+  setSystemMute,
   mediaControl,
   searchMemories,
   addMemory,
@@ -15,12 +17,15 @@ import {
   simulateKeyPress,
   simulateScroll,
   openApp,
+  injectTextToActiveApp,
   getSystemStatus,
   sendSystemNotification,
   listRunningApps,
   focusApp,
   toggleDarkMode,
   captureScreen,
+  readClipboard,
+  writeClipboard,
 } from '../ipc';
 import { useWorkspaceStore } from '../../stores/workspaceStore';
 import { isDestructiveCommandClient, normalizeToolName } from './plan';
@@ -152,6 +157,16 @@ export const AVAILABLE_AGENT_TOOLS: AgentToolDefinition[] = [
     },
   },
   {
+    name: 'list_directory',
+    description: 'Lists files and folders inside a local directory.',
+    parameters: {
+      type: 'object',
+      properties: {
+        dir: { type: 'string', description: 'Directory path, defaults to ./' },
+      },
+    },
+  },
+  {
     name: 'open_target',
     description: 'Opens an application, URL, or local file in the system default viewer.',
     parameters: {
@@ -160,6 +175,17 @@ export const AVAILABLE_AGENT_TOOLS: AgentToolDefinition[] = [
         target: { type: 'string', description: 'Application name, URL, or file path to open' },
       },
       required: ['target'],
+    },
+  },
+  {
+    name: 'open_app',
+    description: 'Launches or focuses desktop applications, websites, or web services (e.g. YouTube, Spotify, Chrome, Terminal).',
+    parameters: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', description: 'Application name, website, or service name to launch' },
+      },
+      required: ['name'],
     },
   },
   {
@@ -182,6 +208,25 @@ export const AVAILABLE_AGENT_TOOLS: AgentToolDefinition[] = [
         level: { type: 'number', description: 'Volume level between 0 and 100' },
       },
       required: ['level'],
+    },
+  },
+  {
+    name: 'get_system_volume',
+    description: 'Gets current system volume level and mute status.',
+    parameters: {
+      type: 'object',
+      properties: {},
+    },
+  },
+  {
+    name: 'set_system_mute',
+    description: 'Mutes or unmutes the computer master volume.',
+    parameters: {
+      type: 'object',
+      properties: {
+        mute: { type: 'boolean', description: 'Whether system audio should be muted' },
+      },
+      required: ['mute'],
     },
   },
   {
@@ -262,6 +307,59 @@ export const AVAILABLE_AGENT_TOOLS: AgentToolDefinition[] = [
         app: { type: 'string', description: 'Desktop application name to launch' },
       },
       required: ['action'],
+    },
+  },
+  {
+    name: 'simulate_key_press',
+    description: 'Simulates pressing a keyboard key (enter, escape, tab, space, up, down, left, right, f5, alt+left).',
+    parameters: {
+      type: 'object',
+      properties: {
+        key: { type: 'string', description: 'Key name to press' },
+      },
+      required: ['key'],
+    },
+  },
+  {
+    name: 'simulate_scroll',
+    description: 'Simulates scrolling the active desktop window up, down, left, or right.',
+    parameters: {
+      type: 'object',
+      properties: {
+        direction: { type: 'string', enum: ['up', 'down', 'left', 'right'], description: 'Scroll direction' },
+        amount: { type: 'number', description: 'Number of scroll steps (default 6)' },
+      },
+      required: ['direction'],
+    },
+  },
+  {
+    name: 'inject_text',
+    description: 'Types or pastes a text string into the active focused desktop application.',
+    parameters: {
+      type: 'object',
+      properties: {
+        text: { type: 'string', description: 'Text string to inject' },
+      },
+      required: ['text'],
+    },
+  },
+  {
+    name: 'read_clipboard',
+    description: 'Reads current text content from the system clipboard.',
+    parameters: {
+      type: 'object',
+      properties: {},
+    },
+  },
+  {
+    name: 'write_clipboard',
+    description: 'Writes a text string to the system clipboard.',
+    parameters: {
+      type: 'object',
+      properties: {
+        text: { type: 'string', description: 'Text to copy to clipboard' },
+      },
+      required: ['text'],
     },
   },
   {
@@ -468,8 +566,11 @@ export async function executeAgentTool(toolName: string, args: Record<string, an
 
   switch (cleanName) {
     case 'search_web': {
-      const query = args.query || args.search || args.q || '';
-      const platform = args.platform || 'google';
+      const query = args.query || args.search || args.q || args.song || args.track || '';
+      let platform = args.platform || 'google';
+      if (!args.platform && (args.youtube || String(query).toLowerCase().includes('youtube'))) {
+        platform = 'youtube';
+      }
       return await searchWebPlatform(query, platform);
     }
 
@@ -495,6 +596,11 @@ export async function executeAgentTool(toolName: string, args: Record<string, an
       return await searchFiles(dir, query);
     }
 
+    case 'list_directory': {
+      const dir = args.dir || args.directory || args.path || './';
+      return await searchFiles(dir, '');
+    }
+
     case 'run_shell': {
       const command = args.command || args.cmd || args.script || '';
       if (isDestructiveCommandClient(command)) {
@@ -504,8 +610,39 @@ export async function executeAgentTool(toolName: string, args: Record<string, an
     }
 
     case 'open_target': {
-      const target = args.target || args.url || args.path || '';
+      const target = args.target || args.url || args.path || args.name || args.app || '';
       return await openTarget(target);
+    }
+
+    case 'open_app': {
+      const appName = args.name || args.app || args.appName || args.target || '';
+      return await openApp(appName);
+    }
+
+    case 'simulate_key_press': {
+      const key = args.key || args.keyName || 'enter';
+      return await simulateKeyPress(key);
+    }
+
+    case 'simulate_scroll': {
+      const direction = args.direction || 'down';
+      const amount = typeof args.amount === 'number' ? args.amount : 6;
+      return await simulateScroll(direction, amount);
+    }
+
+    case 'inject_text': {
+      const text = args.text || args.content || '';
+      return await injectTextToActiveApp(text);
+    }
+
+    case 'read_clipboard': {
+      return await readClipboard();
+    }
+
+    case 'write_clipboard': {
+      const text = args.text || args.content || '';
+      await writeClipboard(text);
+      return 'Content written to clipboard';
     }
 
     case 'play_spotify': {
@@ -514,8 +651,17 @@ export async function executeAgentTool(toolName: string, args: Record<string, an
     }
 
     case 'set_system_volume': {
-      const level = typeof args.level === 'number' ? args.level : 50;
+      const level = typeof args.level === 'number' ? args.level : (typeof args.volume === 'number' ? args.volume : 50);
       return await setSystemVolume(level);
+    }
+
+    case 'get_system_volume': {
+      return await getSystemVolume();
+    }
+
+    case 'set_system_mute': {
+      const mute = typeof args.mute === 'boolean' ? args.mute : true;
+      return await setSystemMute(mute);
     }
 
     case 'media_control': {

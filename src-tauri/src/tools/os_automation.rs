@@ -672,21 +672,118 @@ pub fn simulate_scroll(direction: &str, amount: u32) -> Result<AutomationResult,
     })
 }
 
-/// Launches a desktop application by name
+/// Launches a desktop application by name or opens common web services
 pub fn open_app(name: &str) -> Result<AutomationResult, String> {
     let clean_name = name.trim();
     if clean_name.is_empty() {
         return Err("App name cannot be empty".to_string());
     }
+
+    let lower = clean_name.to_lowercase();
+    if lower.starts_with("http://") || lower.starts_with("https://") {
+        open_target(clean_name)?;
+        return Ok(AutomationResult {
+            success: true,
+            message: format!("Opened URL: {}", clean_name),
+            action_type: "open_app".to_string(),
+            payload: Some(clean_name.to_string()),
+        });
+    }
+
+    if lower == "youtube" || lower == "youtube.com" {
+        open_target("https://www.youtube.com")?;
+        return Ok(AutomationResult {
+            success: true,
+            message: "Opened YouTube".to_string(),
+            action_type: "open_app".to_string(),
+            payload: Some("https://www.youtube.com".to_string()),
+        });
+    }
+    if lower.starts_with("youtube ") {
+        let query = &clean_name[8..];
+        return search_web_platform(query, "youtube");
+    }
+    if lower == "netflix" || lower == "netflix.com" {
+        open_target("https://www.netflix.com")?;
+        return Ok(AutomationResult {
+            success: true,
+            message: "Opened Netflix".to_string(),
+            action_type: "open_app".to_string(),
+            payload: Some("https://www.netflix.com".to_string()),
+        });
+    }
+    if lower == "github" || lower == "github.com" {
+        open_target("https://www.github.com")?;
+        return Ok(AutomationResult {
+            success: true,
+            message: "Opened GitHub".to_string(),
+            action_type: "open_app".to_string(),
+            payload: Some("https://www.github.com".to_string()),
+        });
+    }
+    if lower == "google" || lower == "google.com" {
+        open_target("https://www.google.com")?;
+        return Ok(AutomationResult {
+            success: true,
+            message: "Opened Google".to_string(),
+            action_type: "open_app".to_string(),
+            payload: Some("https://www.google.com".to_string()),
+        });
+    }
+    if lower == "chatgpt" || lower == "chatgpt.com" {
+        open_target("https://chatgpt.com")?;
+        return Ok(AutomationResult {
+            success: true,
+            message: "Opened ChatGPT".to_string(),
+            action_type: "open_app".to_string(),
+            payload: Some("https://chatgpt.com".to_string()),
+        });
+    }
+    if lower == "twitter" || lower == "x.com" || lower == "x" {
+        open_target("https://x.com")?;
+        return Ok(AutomationResult {
+            success: true,
+            message: "Opened X".to_string(),
+            action_type: "open_app".to_string(),
+            payload: Some("https://x.com".to_string()),
+        });
+    }
+    if lower == "reddit" || lower == "reddit.com" {
+        open_target("https://www.reddit.com")?;
+        return Ok(AutomationResult {
+            success: true,
+            message: "Opened Reddit".to_string(),
+            action_type: "open_app".to_string(),
+            payload: Some("https://www.reddit.com".to_string()),
+        });
+    }
+
     #[cfg(target_os = "macos")]
     {
         let output = Command::new("open")
             .arg("-a")
             .arg(clean_name)
-            .output()
-            .map_err(|e| format!("Failed to open app {}: {}", clean_name, e))?;
-        if !output.status.success() {
-            let _ = Command::new("open").arg(clean_name).output();
+            .output();
+
+        let mut opened = false;
+        if let Ok(res) = output {
+            if res.status.success() {
+                opened = true;
+            }
+        }
+
+        if !opened {
+            // Try generic open (file, URI, or protocol)
+            if let Ok(res) = Command::new("open").arg(clean_name).output() {
+                if res.status.success() {
+                    opened = true;
+                }
+            }
+        }
+
+        if !opened && clean_name.contains('.') {
+            let url = format!("https://{}", clean_name);
+            let _ = open_target(&url);
         }
     }
     #[cfg(target_os = "windows")]

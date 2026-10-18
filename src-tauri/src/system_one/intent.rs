@@ -30,8 +30,13 @@ pub fn classify_user_task(prompt: &str) -> TaskIntentVerdict {
         }
     }
 
-    // 3. OS Control cues (Local desktop automation, Spotify, Volume, App Launch)
-    let os_keywords = ["volume", "brightness", "spotify", "play music", "pause music", "next song", "track", "mute", "unmute", "launch ", "open app", "close app", "screenshot", "screen inspector", "click ", "scroll ", "battery status", "system status"];
+    // 3. OS Control cues (Local desktop automation, Spotify, YouTube, Volume, App Launch)
+    let os_keywords = [
+        "volume", "brightness", "spotify", "play music", "pause music", "next song", "track",
+        "mute", "unmute", "launch ", "open app", "close app", "screenshot", "screen inspector",
+        "click ", "scroll ", "battery status", "system status", "youtube", "open ", "play ",
+        "song", "video", "browser", "netflix", "music"
+    ];
     for kw in os_keywords {
         if lower.contains(kw) {
             *scores.get_mut("os_control").unwrap() += 3.5;
@@ -93,7 +98,7 @@ pub fn classify_user_task(prompt: &str) -> TaskIntentVerdict {
         "os_control" => (
             "local_first".to_string(),
             "ollama".to_string(),
-            Some("Execute desktop operating system tools immediately with zero external data exposure.".to_string()),
+            Some("Execute desktop operating system tools immediately with zero external data exposure. Take direct action using host tools without asking confirmation or conversational filler.".to_string()),
         ),
         "private_notes" => (
             "local_first".to_string(),
@@ -155,6 +160,13 @@ mod tests {
         assert_eq!(res.primary_intent, "os_control");
         assert_eq!(res.recommended_route, "local_first");
         assert_eq!(res.suggested_provider, "ollama");
+    }
+
+    #[test]
+    fn test_os_control_youtube_song() {
+        let res = classify_user_task("open YouTube and play Perfect song");
+        assert_eq!(res.primary_intent, "os_control");
+        assert_eq!(res.recommended_route, "local_first");
     }
 
     #[test]
