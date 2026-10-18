@@ -59,6 +59,12 @@ pub fn run() {
         }))
         .plugin(tauri_plugin_opener::init())
         .plugin(global_shortcut_plugin)
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                let _ = window.hide();
+                api.prevent_close();
+            }
+        })
         .setup(|app| {
             let app_data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
             let memory_manager = memory::MemoryManager::new(&app_data_dir)?;

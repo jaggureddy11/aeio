@@ -21,5 +21,14 @@ fn main() {
         }
     }
 
+    #[cfg(target_os = "macos")]
+    {
+        let info_plist = Path::new("Info.plist");
+        if info_plist.exists() {
+            let abs_path = std::fs::canonicalize(info_plist).unwrap();
+            println!("cargo:rustc-link-arg=-Wl,-sectcreate,__TEXT,__info_plist,{}", abs_path.display());
+        }
+    }
+
     tauri_build::build()
 }
