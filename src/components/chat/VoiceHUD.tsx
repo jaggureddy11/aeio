@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   MicOff,
   Volume2,
@@ -51,24 +51,16 @@ export const VoiceHUD: React.FC<Props> = ({ isOpen, onClose }) => {
   const [isDocked, setIsDocked] = useState(false);
   const [dictationTone, setDictationTone] = useState<DictationTone>('standard');
   const [pendingApproval, setPendingApproval] = useState<PendingActionApproval | null>(null);
+  const [statusNotice, setStatusNotice] = useState<string | null>(null);
+  const [customCommand, setCustomCommand] = useState('');
 
   const sendMessage = useChatStore((state) => state.sendMessage);
   const { wakeWordEnabled, toggleWakeWord } = useVoiceStore();
   const currentModeRef = useRef<VoiceHUDMode>(mode);
   currentModeRef.current = mode;
 
-  useEffect(() => {
-    if (!isOpen) {
-      globalVoiceEngine.stopListening();
-      globalAutonomousRunner.cancel();
-      setTranscript('');
-      setFeedback(null);
-      setActiveStepText(null);
-      setPendingApproval(null);
-      return;
-    }
-
-    const processCommand = async (text: string) => {
+  const processCommand = useCallback(
+    async (text: string) => {
       setVoiceState('processing');
       const activeMode = currentModeRef.current;
 
@@ -235,10 +227,27 @@ export const VoiceHUD: React.FC<Props> = ({ isOpen, onClose }) => {
         setFeedback(`Error: ${err?.message || 'Execution failed'}`);
         setVoiceState('idle');
       }
-    };
+    },
+    [dictationTone, isOpen, sendMessage]
+  );
+
+  useEffect(() => {
+    if (!isOpen) {
+      globalVoiceEngine.stopListening();
+      globalAutonomousRunner.cancel();
+      setTranscript('');
+      setFeedback(null);
+      setActiveStepText(null);
+      setPendingApproval(null);
+      return;
+    }
 
     const unsubState = globalVoiceEngine.onStateChange((state) => {
       setVoiceState(state);
+    });
+
+    const unsubStatus = globalVoiceEngine.onStatus((status) => {
+      setStatusNotice(status);
     });
 
     const unsubTranscript = globalVoiceEngine.onTranscript(async (text, isFinal) => {
@@ -260,10 +269,11 @@ export const VoiceHUD: React.FC<Props> = ({ isOpen, onClose }) => {
 
     return () => {
       unsubState();
+      unsubStatus();
       unsubTranscript();
       globalVoiceEngine.stopListening();
     };
-  }, [isOpen, sendMessage, onClose, dictationTone]);
+  }, [isOpen, processCommand]);
 
   if (!isOpen) return null;
 
@@ -514,44 +524,166 @@ export const VoiceHUD: React.FC<Props> = ({ isOpen, onClose }) => {
           ) : transcript ? (
             <p className="voice-hud-transcript">"{transcript}"</p>
           ) : (
-            <p className="voice-hud-placeholder">
-              {mode === 'dictation'
-                ? isListening
-                  ? 'Speak naturally... speech will be polished and typed into your focused app.'
-                  : 'Dictation paused. Click the mic to speak.'
-                : mode === 'rewrite'
-                ? isListening
-                  ? 'Speak an instruction for your selected text (e.g. "make it concise", "translate to Spanish")'
-                  : 'Highlight text in any app, then click mic to rewrite.'
-                : isListening
-                ? 'Speak a command... "Play Back in Black on Spotify", "Volume 100%", "Lock screen"'
-                : 'Microphone paused. Click to listen.'}
-            </p>
+            <div>
+              <p className="voice-hud-placeholder">
+                {mode === 'dictation'
+                  ? isListening
+                    ? 'Speak naturally... speech will be polished and typed into your focused app.'
+                    : 'Dictation paused. Click the mic or type below.'
+                  : mode === 'rewrite'
+                  ? isListening
+                    ? 'Speak an instruction for your selected text (e.g. "make it concise", "translate to Spanish")'
+                    : 'Highlight text in any app, then click mic or type instruction.'
+                  : isListening
+                  ? 'Speak a command... "Play AC/DC on Spotify", "Volume 100%", "Lock screen"'
+                  : 'Microphone ready. Click mic or type command below.'}
+              </p>
+              {statusNotice && (
+                <div className="voice-hud-status-msg">{statusNotice}</div>
+              )}
+            </div>
           )}
         </div>
 
-        {/* Quick Suggestion Chips */}
+        {/* Quick Suggestion Chips (Clickable) */}
         <div className="voice-hud-chips">
           {mode === 'agent' ? (
             <>
-              <span className="voice-chip">"Play AC/DC on Spotify"</span>
-              <span className="voice-chip">"Set volume to 50%"</span>
-              <span className="voice-chip">"Search YouTube for ChatGPT"</span>
-              <span className="voice-chip">"Lock screen"</span>
+              <button
+                type="button"
+                className="voice-chip"
+                onClick={() => {
+                  setTranscript('Play AC/DC on Spotify');
+                  processCommand('Play AC/DC on Spotify');
+                }}
+              >
+                "Play AC/DC on Spotify"
+              </button>
+              <button
+                type="button"
+                className="voice-chip"
+                onClick={() => {
+                  setTranscript('Set volume to 50%');
+                  processCommand('Set volume to 50%');
+                }}
+              >
+                "Set volume to 50%"
+              </button>
+              <button
+                type="button"
+                className="voice-chip"
+                onClick={() => {
+                  setTranscript('Search YouTube for ChatGPT');
+                  processCommand('Search YouTube for ChatGPT');
+                }}
+              >
+                "Search YouTube for ChatGPT"
+              </button>
+              <button
+                type="button"
+                className="voice-chip"
+                onClick={() => {
+                  setTranscript('Lock screen');
+                  processCommand('Lock screen');
+                }}
+              >
+                "Lock screen"
+              </button>
             </>
           ) : mode === 'dictation' ? (
             <>
-              <span className="voice-chip">"Hey team let's sync tomorrow at 3pm..."</span>
-              <span className="voice-chip">"Here is the summary of today's release..."</span>
+              <button
+                type="button"
+                className="voice-chip"
+                onClick={() => {
+                  setTranscript("Hey team let's sync tomorrow at 3pm to review our project progress.");
+                  processCommand("Hey team let's sync tomorrow at 3pm to review our project progress.");
+                }}
+              >
+                "Hey team let's sync tomorrow at 3pm..."
+              </button>
+              <button
+                type="button"
+                className="voice-chip"
+                onClick={() => {
+                  setTranscript("Here is the summary of today's release with verified benchmarks.");
+                  processCommand("Here is the summary of today's release with verified benchmarks.");
+                }}
+              >
+                "Here is the summary of today's release..."
+              </button>
             </>
           ) : (
             <>
-              <span className="voice-chip">"Make it concise and professional"</span>
-              <span className="voice-chip">"Translate this to Spanish"</span>
-              <span className="voice-chip">"Turn into bullet points"</span>
+              <button
+                type="button"
+                className="voice-chip"
+                onClick={() => {
+                  setTranscript('Make it concise and professional');
+                  processCommand('Make it concise and professional');
+                }}
+              >
+                "Make it concise and professional"
+              </button>
+              <button
+                type="button"
+                className="voice-chip"
+                onClick={() => {
+                  setTranscript('Translate this to Spanish');
+                  processCommand('Translate this to Spanish');
+                }}
+              >
+                "Translate this to Spanish"
+              </button>
+              <button
+                type="button"
+                className="voice-chip"
+                onClick={() => {
+                  setTranscript('Turn into bullet points');
+                  processCommand('Turn into bullet points');
+                }}
+              >
+                "Turn into bullet points"
+              </button>
             </>
           )}
         </div>
+
+        {/* Interactive Command Input Bar */}
+        <form
+          className="voice-hud-input-bar"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (customCommand.trim()) {
+              const cmd = customCommand.trim();
+              setCustomCommand('');
+              setTranscript(cmd);
+              processCommand(cmd);
+            }
+          }}
+        >
+          <input
+            type="text"
+            className="voice-hud-input"
+            placeholder={
+              mode === 'dictation'
+                ? 'Type text to polish & inject...'
+                : mode === 'rewrite'
+                ? 'Type rewrite instruction...'
+                : 'Or type voice command and press Enter...'
+            }
+            value={customCommand}
+            onChange={(e) => setCustomCommand(e.target.value)}
+          />
+          <button
+            type="submit"
+            className="voice-hud-send-btn"
+            disabled={!customCommand.trim()}
+            title="Execute Command"
+          >
+            <Send size={13} />
+          </button>
+        </form>
       </div>
     </div>
   );

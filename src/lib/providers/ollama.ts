@@ -1,4 +1,5 @@
 import { ChatOptions, LLMProvider, ProviderHealth, ProviderMessage } from './types';
+import { resolveInstalledOllamaModel } from './qwenCoder';
 
 const OLLAMA_BASE_URL = 'http://localhost:11434';
 
@@ -22,7 +23,8 @@ export class OllamaProvider implements LLMProvider {
   }
 
   async chat(messages: ProviderMessage[], options?: ChatOptions): Promise<string> {
-    const model = options?.model || 'llama3.1';
+    const rawModel = options?.model || 'llama3.2';
+    const model = await resolveInstalledOllamaModel(rawModel);
     const payloadMessages = [...messages];
 
     if (options?.systemPrompt) {

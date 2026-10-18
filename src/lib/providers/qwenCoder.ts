@@ -15,6 +15,9 @@ export async function getInstalledOllamaModels(): Promise<string[]> {
 }
 
 export async function resolveInstalledOllamaModel(requestedModel: string): Promise<string> {
+  if (requestedModel.includes(':')) {
+    return requestedModel;
+  }
   const installed = await getInstalledOllamaModels();
   if (installed.length === 0) return requestedModel;
 
@@ -82,7 +85,8 @@ export class QwenCoderProvider implements LLMProvider {
   }
 
   async chat(messages: ProviderMessage[], options?: ChatOptions): Promise<string> {
-    const model = options?.model || DEFAULT_QWEN_MODEL;
+    const rawModel = options?.model || DEFAULT_QWEN_MODEL;
+    const model = await resolveInstalledOllamaModel(rawModel);
     const payloadMessages = [...messages];
 
     if (options?.systemPrompt) {

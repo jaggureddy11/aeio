@@ -111,7 +111,7 @@ function handleWebFallback<T>(cmd: string, args?: Record<string, unknown>): Prom
   if (cmd === 'set_api_key') {
     try {
       if (typeof localStorage !== 'undefined' && args?.target) {
-        localStorage.setItem(`aeio_key_${args.target}`, args.key);
+        localStorage.setItem(`aeio_key_${args.target}`, String(args.key ?? ''));
       }
     } catch {}
     return Promise.resolve(undefined as unknown as T);

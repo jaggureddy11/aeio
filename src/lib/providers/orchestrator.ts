@@ -261,12 +261,12 @@ export async function orchestrateChat(
   const localCandidates: ProviderCandidate[] = [
     {
       provider: qwenCoderProvider,
-      model: settings.ollamaModel || 'qwen2.5-coder',
+      model: settings.ollamaModel || 'qwen2.5:7b',
       isLocal: true,
     },
     {
       provider: ollamaProvider,
-      model: settings.ollamaModel || 'llama3.1',
+      model: settings.ollamaModel || 'llama3.2:latest',
       isLocal: true,
     },
   ];

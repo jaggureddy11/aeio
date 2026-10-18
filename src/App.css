@@ -6433,6 +6433,73 @@ html, body, #root {
   padding: 4px 10px;
   border-radius: 12px;
   border: 1px solid rgba(255, 255, 255, 0.05);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.voice-chip:hover {
+  color: #ffffff;
+  background: rgba(240, 86, 35, 0.15);
+  border-color: rgba(240, 86, 35, 0.35);
+  transform: translateY(-1px);
+}
+
+.voice-hud-input-bar {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  gap: 8px;
+  margin-top: 14px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  padding: 4px 6px 4px 12px;
+  transition: border-color 0.15s ease;
+}
+
+.voice-hud-input-bar:focus-within {
+  border-color: rgba(240, 86, 35, 0.5);
+}
+
+.voice-hud-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: #ffffff;
+  font-size: 12px;
+  outline: none;
+}
+
+.voice-hud-input::placeholder {
+  color: #5f6368;
+}
+
+.voice-hud-send-btn {
+  background: #f05623;
+  color: #ffffff;
+  border: none;
+  border-radius: 6px;
+  padding: 6px 10px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: opacity 0.15s ease;
+}
+
+.voice-hud-send-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.voice-hud-status-msg {
+  font-size: 11px;
+  color: #f05623;
+  background: rgba(240, 86, 35, 0.08);
+  padding: 4px 10px;
+  border-radius: 8px;
+  margin-top: 8px;
+  display: inline-block;
 }
 
 @keyframes scaleIn {

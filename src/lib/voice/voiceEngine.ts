@@ -626,7 +626,13 @@ export class VoiceEngine {
       this.recognition.onerror = (event: any) => {
         this.isListening = false;
         this.emitState('idle');
-        this.emitStatus(`Microphone error: ${event.error}`);
+        if (event.error === 'no-speech') {
+          this.emitStatus('No speech detected. Speak clearly or type your command.');
+        } else if (event.error === 'not-allowed') {
+          this.emitStatus('Microphone permission not granted. Please check System Settings.');
+        } else {
+          this.emitStatus(`Microphone status: ${event.error}`);
+        }
       };
 
       this.recognition.onend = () => {
@@ -646,13 +652,26 @@ export class VoiceEngine {
     return this.isListening;
   }
 
-  public startListening(): void {
+  public async startListening(): Promise<void> {
     if (!this.recognition) {
       this.initRecognition();
-      if (!this.recognition) {
-        this.emitStatus('Speech recognition not supported in this browser environment.');
+    }
+
+    // Proactively request microphone stream to trigger macOS TCC permission dialog smoothly
+    if (typeof navigator !== 'undefined' && navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        stream.getTracks().forEach((t) => t.stop());
+      } catch (err: any) {
+        this.emitStatus(`Microphone permission required: ${err?.message || 'Access denied'}`);
+        this.emitState('idle');
         return;
       }
+    }
+
+    if (!this.recognition) {
+      this.emitStatus('Speech recognition not supported in this environment. Type your command below.');
+      return;
     }
 
     try {
