@@ -34,6 +34,7 @@ pub fn run() {
                         if is_visible {
                             let _ = window.hide();
                         } else {
+                            let _ = window.unminimize();
                             let _ = window.center();
                             let _ = window.show();
                             let _ = window.set_focus();
@@ -276,9 +277,23 @@ pub fn run() {
             commands::toggle_notch_window,
             commands::resize_notch_window,
             commands::get_notch_window_state,
+            commands::show_main_window,
+            commands::toggle_main_window,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|app, event| {
+            if let tauri::RunEvent::Reopen { has_visible_windows, .. } = event {
+                if !has_visible_windows {
+                    if let Some(window) = app.get_webview_window("main") {
+                        let _ = window.unminimize();
+                        let _ = window.center();
+                        let _ = window.show();
+                        let _ = window.set_focus();
+                    }
+                }
+            }
+        });
 }
 
 

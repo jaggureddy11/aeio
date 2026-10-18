@@ -35,6 +35,13 @@ pub fn run_shell_command(command: &str, cwd: Option<&str>) -> Result<ShellOutput
     #[cfg(not(target_os = "windows"))]
     let mut cmd = {
         let mut c = Command::new("sh");
+        let current_path = std::env::var("PATH").unwrap_or_default();
+        let home = std::env::var("HOME").unwrap_or_default();
+        let extended_path = format!(
+            "{}/.cargo/bin:{}/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/local/sbin:{}",
+            home, home, current_path
+        );
+        c.env("PATH", extended_path);
         c.args(["-c", command]);
         c
     };

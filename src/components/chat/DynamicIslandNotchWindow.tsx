@@ -15,7 +15,7 @@ import {
   Eye,
   Activity,
 } from 'lucide-react';
-import { globalVoiceEngine, VoiceState } from '../../lib/voice/voiceEngine';
+import { globalVoiceEngine, VoiceState, matchAndExecuteFastAction } from '../../lib/voice/voiceEngine';
 import { globalProactiveCopilot, ProactiveNudge } from '../../lib/agent/proactiveCopilot';
 import { globalProactiveHeartbeat } from '../../lib/agent/proactiveHeartbeat';
 import { inspectActiveScreen } from '../../lib/vision/screenInspector';
@@ -25,6 +25,7 @@ import {
   hideNotchWindow,
   resizeNotchWindow,
   playSystemEarcon,
+  showMainWindow,
 } from '../../lib/ipc';
 
 export const DynamicIslandNotchWindow: React.FC = () => {
@@ -93,18 +94,22 @@ export const DynamicIslandNotchWindow: React.FC = () => {
     await hideNotchWindow().catch(() => {});
   };
 
-  const handleOpenMainWindow = () => {
-    import('@tauri-apps/api/webviewWindow')
-      .then(({ WebviewWindow }) => {
-        WebviewWindow.getByLabel('main').then((win) => {
-          if (win) {
-            win.center();
-            win.show();
-            win.setFocus();
-          }
-        });
-      })
-      .catch(() => {});
+  const handleOpenMainWindow = async () => {
+    try {
+      await showMainWindow();
+    } catch {
+      // Fallback
+      if (typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window) {
+        const { WebviewWindow } = await import('@tauri-apps/api/webviewWindow');
+        const win = await WebviewWindow.getByLabel('main');
+        if (win) {
+          await win.unminimize();
+          await win.center();
+          await win.show();
+          await win.setFocus();
+        }
+      }
+    }
   };
 
   const handleToggleMic = () => {
@@ -134,7 +139,24 @@ export const DynamicIslandNotchWindow: React.FC = () => {
         playSystemEarcon('processing').catch(() => {});
 
         try {
-          await sendMessage(text);
+          // 1. Fast-path deterministic directive check
+          const fastResult = await matchAndExecuteFastAction(text);
+          if (fastResult?.handledDeterministically) {
+            setFeedback(fastResult.feedbackText);
+            setVoiceState('speaking');
+            playSystemEarcon('success').catch(() => {});
+            setTimeout(() => {
+              setFeedback(null);
+              setVoiceState('idle');
+              setTranscript('');
+            }, 3500);
+            return;
+          }
+
+          // 2. Complex or Agentic Task: open main window to show live progress & thoughts
+          showMainWindow().catch(() => {});
+
+          await sendMessage(text, { autoApproveSafeTools: true });
           setFeedback('Executed command');
           setVoiceState('speaking');
           playSystemEarcon('success').catch(() => {});
@@ -209,6 +231,8 @@ export const DynamicIslandNotchWindow: React.FC = () => {
         className={`dynamic-island-notch-capsule ${isExpanded ? 'expanded' : 'collapsed'} ${voiceState}`}
         role="region"
         aria-label="Aeio Ambient Dynamic Island"
+        onDoubleClick={handleOpenMainWindow}
+        title="Double-click to open full Aeio app"
       >
         {/* Main Notch Bar */}
         <div className="dynamic-island-notch-bar">

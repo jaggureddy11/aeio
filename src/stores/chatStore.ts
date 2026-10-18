@@ -37,6 +37,7 @@ import {
   injectTextToActiveApp,
   captureScreenData,
   playSystemEarcon,
+  showMainWindow,
 } from '../lib/ipc';
 import { inspectActiveScreen } from '../lib/vision/screenInspector';
 import { evaluateMath, solveEquation, solveSystem } from '../lib/agent/tools/mathTool';
@@ -151,7 +152,7 @@ export interface ChatState {
   clearMessages: () => void;
   sendMessage: (
     userContent: string,
-    options?: { isAgenticContinuation?: boolean; role?: 'user' | 'system' }
+    options?: { isAgenticContinuation?: boolean; role?: 'user' | 'system'; autoApproveSafeTools?: boolean }
   ) => Promise<void>;
   inspectCurrentScreen: (customPrompt?: string) => Promise<void>;
   continueAgenticTurn: (
@@ -1449,7 +1450,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
   sendMessage: async (
     userContent: string,
-    options?: { isAgenticContinuation?: boolean; role?: 'user' | 'system' }
+    options?: { isAgenticContinuation?: boolean; role?: 'user' | 'system'; autoApproveSafeTools?: boolean }
   ) => {
     const trimmed = userContent.trim();
     if (!trimmed || get().isLoading) return;
@@ -1940,16 +1941,47 @@ export const useChatStore = create<ChatState>((set, get) => ({
         }
         // If has destructive steps, executionPlan remains in pending_approval until user approves
       } else if (tools.length > 0) {
-        // Auto-execute any non-destructive tools that are already marked "always allow"
+        const SAFE_READ_TOOLS = new Set([
+          'read_file',
+          'list_directory',
+          'search_files',
+          'fetch_url',
+          'browse_page',
+          'extract_links',
+          'search_memory',
+          'read_clipboard',
+          'open_target',
+          'open_app',
+          'simulate_key_press',
+          'simulate_scroll',
+          'inject_text',
+          'math_evaluate',
+          'math_solve',
+          'set_system_volume',
+          'get_system_volume',
+          'play_spotify',
+          'media_control',
+          'lock_screen',
+          'get_active_window',
+        ]);
+
         const allowed = get().alwaysAllowedCommands;
         for (let i = 0; i < tools.length; i++) {
           const t = tools[i];
-          if (!t.isDestructive) {
-            const cmdKey = t.args.command;
-            const scopedKey = `${t.toolName}:${cmdKey || t.args.path || t.args.target || 'default'}`;
-            if ((cmdKey && allowed.includes(cmdKey)) || allowed.includes(scopedKey)) {
-              get().approveToolExecution(assistantId, i);
-            }
+          const cmdKey = t.args.command;
+          const scopedKey = `${t.toolName}:${cmdKey || t.args.path || t.args.target || 'default'}`;
+          const isExplicitlyAllowed =
+            (cmdKey && allowed.includes(cmdKey)) || allowed.includes(scopedKey);
+          const isHandsFreeAutoApprove =
+            Boolean(options?.autoApproveSafeTools) &&
+            !t.isDestructive &&
+            (t.riskTier === 'low' || SAFE_READ_TOOLS.has(t.toolName));
+
+          if (isHandsFreeAutoApprove || isExplicitlyAllowed) {
+            get().approveToolExecution(assistantId, i);
+          } else if (t.isDestructive || t.riskTier === 'critical') {
+            // Surface approval UI to user immediately
+            showMainWindow().catch(() => {});
           }
         }
       }

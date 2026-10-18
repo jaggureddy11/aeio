@@ -638,3 +638,39 @@ pub fn resize_notch_window(app: tauri::AppHandle, width: u32, height: u32) -> Re
 pub fn get_notch_window_state() -> Result<crate::tools::notch::NotchWindowState, String> {
     crate::tools::notch::get_notch_window_state()
 }
+
+// Dedicated Main App Window Commands
+#[tauri::command]
+pub fn show_main_window(app: tauri::AppHandle) -> Result<bool, String> {
+    use tauri::Manager;
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.unminimize();
+        let _ = window.center();
+        let _ = window.show();
+        let _ = window.set_focus();
+        Ok(true)
+    } else {
+        Err("Main window not found".to_string())
+    }
+}
+
+#[tauri::command]
+pub fn toggle_main_window(app: tauri::AppHandle) -> Result<bool, String> {
+    use tauri::Manager;
+    if let Some(window) = app.get_webview_window("main") {
+        let is_visible = window.is_visible().unwrap_or(false);
+        if is_visible {
+            let _ = window.hide();
+            Ok(false)
+        } else {
+            let _ = window.unminimize();
+            let _ = window.center();
+            let _ = window.show();
+            let _ = window.set_focus();
+            Ok(true)
+        }
+    } else {
+        Err("Main window not found".to_string())
+    }
+}
+

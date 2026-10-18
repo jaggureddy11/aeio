@@ -747,3 +747,33 @@ export async function resizeNotchWindow(width: number, height: number): Promise<
 export async function getNotchWindowState(): Promise<NotchWindowState> {
   return invoke<NotchWindowState>('get_notch_window_state');
 }
+
+export async function showMainWindow(): Promise<boolean> {
+  try {
+    return await invoke<boolean>('show_main_window');
+  } catch (err) {
+    if (typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window) {
+      try {
+        const { WebviewWindow } = await import('@tauri-apps/api/webviewWindow');
+        const win = await WebviewWindow.getByLabel('main');
+        if (win) {
+          await win.unminimize();
+          await win.center();
+          await win.show();
+          await win.setFocus();
+          return true;
+        }
+      } catch {}
+    }
+    return false;
+  }
+}
+
+export async function toggleMainWindow(): Promise<boolean> {
+  try {
+    return await invoke<boolean>('toggle_main_window');
+  } catch {
+    return false;
+  }
+}
+

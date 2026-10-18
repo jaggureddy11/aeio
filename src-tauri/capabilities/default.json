@@ -5,6 +5,9 @@
   "windows": ["*"],
   "permissions": [
     "core:default",
+    "core:window:default",
+    "core:webview:default",
+    "core:event:default",
     "opener:default",
     "global-shortcut:default"
   ]
