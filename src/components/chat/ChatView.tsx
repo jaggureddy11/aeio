@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useChatStore } from '../../stores/chatStore';
 import { useWorkspaceStore } from '../../stores/workspaceStore';
 import { useSettingsStore } from '../../stores/settingsStore';
@@ -15,6 +15,7 @@ import {
   Cpu,
   Brain,
   ArrowRight,
+  ArrowDown,
 } from 'lucide-react';
 
 interface Props {
@@ -37,28 +38,67 @@ export const ChatView: React.FC<Props> = ({ onOpenSettings }) => {
   const { setActiveTab, activeProvider } = useSettingsStore();
   const activeWorkspace = useWorkspaceStore((s) => s.activeWorkspace);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const footerRef = useRef<HTMLElement>(null);
   const isUserNearBottom = useRef(true);
+  const [composerHeight, setComposerHeight] = useState(170);
+  const [showScrollBottomBtn, setShowScrollBottomBtn] = useState(false);
 
   useEffect(() => {
     initChatHistory(activeWorkspace?.id);
   }, [activeWorkspace?.id, initChatHistory]);
 
+  // Dynamically observe the composer height (textarea expansion, privacy pill, disclaimer)
+  useEffect(() => {
+    if (!footerRef.current) return;
+    const updateHeight = () => {
+      if (footerRef.current) {
+        const rect = footerRef.current.getBoundingClientRect();
+        if (rect.height > 0) {
+          setComposerHeight(Math.round(rect.height));
+        }
+      }
+    };
+
+    updateHeight();
+    const observer = new ResizeObserver(() => {
+      updateHeight();
+    });
+    observer.observe(footerRef.current);
+    return () => observer.disconnect();
+  }, []);
+
   const handleScroll = () => {
     if (!scrollAreaRef.current) return;
     const { scrollTop, scrollHeight, clientHeight } = scrollAreaRef.current;
-    isUserNearBottom.current = scrollHeight - (scrollTop + clientHeight) < 100;
+    const distanceToBottom = scrollHeight - (scrollTop + clientHeight);
+    isUserNearBottom.current = distanceToBottom < 180;
+    setShowScrollBottomBtn(distanceToBottom > 220);
+  };
+
+  const scrollToBottom = (smooth = true) => {
+    if (!scrollAreaRef.current) return;
+    isUserNearBottom.current = true;
+    scrollAreaRef.current.scrollTo({
+      top: scrollAreaRef.current.scrollHeight,
+      behavior: smooth ? 'smooth' : 'auto',
+    });
   };
 
   const handleSend = (text: string) => {
     isUserNearBottom.current = true;
     sendMessage(text);
+    // Smooth scroll down immediately after sending
+    setTimeout(() => {
+      scrollToBottom(true);
+    }, 50);
   };
 
   useEffect(() => {
     if (isUserNearBottom.current && scrollAreaRef.current) {
       scrollAreaRef.current.scrollTop = scrollAreaRef.current.scrollHeight;
     }
-  }, [messages, isLoading]);
+  }, [messages, isLoading, composerHeight]);
 
   const topBarTitle =
     messages.length === 0
@@ -82,8 +122,13 @@ export const ChatView: React.FC<Props> = ({ onOpenSettings }) => {
         onActionClick={clearMessages}
       />
 
-      {/* Messages Scroll Canvas */}
-      <div className="claude-scroll-canvas" ref={scrollAreaRef} onScroll={handleScroll}>
+      {/* Messages Scroll Canvas with Dynamic Breathing Room */}
+      <div
+        className="claude-scroll-canvas"
+        ref={scrollAreaRef}
+        onScroll={handleScroll}
+        style={{ paddingBottom: `${Math.max(composerHeight + 64, 240)}px` }}
+      >
         <div className="claude-reading-column">
           {messages.length === 0 ? (
             <div className="claude-empty-welcome">
@@ -220,11 +265,27 @@ export const ChatView: React.FC<Props> = ({ onOpenSettings }) => {
               </div>
             </div>
           )}
+          {/* Scroll Sentinel Anchor for reliable full-height scrolling */}
+          <div ref={messagesEndRef} className="claude-scroll-sentinel" aria-hidden="true" />
         </div>
       </div>
 
+      {/* Floating Scroll to Bottom Button */}
+      {showScrollBottomBtn && (
+        <button
+          type="button"
+          className="claude-scroll-bottom-fab"
+          onClick={() => scrollToBottom(true)}
+          title="Scroll to latest messages"
+          aria-label="Scroll to latest messages"
+          style={{ bottom: `${composerHeight + 20}px` }}
+        >
+          <ArrowDown size={15} />
+        </button>
+      )}
+
       {/* Floating Bottom Composer */}
-      <footer className="claude-bottom-section">
+      <footer className="claude-bottom-section" ref={footerRef}>
         <ChatInput onSend={handleSend} isLoading={isLoading} onOpenSettings={onOpenSettings} />
       </footer>
     </div>

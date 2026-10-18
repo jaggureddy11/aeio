@@ -5442,7 +5442,7 @@ html, body, #root {
   overflow-y: auto;
   display: flex;
   justify-content: center;
-  padding: 24px 24px 150px 24px;
+  padding: 24px 24px 240px 24px;
   scroll-behavior: smooth;
   background: var(--bg-app);
 }
@@ -5453,6 +5453,13 @@ html, body, #root {
   display: flex;
   flex-direction: column;
   gap: 28px;
+}
+
+.claude-scroll-sentinel {
+  height: 1px;
+  width: 100%;
+  pointer-events: none;
+  visibility: hidden;
 }
 
 /* --- Claude Empty Welcome Screen --- */
@@ -6001,12 +6008,12 @@ html, body, #root {
   justify-content: center;
   padding: 0 24px 18px 24px;
   pointer-events: none;
-  background: linear-gradient(180deg, transparent 0%, rgba(255, 255, 255, 0.88) 25%, var(--bg-app) 100%);
+  background: linear-gradient(180deg, transparent 0%, rgba(255, 255, 255, 0.45) 35%, rgba(255, 255, 255, 0.96) 72%, var(--bg-app) 100%);
   z-index: 10;
 }
 
 [data-theme="dark"] .claude-bottom-section {
-  background: linear-gradient(180deg, transparent 0%, rgba(24, 23, 21, 0.85) 25%, var(--bg-app) 100%);
+  background: linear-gradient(180deg, transparent 0%, rgba(24, 23, 21, 0.4) 35%, rgba(24, 23, 21, 0.96) 72%, var(--bg-app) 100%);
 }
 
 .claude-composer-wrapper {
@@ -6155,6 +6162,80 @@ html, body, #root {
   font-size: 11px;
   color: var(--text-muted);
   letter-spacing: 0.01em;
+}
+
+/* --- Claude Assistant Message Actions Row --- */
+.claude-message-actions-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 8px;
+  padding-top: 2px;
+}
+
+.claude-action-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  padding: 0;
+}
+
+.claude-action-icon-btn:hover {
+  background: var(--bg-card-hover);
+  color: var(--text-primary);
+  border-color: var(--border-subtle);
+}
+
+.claude-action-icon-btn.active-thumbs {
+  color: var(--accent-primary);
+  background: var(--accent-subtle);
+  border-color: var(--accent-border);
+}
+
+.claude-action-icon-btn.active-speaking {
+  color: #f05623;
+  background: rgba(240, 86, 35, 0.12);
+  border-color: rgba(240, 86, 35, 0.25);
+  animation: pulseMic 1.8s infinite;
+}
+
+.claude-action-icon-btn .action-success {
+  color: var(--accent-primary);
+}
+
+/* --- Claude Floating Scroll to Bottom Button --- */
+.claude-scroll-bottom-fab {
+  position: absolute;
+  right: 28px;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 25;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  animation: fadeIn 0.2s ease;
+}
+
+.claude-scroll-bottom-fab:hover {
+  background: var(--bg-card-hover);
+  color: var(--text-primary);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.16);
 }
 
 /* ==========================================================================

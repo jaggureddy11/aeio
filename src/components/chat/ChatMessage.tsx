@@ -13,6 +13,10 @@ import {
   Eye,
   Maximize2,
   Minimize2,
+  Volume2,
+  ThumbsUp,
+  ThumbsDown,
+  RotateCw,
 } from 'lucide-react';
 import { ToolApprovalCard } from './ToolApproval';
 import { PlanExecutionCard } from './PlanExecutionCard';
@@ -82,11 +86,40 @@ export const ChatMessageItem: React.FC<Props> = React.memo(({ message }) => {
     denyToolExecution,
     approvePlan,
     cancelPlan,
+    retryLastMessage,
   } = useChatStore();
 
   const [showRecalled, setShowRecalled] = useState(false);
   const [showReasoning, setShowReasoning] = useState(false);
   const [zoomOpen, setZoomOpen] = useState(false);
+  const [copiedMessage, setCopiedMessage] = useState(false);
+  const [isSpeaking, setIsSpeaking] = useState(false);
+  const [feedback, setFeedback] = useState<'up' | 'down' | null>(null);
+
+  const handleCopyMessage = () => {
+    navigator.clipboard.writeText(message.content);
+    setCopiedMessage(true);
+    setTimeout(() => setCopiedMessage(false), 2000);
+  };
+
+  const handleToggleSpeech = () => {
+    if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
+    if (isSpeaking) {
+      window.speechSynthesis.cancel();
+      setIsSpeaking(false);
+    } else {
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(message.content);
+      utterance.onend = () => setIsSpeaking(false);
+      utterance.onerror = () => setIsSpeaking(false);
+      setIsSpeaking(true);
+      window.speechSynthesis.speak(utterance);
+    }
+  };
+
+  const handleFeedback = (type: 'up' | 'down') => {
+    setFeedback((prev) => (prev === type ? null : type));
+  };
 
   const hasRecalled = !isUser && message.recalledMemories && message.recalledMemories.length > 0;
   const hasProposed = !isUser && message.proposedMemories && message.proposedMemories.length > 0;
@@ -247,6 +280,63 @@ export const ChatMessageItem: React.FC<Props> = React.memo(({ message }) => {
             <span className="claude-typing-cursor" aria-hidden="true" />
           )}
         </div>
+
+        {/* Claude Assistant Message Action Row */}
+        {!message.isStreaming && message.content && (
+          <div className="claude-message-actions-row">
+            <button
+              type="button"
+              className="claude-action-icon-btn"
+              onClick={handleCopyMessage}
+              title={copiedMessage ? 'Copied to clipboard' : 'Copy'}
+              aria-label="Copy response"
+            >
+              {copiedMessage ? <Check size={14} className="action-success" /> : <Copy size={14} />}
+            </button>
+
+            {typeof window !== 'undefined' && 'speechSynthesis' in window && (
+              <button
+                type="button"
+                className={`claude-action-icon-btn ${isSpeaking ? 'active-speaking' : ''}`}
+                onClick={handleToggleSpeech}
+                title={isSpeaking ? 'Stop reading' : 'Read aloud'}
+                aria-label={isSpeaking ? 'Stop reading aloud' : 'Read aloud'}
+              >
+                <Volume2 size={14} />
+              </button>
+            )}
+
+            <button
+              type="button"
+              className={`claude-action-icon-btn ${feedback === 'up' ? 'active-thumbs' : ''}`}
+              onClick={() => handleFeedback('up')}
+              title="Good response"
+              aria-label="Good response"
+            >
+              <ThumbsUp size={14} />
+            </button>
+
+            <button
+              type="button"
+              className={`claude-action-icon-btn ${feedback === 'down' ? 'active-thumbs' : ''}`}
+              onClick={() => handleFeedback('down')}
+              title="Bad response"
+              aria-label="Bad response"
+            >
+              <ThumbsDown size={14} />
+            </button>
+
+            <button
+              type="button"
+              className="claude-action-icon-btn"
+              onClick={() => retryLastMessage()}
+              title="Retry"
+              aria-label="Retry response"
+            >
+              <RotateCw size={14} />
+            </button>
+          </div>
+        )}
 
         {/* Autonomous Multi-Step Execution Plan Card */}
         {message.plan && (
