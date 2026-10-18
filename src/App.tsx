@@ -304,7 +304,7 @@ export const App: React.FC = () => {
         } else if (e.key.toLowerCase() === 'k') {
           e.preventDefault();
           setActiveTab('chat');
-          clearMessages();
+          useChatStore.getState().createNewSession();
         }
       }
     };

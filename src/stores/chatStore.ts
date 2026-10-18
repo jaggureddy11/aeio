@@ -126,8 +126,19 @@ export interface ChatMessage {
   };
 }
 
+export interface ChatSession {
+  id: string;
+  title: string;
+  messages: ChatMessage[];
+  createdAt: number;
+  updatedAt: number;
+  workspaceId?: string;
+}
+
 export interface ChatState {
   messages: ChatMessage[];
+  sessions: ChatSession[];
+  activeSessionId: string | null;
   isLoading: boolean;
   error: string | null;
   lastFailedPrompt: string | null;
@@ -137,6 +148,10 @@ export interface ChatState {
   consecutiveAgenticRounds: number;
   activeRunningPlanMessageId: string | null;
   initChatHistory: (workspaceId?: string) => Promise<void>;
+  createNewSession: (workspaceId?: string) => string;
+  switchSession: (sessionId: string) => void;
+  deleteSession: (sessionId: string) => void;
+  renameSession: (sessionId: string, newTitle: string) => void;
   addMessage: (message: Omit<ChatMessage, 'id' | 'timestamp'>) => string;
   updateMessageContent: (
     id: string,
@@ -259,8 +274,96 @@ function persistChatMessage(msg: ChatMessage) {
   }).catch((err) => console.warn('Failed to persist chat message to SQLite:', err));
 }
 
+const SESSIONS_STORAGE_KEY = 'aeio_chat_sessions_v2';
+const ACTIVE_SESSION_STORAGE_KEY = 'aeio_active_session_id';
+
+export function deriveSessionTitle(messages: ChatMessage[]): string {
+  const firstUser = messages.find((m) => m.role === 'user' && m.content && m.content.trim().length > 0);
+  if (!firstUser) return 'New chat';
+  const clean = firstUser.content.replace(/[\r\n]+/g, ' ').trim();
+  return clean.length > 36 ? `${clean.slice(0, 36)}...` : clean;
+}
+
+function sanitizeSessionForStorage(session: ChatSession): ChatSession {
+  return {
+    ...session,
+    messages: session.messages.map((m) => {
+      if (m.screenSnapshot && m.screenSnapshot.base64 && m.screenSnapshot.base64.length > 500) {
+        return {
+          ...m,
+          screenSnapshot: {
+            ...m.screenSnapshot,
+            base64: '',
+          },
+        };
+      }
+      return m;
+    }),
+  };
+}
+
+function loadStoredSessions(): ChatSession[] {
+  try {
+    const raw = localStorage.getItem(SESSIONS_STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveStoredSessions(sessions: ChatSession[], activeId?: string | null) {
+  try {
+    const sanitized = sessions.map(sanitizeSessionForStorage);
+    localStorage.setItem(SESSIONS_STORAGE_KEY, JSON.stringify(sanitized));
+    if (activeId) {
+      localStorage.setItem(ACTIVE_SESSION_STORAGE_KEY, activeId);
+    }
+  } catch (err) {
+    console.warn('Failed to save chat sessions to localStorage:', err);
+  }
+}
+
+function parseSqliteMessages(saved: any[]): ChatMessage[] {
+  return saved.map((s) => {
+    let parsedProvider: ProviderBadgeInfo | undefined = undefined;
+    let parsedReasoning: string | undefined = undefined;
+    if (s.provider_info_json) {
+      try {
+        const meta = JSON.parse(s.provider_info_json);
+        parsedReasoning = meta.reasoning;
+        if (meta.providerId) {
+          parsedProvider = meta;
+        }
+      } catch {}
+    }
+
+    return {
+      id: s.id,
+      role: s.role as 'user' | 'assistant' | 'system',
+      content: s.content,
+      timestamp: s.timestamp,
+      reasoning: parsedReasoning,
+      recalledMemories: s.recalled_memories_json
+        ? JSON.parse(s.recalled_memories_json)
+        : undefined,
+      proposedMemories: s.proposed_memories_json
+        ? JSON.parse(s.proposed_memories_json)
+        : undefined,
+      toolExecutions: s.tool_executions_json
+        ? JSON.parse(s.tool_executions_json)
+        : undefined,
+      providerInfo: parsedProvider,
+      workspaceId: s.workspace_id || undefined,
+    };
+  });
+}
+
 export const useChatStore = create<ChatState>((set, get) => ({
   messages: [],
+  sessions: [],
+  activeSessionId: null,
   isLoading: false,
   error: null,
   lastFailedPrompt: null,
@@ -274,45 +377,161 @@ export const useChatStore = create<ChatState>((set, get) => ({
     try {
       const activeWs = useWorkspaceStore.getState().activeWorkspace;
       const wsId = workspaceId || activeWs?.id || 'default';
-      const saved = await loadChatMessages(wsId, 100);
-      if (saved) {
-        const parsed: ChatMessage[] = saved.map((s) => {
-          let parsedProvider: ProviderBadgeInfo | undefined = undefined;
-          let parsedReasoning: string | undefined = undefined;
-          if (s.provider_info_json) {
-            try {
-              const meta = JSON.parse(s.provider_info_json);
-              parsedReasoning = meta.reasoning;
-              if (meta.providerId) {
-                parsedProvider = meta;
-              }
-            } catch {}
-          }
 
-          return {
-            id: s.id,
-            role: s.role as 'user' | 'assistant' | 'system',
-            content: s.content,
-            timestamp: s.timestamp,
-            reasoning: parsedReasoning,
-            recalledMemories: s.recalled_memories_json
-              ? JSON.parse(s.recalled_memories_json)
-              : undefined,
-            proposedMemories: s.proposed_memories_json
-              ? JSON.parse(s.proposed_memories_json)
-              : undefined,
-            toolExecutions: s.tool_executions_json
-              ? JSON.parse(s.tool_executions_json)
-              : undefined,
-            providerInfo: parsedProvider,
-            workspaceId: s.workspace_id || undefined,
+      let sessions = loadStoredSessions();
+      let activeSessionId = localStorage.getItem(ACTIVE_SESSION_STORAGE_KEY);
+
+      // If no sessions in localStorage yet, check SQLite for existing messages to seed initial session
+      if (sessions.length === 0) {
+        const saved = await loadChatMessages(wsId, 100);
+        if (saved && saved.length > 0) {
+          const parsed = parseSqliteMessages(saved);
+          const initialSession: ChatSession = {
+            id: crypto.randomUUID(),
+            title: deriveSessionTitle(parsed),
+            messages: parsed,
+            createdAt: parsed[0]?.timestamp || Date.now(),
+            updatedAt: parsed[parsed.length - 1]?.timestamp || Date.now(),
+            workspaceId: wsId,
           };
-        });
-        set({ messages: parsed });
+          sessions = [initialSession];
+          activeSessionId = initialSession.id;
+          saveStoredSessions(sessions, activeSessionId);
+        } else {
+          const initialSession: ChatSession = {
+            id: crypto.randomUUID(),
+            title: 'New chat',
+            messages: [],
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+            workspaceId: wsId,
+          };
+          sessions = [initialSession];
+          activeSessionId = initialSession.id;
+          saveStoredSessions(sessions, activeSessionId);
+        }
       }
+
+      let currentSession = sessions.find((s) => s.id === activeSessionId);
+      if (!currentSession) {
+        currentSession = sessions[0];
+        activeSessionId = currentSession ? currentSession.id : null;
+      }
+
+      set({
+        sessions,
+        activeSessionId,
+        messages: currentSession ? currentSession.messages : [],
+      });
     } catch (err) {
-      console.warn('Failed to load chat history from SQLite:', err);
+      console.warn('Failed to load chat history from storage/SQLite:', err);
     }
+  },
+
+  createNewSession: (workspaceId?: string) => {
+    const activeWs = useWorkspaceStore.getState().activeWorkspace;
+    const wsId = workspaceId || activeWs?.id || 'default';
+    const state = get();
+
+    // If active session already has no messages, simply focus it
+    const active = state.sessions.find((s) => s.id === state.activeSessionId);
+    if (active && active.messages.length === 0) {
+      set({ messages: [], activeNudge: null, error: null });
+      return active.id;
+    }
+
+    // Prune any empty abandoned sessions before creating a new one
+    const cleanSessions = state.sessions.filter((s) => s.messages.length > 0);
+
+    const newId = crypto.randomUUID();
+    const newSession: ChatSession = {
+      id: newId,
+      title: 'New chat',
+      messages: [],
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+      workspaceId: wsId,
+    };
+
+    const updatedSessions = [newSession, ...cleanSessions];
+    saveStoredSessions(updatedSessions, newId);
+
+    set({
+      sessions: updatedSessions,
+      activeSessionId: newId,
+      messages: [],
+      activeNudge: null,
+      error: null,
+    });
+
+    return newId;
+  },
+
+  switchSession: (sessionId: string) => {
+    const state = get();
+    const target = state.sessions.find((s) => s.id === sessionId);
+    if (!target) return;
+
+    // Prune empty inactive sessions when navigating to another session
+    const prunedSessions = state.sessions.filter(
+      (s) => s.id === sessionId || s.messages.length > 0
+    );
+
+    saveStoredSessions(prunedSessions, sessionId);
+    set({
+      sessions: prunedSessions,
+      activeSessionId: sessionId,
+      messages: target.messages,
+      activeNudge: null,
+      error: null,
+    });
+  },
+
+  deleteSession: (sessionId: string) => {
+    const state = get();
+    const remaining = state.sessions.filter((s) => s.id !== sessionId);
+
+    let nextActiveId = state.activeSessionId;
+    let nextMessages = state.messages;
+
+    if (state.activeSessionId === sessionId) {
+      if (remaining.length > 0) {
+        nextActiveId = remaining[0].id;
+        nextMessages = remaining[0].messages;
+      } else {
+        const activeWs = useWorkspaceStore.getState().activeWorkspace;
+        const freshId = crypto.randomUUID();
+        const freshSession: ChatSession = {
+          id: freshId,
+          title: 'New chat',
+          messages: [],
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+          workspaceId: activeWs?.id || 'default',
+        };
+        remaining.push(freshSession);
+        nextActiveId = freshId;
+        nextMessages = [];
+      }
+    }
+
+    saveStoredSessions(remaining, nextActiveId);
+
+    set({
+      sessions: remaining,
+      activeSessionId: nextActiveId,
+      messages: nextMessages,
+    });
+  },
+
+  renameSession: (sessionId: string, newTitle: string) => {
+    const state = get();
+    const cleanTitle = newTitle.trim() || 'Untitled chat';
+    const updated = state.sessions.map((s) =>
+      s.id === sessionId ? { ...s, title: cleanTitle, updatedAt: Date.now() } : s
+    );
+    saveStoredSessions(updated, state.activeSessionId);
+    set({ sessions: updated });
   },
 
   addMessage: (message) => {
@@ -326,7 +545,51 @@ export const useChatStore = create<ChatState>((set, get) => ({
       timestamp: Date.now(),
       workspaceId: wsId,
     };
-    set((state) => ({ messages: [...state.messages, newMessage] }));
+
+    set((state) => {
+      const newMessages = [...state.messages, newMessage];
+      let activeId = state.activeSessionId;
+      let sessions = [...state.sessions];
+
+      if (!activeId || !sessions.some((s) => s.id === activeId)) {
+        activeId = crypto.randomUUID();
+        const newSession: ChatSession = {
+          id: activeId,
+          title: deriveSessionTitle(newMessages),
+          messages: newMessages,
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+          workspaceId: wsId,
+        };
+        sessions.unshift(newSession);
+      } else {
+        sessions = sessions.map((s) => {
+          if (s.id === activeId) {
+            const shouldRename =
+              s.title === 'New chat' ||
+              s.title === 'Current conversation' ||
+              s.messages.length === 0;
+            return {
+              ...s,
+              title: shouldRename ? deriveSessionTitle(newMessages) : s.title,
+              messages: newMessages,
+              updatedAt: Date.now(),
+            };
+          }
+          return s;
+        });
+        // Sort sessions with most recently active first
+        sessions.sort((a, b) => b.updatedAt - a.updatedAt);
+      }
+
+      saveStoredSessions(sessions, activeId);
+
+      return {
+        messages: newMessages,
+        sessions,
+        activeSessionId: activeId,
+      };
+    });
 
     // Persist complete user or assistant message to SQLite
     if (!message.isStreaming) {
@@ -371,7 +634,29 @@ export const useChatStore = create<ChatState>((set, get) => ({
         }
         return m;
       });
-      return { messages: updatedMessages };
+
+      let sessions = state.sessions;
+      if (state.activeSessionId) {
+        sessions = state.sessions.map((s) => {
+          if (s.id === state.activeSessionId) {
+            const shouldRename =
+              (s.title === 'New chat' || s.title === 'Current conversation') &&
+              updatedMessages.some((msg) => msg.role === 'user');
+            return {
+              ...s,
+              title: shouldRename ? deriveSessionTitle(updatedMessages) : s.title,
+              messages: updatedMessages,
+              updatedAt: Date.now(),
+            };
+          }
+          return s;
+        });
+        if (!isStreaming) {
+          saveStoredSessions(sessions, state.activeSessionId);
+        }
+      }
+
+      return { messages: updatedMessages, sessions };
     });
   },
 
@@ -380,7 +665,19 @@ export const useChatStore = create<ChatState>((set, get) => ({
   clearMessages: async () => {
     const activeWs = useWorkspaceStore.getState().activeWorkspace;
     const wsId = activeWs?.id || 'default';
-    set({ messages: [], activeNudge: null });
+    const state = get();
+
+    let updatedSessions = state.sessions;
+    if (state.activeSessionId) {
+      updatedSessions = state.sessions.map((s) =>
+        s.id === state.activeSessionId
+          ? { ...s, messages: [], title: 'New chat', updatedAt: Date.now() }
+          : s
+      );
+      saveStoredSessions(updatedSessions, state.activeSessionId);
+    }
+
+    set({ messages: [], activeNudge: null, sessions: updatedSessions });
     try {
       await clearChatHistory(wsId);
     } catch (err) {

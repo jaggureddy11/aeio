@@ -25,6 +25,9 @@ interface Props {
 export const ChatView: React.FC<Props> = ({ onOpenSettings }) => {
   const {
     messages,
+    sessions,
+    activeSessionId,
+    createNewSession,
     isLoading,
     error,
     setError,
@@ -118,8 +121,11 @@ export const ChatView: React.FC<Props> = ({ onOpenSettings }) => {
     return () => resizeObserver.disconnect();
   }, []);
 
+  const activeSession = sessions.find((s) => s.id === activeSessionId);
   const topBarTitle =
-    messages.length === 0
+    activeSession?.title && activeSession.title !== 'New chat'
+      ? activeSession.title
+      : messages.length === 0
       ? activeWorkspace?.name || 'General Workspace'
       : messages[0]?.content
       ? messages[0].content.length > 36
@@ -133,7 +139,7 @@ export const ChatView: React.FC<Props> = ({ onOpenSettings }) => {
       <ClaudeTopBar
         title={topBarTitle}
         hasMessages={messages.length > 0}
-        onNewChat={clearMessages}
+        onNewChat={() => createNewSession()}
         onClearChat={clearMessages}
         onOpenSettings={onOpenSettings}
         onOpenMemory={() => setActiveTab('memory')}

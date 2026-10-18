@@ -1,8 +1,10 @@
-import React from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { AeLogo } from '../common/AeLogo';
 import { useSettingsStore } from '../../stores/settingsStore';
-import { useChatStore } from '../../stores/chatStore';
+import { useChatStore, ChatSession } from '../../stores/chatStore';
+import { useMemoryStore } from '../../stores/memoryStore';
 import { useWorkspaceStore } from '../../stores/workspaceStore';
+import { WorkspaceSwitcher } from '../workspace/WorkspaceSwitcher';
 import {
   MessageSquare,
   Brain,
@@ -10,14 +12,103 @@ import {
   Plus,
   PanelLeftClose,
   ShieldCheck,
-  Layers,
   Trash2,
+  Pencil,
+  Check,
+  X,
+  Search,
+  User,
+  ChevronsUpDown,
 } from 'lucide-react';
 
 interface Props {
   collapsed: boolean;
   onToggleCollapse: () => void;
   onOpenSettings: () => void;
+}
+
+export type DateGroupLabel = 'Today' | 'Yesterday' | 'Previous 7 Days' | 'Previous 30 Days' | 'Older';
+
+export interface DateGroupedSessions {
+  label: DateGroupLabel;
+  sessions: ChatSession[];
+}
+
+export function groupSessionsByDate(sessions: ChatSession[]): DateGroupedSessions[] {
+  const now = new Date();
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const startOfYesterday = startOfToday - 86400000;
+  const startOfSevenDays = startOfToday - 6 * 86400000;
+  const startOfThirtyDays = startOfToday - 29 * 86400000;
+
+  const groups: Record<DateGroupLabel, ChatSession[]> = {
+    'Today': [],
+    'Yesterday': [],
+    'Previous 7 Days': [],
+    'Previous 30 Days': [],
+    'Older': [],
+  };
+
+  for (const session of sessions) {
+    const ts = session.updatedAt || session.createdAt || 0;
+    if (ts >= startOfToday) {
+      groups['Today'].push(session);
+    } else if (ts >= startOfYesterday) {
+      groups['Yesterday'].push(session);
+    } else if (ts >= startOfSevenDays) {
+      groups['Previous 7 Days'].push(session);
+    } else if (ts >= startOfThirtyDays) {
+      groups['Previous 30 Days'].push(session);
+    } else {
+      groups['Older'].push(session);
+    }
+  }
+
+  const order: DateGroupLabel[] = ['Today', 'Yesterday', 'Previous 7 Days', 'Previous 30 Days', 'Older'];
+  return order
+    .filter((label) => groups[label].length > 0)
+    .map((label) => ({ label, sessions: groups[label] }));
+}
+
+function formatRelativeTime(timestamp: number): string {
+  if (!timestamp) return '';
+  const now = Date.now();
+  const diffSec = Math.floor((now - timestamp) / 1000);
+  if (diffSec < 60) return 'Just now';
+  const diffMin = Math.floor(diffSec / 60);
+  if (diffMin < 60) return `${diffMin}m ago`;
+  const diffHour = Math.floor(diffMin / 60);
+  if (diffHour < 24) return `${diffHour}h ago`;
+  const diffDay = Math.floor(diffHour / 24);
+  if (diffDay === 1) return 'Yesterday';
+  if (diffDay < 7) return `${diffDay}d ago`;
+  return new Date(timestamp).toLocaleDateString([], { month: 'short', day: 'numeric' });
+}
+
+function getProviderDisplayName(provider: string, ollamaModel?: string): string {
+  switch (provider) {
+    case 'qwen-coder': return 'Qwen 2.5 Coder';
+    case 'claude': return 'Claude 3.5 Sonnet';
+    case 'gemini': return 'Gemini 2.5 Flash';
+    case 'openai': return 'GPT-4o';
+    case 'bedrock': return 'AWS Bedrock';
+    case 'aeio-free': return 'Claude 3.5 Haiku';
+    case 'ollama': return ollamaModel || 'Local Ollama';
+    default: return 'Active Engine';
+  }
+}
+
+function getProviderShortName(provider: string): string {
+  switch (provider) {
+    case 'bedrock': return 'Bedrock';
+    case 'claude': return 'Claude';
+    case 'gemini': return 'Gemini';
+    case 'openai': return 'GPT-4o';
+    case 'qwen-coder': return 'Qwen';
+    case 'ollama': return 'Ollama';
+    case 'aeio-free': return 'Haiku';
+    default: return 'Engine';
+  }
 }
 
 export const Sidebar: React.FC<Props> = ({
@@ -33,13 +124,87 @@ export const Sidebar: React.FC<Props> = ({
     hotkey,
   } = useSettingsStore();
 
-  const { messages, clearMessages } = useChatStore();
+  const {
+    sessions,
+    activeSessionId,
+    createNewSession,
+    switchSession,
+    deleteSession,
+    renameSession,
+  } = useChatStore();
+
+  const { memories } = useMemoryStore();
   const { activeWorkspace } = useWorkspaceStore();
+
+  const [searchQuery, setSearchQuery] = useState('');
+  const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
+  const [editingTitle, setEditingTitle] = useState('');
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
+
+  const editInputRef = useRef<HTMLInputElement>(null);
+  const profileMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (editingSessionId && editInputRef.current) {
+      editInputRef.current.focus();
+      editInputRef.current.select();
+    }
+  }, [editingSessionId]);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (profileMenuRef.current && !profileMenuRef.current.contains(event.target as Node)) {
+        setIsProfileOpen(false);
+      }
+    }
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        setIsProfileOpen(false);
+      }
+    }
+    if (isProfileOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+      document.addEventListener('keydown', handleKeyDown);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isProfileOpen]);
 
   const handleStartNewChat = () => {
     setActiveTab('chat');
-    clearMessages();
+    createNewSession();
   };
+
+  const handleStartRename = (e: React.MouseEvent, session: ChatSession) => {
+    e.stopPropagation();
+    setEditingSessionId(session.id);
+    setEditingTitle(session.title || 'Untitled chat');
+  };
+
+  const handleSaveRename = (sessionId: string) => {
+    if (editingTitle.trim()) {
+      renameSession(sessionId, editingTitle.trim());
+    }
+    setEditingSessionId(null);
+    setEditingTitle('');
+  };
+
+  const handleCancelRename = () => {
+    setEditingSessionId(null);
+    setEditingTitle('');
+  };
+
+  // Filter sessions based on search query
+  const filteredSessions = sessions.filter((s) => {
+    if (!searchQuery.trim()) return true;
+    const q = searchQuery.toLowerCase().trim();
+    if (s.title && s.title.toLowerCase().includes(q)) return true;
+    return s.messages.some((m) => m.content && m.content.toLowerCase().includes(q));
+  });
+
+  const grouped = groupSessionsByDate(filteredSessions);
 
   if (collapsed) {
     return (
@@ -59,7 +224,7 @@ export const Sidebar: React.FC<Props> = ({
             type="button"
             className="sidebar-mini-action primary"
             onClick={handleStartNewChat}
-            title="Start new chat"
+            title="Start new chat (⌘K)"
           >
             <Plus size={16} />
           </button>
@@ -72,23 +237,65 @@ export const Sidebar: React.FC<Props> = ({
           >
             <MessageSquare size={16} />
           </button>
+        </div>
+
+        {/* Collapsed Profile Icon at bottom */}
+        <div className="sidebar-mini-footer" ref={profileMenuRef}>
+          {isProfileOpen && (
+            <div className="sidebar-profile-menu mini animate-fadeIn">
+              <div className="profile-menu-header">
+                <div className="profile-menu-avatar">
+                  <User size={15} />
+                </div>
+                <div className="profile-menu-user-text">
+                  <span className="profile-menu-username">User Profile</span>
+                  <span className="profile-menu-status">{activeWorkspace?.name || 'Default'}</span>
+                </div>
+              </div>
+              <div className="profile-menu-divider" />
+              <div className="profile-menu-section">
+                <div className="profile-menu-section-label">WORKSPACE</div>
+                <WorkspaceSwitcher />
+              </div>
+              <div className="profile-menu-divider" />
+              <div className="profile-menu-actions">
+                <button
+                  type="button"
+                  className={`profile-menu-item ${activeTab === 'memory' ? 'active' : ''}`}
+                  onClick={() => {
+                    setActiveTab('memory');
+                    setIsProfileOpen(false);
+                  }}
+                >
+                  <Brain size={14} className="profile-item-icon" />
+                  <span className="profile-item-text">Memory Vault</span>
+                  {memories.length > 0 && (
+                    <span className="profile-item-badge">{memories.length}</span>
+                  )}
+                </button>
+                <button
+                  type="button"
+                  className={`profile-menu-item ${activeTab === 'settings' ? 'active' : ''}`}
+                  onClick={() => {
+                    onOpenSettings();
+                    setIsProfileOpen(false);
+                  }}
+                >
+                  <Settings size={14} className="profile-item-icon" />
+                  <span className="profile-item-text">Settings & Keys</span>
+                </button>
+              </div>
+            </div>
+          )}
 
           <button
             type="button"
-            className={`sidebar-mini-action ${activeTab === 'memory' ? 'active' : ''}`}
-            onClick={() => setActiveTab('memory')}
-            title="Memory store"
+            className={`sidebar-mini-profile-btn ${isProfileOpen ? 'active' : ''}`}
+            onClick={() => setIsProfileOpen(!isProfileOpen)}
+            title="User Profile & Settings"
+            aria-label="User profile"
           >
-            <Brain size={16} />
-          </button>
-
-          <button
-            type="button"
-            className={`sidebar-mini-action ${activeTab === 'settings' ? 'active' : ''}`}
-            onClick={() => setActiveTab('settings')}
-            title="Settings"
-          >
-            <Settings size={16} />
+            <User size={15} />
           </button>
         </div>
       </aside>
@@ -120,8 +327,8 @@ export const Sidebar: React.FC<Props> = ({
         </button>
       </div>
 
-      {/* Primary Action: New Chat */}
-      <div className="sidebar-primary-action-wrap">
+      {/* Top Action Bar: Start New Chat + Search */}
+      <div className="sidebar-top-section">
         <button
           type="button"
           className="sidebar-new-chat-btn"
@@ -134,106 +341,284 @@ export const Sidebar: React.FC<Props> = ({
           </div>
           <kbd className="new-chat-shortcut">⌘K</kbd>
         </button>
-      </div>
 
-      {/* Main Navigation Section */}
-      <div className="sidebar-nav-section">
-        <div className="sidebar-section-label">VIEWS</div>
-        <button
-          type="button"
-          className={`sidebar-nav-item ${activeTab === 'chat' ? 'active' : ''}`}
-          onClick={() => setActiveTab('chat')}
-        >
-          <MessageSquare size={14} strokeWidth={1.9} className="nav-item-icon" />
-          <span className="nav-item-label">Conversation</span>
-          {messages.length > 0 && (
-            <span className="nav-item-badge">{messages.length}</span>
-          )}
-        </button>
-
-        <button
-          type="button"
-          className={`sidebar-nav-item ${activeTab === 'memory' ? 'active' : ''}`}
-          onClick={() => setActiveTab('memory')}
-        >
-          <Brain size={14} strokeWidth={1.9} className="nav-item-icon" />
-          <span className="nav-item-label">Memory Vault</span>
-        </button>
-
-        <button
-          type="button"
-          className={`sidebar-nav-item ${activeTab === 'settings' ? 'active' : ''}`}
-          onClick={() => setActiveTab('settings')}
-        >
-          <Settings size={14} strokeWidth={1.9} className="nav-item-icon" />
-          <span className="nav-item-label">Settings & Keys</span>
-        </button>
-      </div>
-
-      {/* Current Workspace Pill */}
-      <div className="sidebar-nav-section">
-        <div className="sidebar-section-label">WORKSPACE</div>
-        <div className="sidebar-workspace-chip" title={activeWorkspace?.name || 'General Workspace'}>
-          <Layers size={13} strokeWidth={2} className="ws-chip-icon" />
-          <span className="ws-chip-name">{activeWorkspace?.name || 'General Workspace'}</span>
-        </div>
-      </div>
-
-      {/* Recent Conversation Quick Actions */}
-      {messages.length > 0 && (
-        <div className="sidebar-nav-section">
-          <div className="sidebar-section-label">ACTIVE CHAT</div>
-          <div className="sidebar-recent-card">
-            <div className="recent-card-text">
-              <span className="recent-title">
-                {messages[0]?.content?.slice(0, 28) || 'Current conversation'}
-                {messages[0]?.content && messages[0].content.length > 28 ? '...' : ''}
-              </span>
-              <span className="recent-time">
-                {messages.length} message{messages.length === 1 ? '' : 's'}
-              </span>
-            </div>
+        {/* Compact Search Box */}
+        <div className="sidebar-search-box">
+          <Search size={12} className="sidebar-search-icon" />
+          <input
+            type="text"
+            className="sidebar-search-input"
+            placeholder="Search chats..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            aria-label="Search recent chats"
+          />
+          {searchQuery && (
             <button
               type="button"
-              className="recent-clear-btn"
-              onClick={clearMessages}
-              title="Clear conversation"
+              className="sidebar-search-clear"
+              onClick={() => setSearchQuery('')}
+              title="Clear search"
+              aria-label="Clear search"
             >
-              <Trash2 size={12} />
+              <X size={11} />
             </button>
-          </div>
+          )}
         </div>
-      )}
+      </div>
 
-      {/* Sidebar Footer with Engine & Privacy Badge */}
-      <div className="sidebar-footer">
+      {/* Recent Chats Section - Dominant Scrollable Explorer (flex: 1) */}
+      <div className="sidebar-history-section">
+        <div className="sidebar-section-header">
+          <span className="sidebar-section-label">RECENT CHATS</span>
+          {sessions.length > 0 && (
+            <span className="sidebar-section-count">
+              {searchQuery ? `${filteredSessions.length} of ${sessions.length}` : sessions.length}
+            </span>
+          )}
+        </div>
+
+        <div className="sidebar-recent-chats-list">
+          {sessions.length === 0 ? (
+            <div className="sidebar-chats-empty">
+              <MessageSquare size={13} className="empty-icon" />
+              <span>No chat history</span>
+              <button
+                type="button"
+                className="sidebar-empty-action-btn"
+                onClick={handleStartNewChat}
+              >
+                Start your first chat
+              </button>
+            </div>
+          ) : filteredSessions.length === 0 ? (
+            <div className="sidebar-chats-empty">
+              <Search size={13} className="empty-icon" />
+              <span>No chats matching "{searchQuery}"</span>
+              <button
+                type="button"
+                className="sidebar-empty-clear-btn"
+                onClick={() => setSearchQuery('')}
+              >
+                Clear filter
+              </button>
+            </div>
+          ) : (
+            grouped.map((group) => (
+              <div key={group.label} className="sidebar-date-group">
+                <div className="sidebar-date-group-header">{group.label}</div>
+                {group.sessions.map((session) => {
+                  const isActive = activeTab === 'chat' && session.id === activeSessionId;
+                  const isEditing = editingSessionId === session.id;
+                  const msgCount = session.messages.length;
+                  const timeStr = formatRelativeTime(session.updatedAt);
+
+                  return (
+                    <div
+                      key={session.id}
+                      className={`sidebar-chat-item ${isActive ? 'active' : ''}`}
+                      onClick={() => {
+                        if (!isEditing) {
+                          setActiveTab('chat');
+                          switchSession(session.id);
+                        }
+                      }}
+                      role="button"
+                      tabIndex={0}
+                    >
+                      {isEditing ? (
+                        <div
+                          className="chat-item-edit-row"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <input
+                            ref={editInputRef}
+                            type="text"
+                            className="chat-item-edit-input"
+                            value={editingTitle}
+                            onChange={(e) => setEditingTitle(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault();
+                                handleSaveRename(session.id);
+                              } else if (e.key === 'Escape') {
+                                e.preventDefault();
+                                handleCancelRename();
+                              }
+                            }}
+                            aria-label="Edit chat title"
+                          />
+                          <button
+                            type="button"
+                            className="chat-item-action-btn check"
+                            onClick={() => handleSaveRename(session.id)}
+                            title="Save title"
+                          >
+                            <Check size={12} />
+                          </button>
+                          <button
+                            type="button"
+                            className="chat-item-action-btn cancel"
+                            onClick={handleCancelRename}
+                            title="Cancel"
+                          >
+                            <X size={12} />
+                          </button>
+                        </div>
+                      ) : (
+                        <>
+                          <MessageSquare size={13} strokeWidth={1.8} className="chat-item-icon" />
+                          <div className="chat-item-text">
+                            <span className="chat-item-title" title={session.title}>
+                              {session.title || 'New chat'}
+                            </span>
+                            <span className="chat-item-meta">
+                              {msgCount === 0 ? 'Empty chat' : `${msgCount} msg${msgCount === 1 ? '' : 's'}`}
+                              {timeStr ? ` • ${timeStr}` : ''}
+                            </span>
+                          </div>
+                          <div className="chat-item-actions">
+                            <button
+                              type="button"
+                              className="chat-item-action-btn"
+                              onClick={(e) => handleStartRename(e, session)}
+                              title="Rename chat"
+                              aria-label="Rename chat"
+                            >
+                              <Pencil size={11} />
+                            </button>
+                            <button
+                              type="button"
+                              className="chat-item-action-btn delete"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                deleteSession(session.id);
+                              }}
+                              title="Delete chat"
+                              aria-label="Delete chat"
+                            >
+                              <Trash2 size={11} />
+                            </button>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+
+      {/* Bundled User Profile Trigger & Menu at Bottom (Replaces separate clutter) */}
+      <div className="sidebar-profile-wrap" ref={profileMenuRef}>
+        {isProfileOpen && (
+          <div className="sidebar-profile-menu animate-fadeIn" role="menu">
+            {/* Header: User & Workspace Identity */}
+            <div className="profile-menu-header">
+              <div className="profile-menu-avatar">
+                <User size={15} />
+              </div>
+              <div className="profile-menu-user-text">
+                <span className="profile-menu-username">Aeio User</span>
+                <span className="profile-menu-status">Personal Workspace</span>
+              </div>
+              <span className="profile-menu-badge">Local</span>
+            </div>
+
+            <div className="profile-menu-divider" />
+
+            {/* Bundled Workspace Switcher */}
+            <div className="profile-menu-section">
+              <div className="profile-menu-section-label">WORKSPACE</div>
+              <WorkspaceSwitcher />
+            </div>
+
+            <div className="profile-menu-divider" />
+
+            {/* Bundled Nav Options */}
+            <div className="profile-menu-actions">
+              <button
+                type="button"
+                className={`profile-menu-item ${activeTab === 'memory' ? 'active' : ''}`}
+                onClick={() => {
+                  setActiveTab('memory');
+                  setIsProfileOpen(false);
+                }}
+              >
+                <Brain size={14} className="profile-item-icon" />
+                <span className="profile-item-text">Memory Vault</span>
+                {memories.length > 0 && (
+                  <span className="profile-item-badge">{memories.length}</span>
+                )}
+              </button>
+
+              <button
+                type="button"
+                className={`profile-menu-item ${activeTab === 'settings' ? 'active' : ''}`}
+                onClick={() => {
+                  onOpenSettings();
+                  setIsProfileOpen(false);
+                }}
+              >
+                <Settings size={14} className="profile-item-icon" />
+                <span className="profile-item-text">Settings & Keys</span>
+              </button>
+            </div>
+
+            <div className="profile-menu-divider" />
+
+            {/* Bundled Engine & Encryption Footer */}
+            <div className="profile-menu-footer">
+              <button
+                type="button"
+                className="profile-engine-row"
+                onClick={() => {
+                  onOpenSettings();
+                  setIsProfileOpen(false);
+                }}
+                title="Configure model engine"
+              >
+                <div className="profile-engine-left">
+                  <span className="engine-status-indicator" />
+                  <span className="profile-engine-name">{getProviderDisplayName(activeProvider, ollamaModel)}</span>
+                </div>
+                <span className="profile-engine-action">Configure</span>
+              </button>
+
+              <div className="profile-security-row">
+                <div className="profile-security-left">
+                  <ShieldCheck size={11} className="privacy-icon" />
+                  <span>Memory encrypted</span>
+                </div>
+                <kbd className="profile-hotkey">{hotkey === 'CommandOrControl+Shift+Space' ? '⌘⇧Space' : hotkey}</kbd>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* User Profile Card Button */}
         <button
           type="button"
-          className="sidebar-engine-badge"
-          onClick={onOpenSettings}
-          title="Configure model engine and API keys in settings"
+          className={`sidebar-profile-card ${isProfileOpen ? 'active' : ''}`}
+          onClick={() => setIsProfileOpen(!isProfileOpen)}
+          title="User Profile & Settings"
+          aria-expanded={isProfileOpen}
+          aria-haspopup="true"
         >
-          <div className="engine-left">
-            <span className="engine-status-indicator" />
-            <span className="engine-name">
-              {activeProvider === 'qwen-coder' && 'Qwen 2.5 Coder'}
-              {activeProvider === 'claude' && 'Claude 3.5 Sonnet'}
-              {activeProvider === 'gemini' && 'Gemini 2.5 Flash'}
-              {activeProvider === 'openai' && 'GPT-4o'}
-              {activeProvider === 'bedrock' && 'AWS Bedrock'}
-              {activeProvider === 'aeio-free' && 'Claude 3.5 Haiku'}
-              {activeProvider === 'ollama' && (ollamaModel || 'Local Ollama')}
-              {!['qwen-coder', 'claude', 'gemini', 'openai', 'bedrock', 'aeio-free', 'ollama'].includes(activeProvider) && 'Active Engine'}
+          <div className="profile-card-avatar">
+            <User size={14} />
+            <span className="profile-card-status-dot" />
+          </div>
+          <div className="profile-card-text">
+            <span className="profile-card-name">User</span>
+            <span className="profile-card-sub">
+              {activeWorkspace?.name || 'Default'} • {getProviderShortName(activeProvider)}
             </span>
           </div>
-          <span className="engine-manage-link">Settings</span>
+          <ChevronsUpDown size={13} className="profile-card-chevron" />
         </button>
-
-        <div className="sidebar-privacy-note">
-          <ShieldCheck size={11} className="privacy-icon" />
-          <span>Local memory encrypted</span>
-          <span className="privacy-hotkey">{hotkey === 'CommandOrControl+Shift+Space' ? '⌘⇧Space' : hotkey}</span>
-        </div>
       </div>
     </aside>
   );
