@@ -159,6 +159,7 @@ pub enum BundleValidationResult {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Default)]
 pub struct ComputerControlConfig {
     /// Master safety switch. Defaults to false (OFF).
     pub enabled: bool,
@@ -166,14 +167,6 @@ pub struct ComputerControlConfig {
     pub allowlist: Vec<String>,
 }
 
-impl Default for ComputerControlConfig {
-    fn default() -> Self {
-        Self {
-            enabled: false,
-            allowlist: Vec::new(),
-        }
-    }
-}
 
 /// Checks whether a bundle identifier matches terminal emulators, shells, or editors with integrated terminals.
 pub fn is_terminal_or_editor(bundle_id: &str) -> bool {

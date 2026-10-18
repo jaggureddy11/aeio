@@ -113,7 +113,7 @@ export class QwenCoderProvider implements LLMProvider {
       options: {
         temperature: options?.temperature ?? 0.2, // Low temperature for deterministic coding & tool execution
         top_p: options?.topP ?? 0.95,
-        num_ctx: options?.numCtx ?? 32768, // Expanded 32k context window for code analysis
+        num_ctx: options?.numCtx ?? 32768, // 32k context window for code analysis
         stop: options?.stop || ['<|im_end|>', '<|endoftext|>', '<|im_start|>'],
       },
     };

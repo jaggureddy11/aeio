@@ -5,6 +5,7 @@ use tauri::{AppHandle, Emitter, Manager};
 /// State payload for the visible active-control overlay HUD.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
+#[derive(Default)]
 pub struct ControlOverlayState {
     pub is_active: bool,
     pub target_app_name: String,
@@ -16,20 +17,6 @@ pub struct ControlOverlayState {
     pub kill_switch_reason: Option<String>,
 }
 
-impl Default for ControlOverlayState {
-    fn default() -> Self {
-        Self {
-            is_active: false,
-            target_app_name: String::new(),
-            target_app_bundle_id: String::new(),
-            declared_intent: String::new(),
-            current_step: 0,
-            total_steps: 0,
-            kill_switch_triggered: false,
-            kill_switch_reason: None,
-        }
-    }
-}
 
 static OVERLAY_STATE: LazyLock<Mutex<ControlOverlayState>> =
     LazyLock::new(|| Mutex::new(ControlOverlayState::default()));

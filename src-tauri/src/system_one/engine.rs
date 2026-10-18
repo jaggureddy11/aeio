@@ -5,6 +5,12 @@ use super::types::*;
 
 pub struct SystemOneEngine;
 
+impl Default for SystemOneEngine {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl SystemOneEngine {
     pub fn new() -> Self {
         Self
@@ -109,7 +115,7 @@ impl SystemOneEngine {
             }
         }
 
-        let confidence = (highest_prob.max(0.0).min(1.0) * 100.0).round() / 100.0;
+        let confidence = (highest_prob.clamp(0.0, 1.0) * 100.0).round() / 100.0;
 
         ChoiceAnswer {
             choice: best_choice.clone(),
@@ -213,7 +219,7 @@ impl SystemOneEngine {
 
         let max_scale = (q.levels.len() as f64).max(1.0);
         let normalized_score = ((weighted_score / max_scale * 100.0) * 10.0).round() / 10.0;
-        let confidence = (highest_prob.max(0.0).min(1.0) * 100.0).round() / 100.0;
+        let confidence = (highest_prob.clamp(0.0, 1.0) * 100.0).round() / 100.0;
 
         ScoreAnswer {
             selected_level: best_level,

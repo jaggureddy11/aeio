@@ -50,8 +50,10 @@ export class OllamaProvider implements LLMProvider {
           model,
           messages: formattedMessages,
           stream: !!options?.onChunk,
+          keep_alive: options?.keepAlive || '60m',
           options: {
             temperature: options?.temperature ?? 0.7,
+            num_ctx: options?.numCtx ?? 8192,
           },
         }),
       });

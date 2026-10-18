@@ -195,7 +195,7 @@ pub fn embed_text(text: &str) -> Vec<f32> {
         return vec![0.0f32; EMBEDDING_DIM];
     }
 
-    if MODEL_LOAD_FAILED.get().copied().unwrap_or(false) == false {
+    if !MODEL_LOAD_FAILED.get().copied().unwrap_or(false) {
         let mut cache = MODEL_CACHE.lock().unwrap();
         if cache.is_none() {
             if let Some(dir) = find_model_dir() {

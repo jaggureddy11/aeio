@@ -223,9 +223,58 @@ export const ToolApprovalCard: React.FC<Props> = ({
           </div>
         )}
 
+        {execution.toolName === 'open_app' && (
+          <div className="code-command-snippet">
+            <span className="arg-label">Application:</span>
+            <code>{execution.args.name || execution.args.app || execution.args.appName || execution.args.target}</code>
+          </div>
+        )}
+
+        {execution.toolName === 'search_web' && (
+          <div className="code-command-snippet">
+            <span className="arg-label">Search ({execution.args.platform || 'web'}):</span>
+            <code>{execution.args.query || execution.args.search}</code>
+          </div>
+        )}
+
+        {execution.toolName === 'media_control' && (
+          <div className="code-command-snippet">
+            <span className="arg-label">Media Action:</span>
+            <code>{execution.args.action || 'playpause'}</code>
+          </div>
+        )}
+
+        {execution.toolName === 'play_spotify' && (
+          <div className="code-command-snippet">
+            <span className="arg-label">Spotify Query:</span>
+            <code>{execution.args.query || execution.args.song || execution.args.track || 'Play'}</code>
+          </div>
+        )}
+
         {execution.toolName === 'read_clipboard' && (
           <div className="code-command-snippet">
             <span>Read text content from active system clipboard</span>
+          </div>
+        )}
+
+        {![
+          'run_shell',
+          'read_file',
+          'write_file',
+          'list_directory',
+          'fetch_url',
+          'search_memory',
+          'search_files',
+          'write_clipboard',
+          'open_target',
+          'open_app',
+          'search_web',
+          'media_control',
+          'play_spotify',
+          'read_clipboard',
+        ].includes(execution.toolName) && (
+          <div className="code-command-snippet">
+            <code>{JSON.stringify(execution.args)}</code>
           </div>
         )}
       </div>

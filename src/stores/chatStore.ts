@@ -50,6 +50,7 @@ import {
   classifyPlanSafety,
   isGuiActionDestructive,
   normalizeToolName,
+  cleanDisplayContent,
 } from '../lib/agent/plan';
 import { rerankMemoriesSystemOne } from '../lib/systemOne/memoryRerank';
 import { isHaltActive } from '../lib/safety/killSwitch';
@@ -185,10 +186,10 @@ export const THINK_REGEX = /<(?:think|thought)>([\s\S]*?)<\/(?:think|thought)>/g
 export const UNCLOSED_THINK_REGEX = /<(?:think|thought)>([\s\S]*?)$/i;
 
 export const XML_TOOL_CALL_REGEX =
-  /<tool_call\s+name=["']?([^"'\s>]+)["']?(?:\s+args=(?:'([^']*)'|"([^"]*)"))?\s*(?:\/>|>([\s\S]*?)<\/tool_call>)/gi;
+  /(?:```(?:xml|json)?\s*)?<tool_call(?:\s+name=["']?([^"'\s>]+)["']?)?(?:\s+args=(?:'([^']*)'|"([^"]*)"))?\s*(?:\/>|>([\s\S]*?)<\/tool_call>|>|$)(?:\s*```)?/gi;
 
 export const JSON_TOOL_CALL_REGEX =
-  /<tool_call>\s*(\{[\s\S]*?\})\s*<\/tool_call>/gi;
+  /(?:```json\s*)?<tool_call>\s*(\{[\s\S]*?\})\s*<\/tool_call>(?:\s*```)?/gi;
 
 /**
  * Micro-throttled streaming buffer for high-frequency token updates.
@@ -473,7 +474,11 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
     const continuationPrompt = `${statusHeader}\n\`\`\`\n${formattedPayload}\n\`\`\`\n\nAnalyze this output, continue your reasoning, and complete the user task.`;
 
-    await get().sendMessage(continuationPrompt, { isAgenticContinuation: true, role: 'user' });
+    await get().sendMessage(continuationPrompt, {
+      isAgenticContinuation: true,
+      role: 'user',
+      autoApproveSafeTools: true,
+    });
   },
 
   approveToolExecution: async (messageId: string, index: number, alwaysAllow = false) => {
@@ -973,6 +978,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
       steps[i] = { ...steps[i], status: 'running' };
       plan.currentStepIndex = i;
       plan.steps = [...steps];
+      if (i < currentTools.length) {
+        currentTools[i] = { ...currentTools[i], status: 'running' };
+      }
       broadcastStepUpdate(`Step ${i + 1}/${steps.length}: ${steps[i].description}`);
       get().updateMessageContent(
         messageId,
@@ -1349,7 +1357,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         }
       }
 
-      // Add audit receipt to toolExecutions
+      // Add or update audit receipt in toolExecutions
       const toolReceipt: ToolExecution = {
         id: step.id,
         toolName: step.toolName,
@@ -1359,7 +1367,11 @@ export const useChatStore = create<ChatState>((set, get) => ({
         result: stepResult,
         error: isError ? errorMsg : undefined,
       };
-      currentTools.push(toolReceipt);
+      if (i < currentTools.length) {
+        currentTools[i] = toolReceipt;
+      } else {
+        currentTools.push(toolReceipt);
+      }
 
       if (isError) {
         steps[i] = { ...steps[i], status: 'failed', error: errorMsg, result: stepResult };
@@ -1534,33 +1546,48 @@ export const useChatStore = create<ChatState>((set, get) => ({
       workspaceId: wsId,
     });
 
+    // 1.5 Task Intent Classification (Native Rust System One Engine)
+    let taskIntent: SystemOneTaskIntentVerdict | undefined = undefined;
+    try {
+      taskIntent = await classifyUserTask(trimmed);
+    } catch {
+      // Non-blocking fallback for browser/test environments
+    }
+
+    // Direct OS control / quick action check: bypass heavy vector reranking to achieve sub-second execution!
+    const isDirectOsCommand =
+      taskIntent?.primary_intent === 'os_control' ||
+      /^(?:open|launch|play|pause|mute|unmute|set volume|volume|search youtube|search web|lock screen|take screenshot)\b/i.test(trimmed);
+
     // 2. Search relevant memories strictly scoped to active workspace (Tier 1 & Tier 4 Scoped Recall)
     let recalled: RecalledMemory[] = [];
-    try {
-      const reranked = await rerankMemories(trimmed, wsId, false, 5);
-      recalled = reranked
-        .filter((r) => r.final_score >= 35.0 || r.confidence >= 0.70)
-        .slice(0, 4)
-        .map((r) => ({
-          id: r.memory_id,
-          content: r.content,
-          category: r.category,
-        }));
-    } catch {
+    if (!options?.isAgenticContinuation && !isDirectOsCommand) {
       try {
-        const searchResults = await searchMemories(trimmed, wsId, false, 5);
-        const reranked = await rerankMemoriesSystemOne(trimmed, searchResults);
-        const candidates = reranked.length > 0 ? reranked.map((r) => r.searchResult) : searchResults;
-        recalled = candidates
-          .filter((r) => r.score >= 0.6)
+        const reranked = await rerankMemories(trimmed, wsId, false, 5);
+        recalled = reranked
+          .filter((r) => r.final_score >= 35.0 || r.confidence >= 0.70)
           .slice(0, 4)
           .map((r) => ({
-            id: r.memory.id,
-            content: r.memory.content,
-            category: r.memory.category,
+            id: r.memory_id,
+            content: r.content,
+            category: r.category,
           }));
-      } catch (err) {
-        console.warn('Memory search before prompt failed:', err);
+      } catch {
+        try {
+          const searchResults = await searchMemories(trimmed, wsId, false, 5);
+          const reranked = await rerankMemoriesSystemOne(trimmed, searchResults);
+          const candidates = reranked.length > 0 ? reranked.map((r) => r.searchResult) : searchResults;
+          recalled = candidates
+            .filter((r) => r.score >= 0.6)
+            .slice(0, 4)
+            .map((r) => ({
+              id: r.memory.id,
+              content: r.memory.content,
+              category: r.memory.category,
+            }));
+        } catch (err) {
+          console.warn('Memory search before prompt failed:', err);
+        }
       }
     }
 
@@ -1568,7 +1595,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
     const settings = useSettingsStore.getState();
     const providerId = settings.activeProvider;
     const modelName =
-      providerId === 'qwen-coder'
+      providerId === 'bedrock'
+        ? settings.bedrockModel || 'amazon.nova-lite-v1:0'
+        : providerId === 'qwen-coder'
         ? settings.ollamaModel || 'qwen2.5:7b'
         : providerId === 'ollama'
         ? settings.ollamaModel || 'llama3.2'
@@ -1576,9 +1605,11 @@ export const useChatStore = create<ChatState>((set, get) => ({
         ? 'claude-3-5-sonnet'
         : providerId === 'aeio-free'
         ? 'claude-3-5-haiku'
+        : providerId === 'gemini'
+        ? 'gemini-2.0-flash'
         : 'gpt-4o';
     const isLocal = providerId === 'qwen-coder' || providerId === 'ollama';
-    const isCloud = providerId === 'claude' || providerId === 'openai' || providerId === 'aeio-free';
+    const isCloud = providerId === 'bedrock' || providerId === 'claude' || providerId === 'openai' || providerId === 'aeio-free' || providerId === 'gemini';
 
     // Tier 3.2: Sensitive-Content Routing Gate
     // If querying an external cloud provider and the privacy lock is enabled, strip memory context completely!
@@ -1609,32 +1640,23 @@ export const useChatStore = create<ChatState>((set, get) => ({
       }
     }
 
-    // 4.5 Task Intent Classification (Native Rust System One Engine)
-    let taskIntent: SystemOneTaskIntentVerdict | undefined = undefined;
-    try {
-      taskIntent = await classifyUserTask(trimmed);
-    } catch {
-      // Non-blocking fallback for browser/test environments
-    }
-
-    // 5. Build system prompt tailored for Qwen3-Coder
+    // 5. Build system prompt for high-performance Aeio Assistant
     let systemPrompt =
-      'You are Aeio, an intelligent, helpful, and concise local-first desktop AI assistant powered by Qwen3-Coder.\n' +
-      'You specialize in programming, systems automation, shell scripting, code analysis, and local host tasks.\n';
+      'You are Aeio, an intelligent, helpful, and high-performance desktop AI assistant powered by AWS Bedrock cloud intelligence.\n' +
+      'You specialize in programming, systems automation, shell scripting, code analysis, web search, media control, and local desktop tasks.\n';
 
     if (taskIntent?.suggested_system_prompt) {
       systemPrompt += `Task Intent Mode [${taskIntent.primary_intent.toUpperCase()} (${Math.round(taskIntent.confidence * 100)}% confidence)]: ${taskIntent.suggested_system_prompt}\n`;
     }
 
     systemPrompt +=
-
       'Always adhere to these guidelines:\n' +
       '1. Be direct, precise, and concise. Never use emojis or conversational fluff.\n' +
       '2. For non-trivial code analysis, logic, or multi-step decisions, output your internal reasoning inside <think>Your thought process</think> before your final response.\n' +
-      '3. You have access to local host tools. When host actions are needed, output tool calls using either format:\n' +
-      '   <tool_call name="tool_name" args=\'{"param":"val"}\'></tool_call> or\n' +
-      '   <tool_call>{"name": "tool_name", "arguments": {"param":"val"}}</tool_call>\n' +
-      '4. Available host tools:\n' +
+      '3. Conversational queries, status inquiries, greetings, explanations, and capability questions must be answered DIRECTLY in natural language. Never call search_memory or other tools for general conversation unless the user explicitly requests searching past memories, files, or notes.\n' +
+      '4. You have access to local host tools. ONLY output a tool call when the user explicitly requests a concrete host action or external file/API retrieval. Output tool calls using:\n' +
+      '   <tool_call name="tool_name" args=\'{"param":"val"}\'></tool_call>\n' +
+      '5. Available host tools:\n' +
       '   - search_web: Search the web (Google, YouTube, GitHub). To search or play music/videos on YouTube, use: {"query": "...", "platform": "youtube"}\n' +
       '   - run_shell: Execute shell commands. Arguments: {"command": "...", "cwd": "optional_path"}\n' +
       '   - read_file: Read file contents. Arguments: {"path": "..."}\n' +
@@ -1662,13 +1684,15 @@ export const useChatStore = create<ChatState>((set, get) => ({
         ? '   - gui_action: Execute desktop GUI action on allowlisted application. Arguments: {"intent": {"targetAppBundleId": "...", "naturalLanguageIntent": "...", "targetElementDescription": "...", "intendedStateChange": "..."}, "action": {"actionType": "click"|"type"|"keyCombo"|"scroll"|"drag", ...}}\n'
         : '') +
       '5. When tool execution outputs are fed back to you, analyze the result and deliver the synthesized answer or next action.\n' +
-      '6. When a user goal requires multiple steps or sequential tool operations, emit a structured plan:\n' +
+      '6. FAST ACTION EXECUTION: When the user asks to open an app, website, search, play music/video, change volume, or run desktop actions, immediately output a direct <tool_call> without unnecessary boilerplate. Direct tool calls execute in milliseconds.\n' +
+      '   Example: <tool_call name="search_web" args=\'{"query": "song name", "platform": "youtube"}\'></tool_call>\n' +
+      '   Or: <tool_call name="open_app" args=\'{"name": "Chrome"}\'></tool_call>\n' +
+      '7. MULTI-STEP PLANS: If and only if a complex task strictly requires a coordinated multi-step workflow across different tools, emit:\n' +
       '   <plan title="Descriptive title of the overall plan">\n' +
       '     <step number="1" tool="search_web" description="Explanation of step">{"query": "...", "platform": "youtube"}</step>\n' +
       '     <step number="2" tool="run_shell" description="Explanation of step">{"command": "..."}</step>\n' +
       '   </plan>\n' +
-      '   Aeio will classify the plan and execute it safely or present it for upfront approval.\n' +
-      '7. Direct execution: When the user asks to open an app, website, search, or play media (e.g. "open YouTube and play X"), EXECUTE IT DIRECTLY using host tools or <plan>. Never ask confirmation or clarifying questions like "Do you want to proceed with this plan?" or "Could you confirm the song name?". Take immediate action with sensible defaults.';
+      '8. Direct execution: When the user asks to open an app, website, search, or play media (e.g. "open YouTube and play X"), EXECUTE IT DIRECTLY using host tools or <plan>. Never ask confirmation or clarifying questions like "Do you want to proceed with this plan?" or "Could you confirm the song name?". Take immediate action with sensible defaults.';
 
     if (activeWs) {
       systemPrompt += `\nCurrent Workspace: "${activeWs.name}". Keep context focused on this workspace.`;
@@ -1780,17 +1804,12 @@ export const useChatStore = create<ChatState>((set, get) => ({
               }
             }
 
-            const cleanDisplay = rawStreamed
-              .replace(THINK_REGEX, '')
-              .replace(UNCLOSED_THINK_REGEX, '')
-              .replace(REMEMBER_REGEX, '')
-              .replace(XML_TOOL_CALL_REGEX, '')
-              .replace(JSON_TOOL_CALL_REGEX, '')
-              .trim();
+            const cleanDisplay = cleanDisplayContent(rawStreamed);
+            const isEmittingAction = /<(?:plan|step|tool_call)\b/i.test(rawStreamed);
 
             get().updateMessageContent(
               assistantId,
-              cleanDisplay || (streamReasoning ? 'Thinking...' : '...'),
+              cleanDisplay || (streamReasoning ? 'Thinking...' : isEmittingAction ? 'Executing action...' : '...'),
               true,
               recalled,
               undefined,
@@ -1945,6 +1964,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
             return checkDestructiveCommand(cmd);
           }
         });
+        if (executionPlan) {
+          executionPlan.status = 'running';
+        }
       } else if (tools.length > 1) {
 
         // Automatically bundle multiple tools into a multi-step plan
@@ -1962,19 +1984,13 @@ export const useChatStore = create<ChatState>((set, get) => ({
           id: crypto.randomUUID(),
           title: 'Multi-Step Execution Plan',
           steps,
-          status: hasDestructive ? 'pending_approval' : 'running',
+          status: 'running',
           hasDestructiveSteps: hasDestructive,
           currentStepIndex: 0,
         };
       }
 
-      const finalText = rawStreamed
-        .replace(THINK_REGEX, '')
-        .replace(REMEMBER_REGEX, '')
-        .replace(XML_TOOL_CALL_REGEX, '')
-        .replace(JSON_TOOL_CALL_REGEX, '')
-        .replace(/<plan(?:\s+title=["'][^"']*["'])?>[\s\S]*?<\/plan>/gi, '')
-        .trim();
+      const finalText = cleanDisplayContent(rawStreamed);
 
       const finalProviderInfo: ProviderBadgeInfo = {
         providerId: orchestrationResult.providerId,
@@ -1985,9 +2001,15 @@ export const useChatStore = create<ChatState>((set, get) => ({
         recommendedRoute: orchestrationResult.recommendedRoute,
       };
 
+      const displayContent =
+        finalText ||
+        (tools.length > 0 || executionPlan
+          ? ''
+          : cleanDisplayContent(rawStreamed));
+
       get().updateMessageContent(
         assistantId,
-        finalText || rawStreamed,
+        displayContent,
         false,
         recalled,
         proposed,
@@ -1998,18 +2020,15 @@ export const useChatStore = create<ChatState>((set, get) => ({
         executionPlan || undefined
       );
 
-      // 11. Handle execution
+      // 11. Handle execution: auto-execute all tasks directly without waiting for manual approvals
       if (executionPlan) {
-        if (!executionPlan.hasDestructiveSteps) {
-          // Autonomous execution for all-safe steps
-          get().executePlan(assistantId);
-        }
-        // If has destructive steps, executionPlan remains in pending_approval until user approves
+        get().executePlan(assistantId);
       } else if (tools.length > 0) {
         const SAFE_READ_TOOLS = new Set([
           'read_file',
           'list_directory',
           'search_files',
+          'search_web',
           'fetch_url',
           'browse_page',
           'extract_links',
@@ -2038,14 +2057,13 @@ export const useChatStore = create<ChatState>((set, get) => ({
           const isExplicitlyAllowed =
             (cmdKey && allowed.includes(cmdKey)) || allowed.includes(scopedKey);
           const isHandsFreeAutoApprove =
-            Boolean(options?.autoApproveSafeTools) &&
+            options?.autoApproveSafeTools !== false &&
             !t.isDestructive &&
             (t.riskTier === 'low' || SAFE_READ_TOOLS.has(t.toolName));
 
           if (isHandsFreeAutoApprove || isExplicitlyAllowed) {
             get().approveToolExecution(assistantId, i);
           } else if (t.isDestructive || t.riskTier === 'critical') {
-            // Surface approval UI to user immediately
             showMainWindow().catch(() => {});
           }
         }
@@ -2071,13 +2089,17 @@ export const useChatStore = create<ChatState>((set, get) => ({
       } else if (
         errorMsg.includes('Failed to fetch') ||
         errorMsg.includes('ECONNREFUSED') ||
-        errorMsg.includes('11434')
+        errorMsg.includes('11434') ||
+        errorMsg.includes('Bedrock')
       ) {
-        if (providerInfo.providerId === 'qwen-coder' || providerInfo.providerId === 'ollama') {
+        if (providerInfo.providerId === 'bedrock') {
+          actionableError =
+            'AWS Bedrock connection failed in Sydney Region (ap-southeast-2). Please verify your AWS credentials or network connection in AWS Settings.';
+        } else if (providerInfo.providerId === 'qwen-coder' || providerInfo.providerId === 'ollama') {
           actionableError =
             'Local AI inference engine (Ollama) is offline or unreachable on localhost:11434. Make sure Ollama is running (`ollama serve`).';
         } else {
-          actionableError = `Network connection offline while connecting to ${providerInfo.providerId.toUpperCase()}. You can switch to local Qwen3-Coder.`;
+          actionableError = `Network connection offline while connecting to ${providerInfo.providerId.toUpperCase()}.`;
         }
       }
 

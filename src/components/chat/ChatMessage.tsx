@@ -1,23 +1,20 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { ChatMessage as MessageType, useChatStore } from '../../stores/chatStore';
-import { AeLogo } from '../common/AeLogo';
 import {
   Brain,
   Check,
   ChevronDown,
   ChevronUp,
-  Cpu,
   Copy,
-  Bot,
   Eye,
   Maximize2,
   Minimize2,
   Volume2,
-  ThumbsUp,
-  ThumbsDown,
-  RotateCw,
+  VolumeX,
 } from 'lucide-react';
+import { isTauri, speakText, stopSpeaking } from '../../lib/ipc';
+import { globalHumanVoice } from '../../lib/voice/humanVoiceEngine';
 import { ToolApprovalCard } from './ToolApproval';
 import { PlanExecutionCard } from './PlanExecutionCard';
 
@@ -86,7 +83,6 @@ export const ChatMessageItem: React.FC<Props> = React.memo(({ message }) => {
     denyToolExecution,
     approvePlan,
     cancelPlan,
-    retryLastMessage,
   } = useChatStore();
 
   const [showRecalled, setShowRecalled] = useState(false);
@@ -94,7 +90,6 @@ export const ChatMessageItem: React.FC<Props> = React.memo(({ message }) => {
   const [zoomOpen, setZoomOpen] = useState(false);
   const [copiedMessage, setCopiedMessage] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
-  const [feedback, setFeedback] = useState<'up' | 'down' | null>(null);
 
   const handleCopyMessage = () => {
     navigator.clipboard.writeText(message.content);
@@ -102,23 +97,150 @@ export const ChatMessageItem: React.FC<Props> = React.memo(({ message }) => {
     setTimeout(() => setCopiedMessage(false), 2000);
   };
 
-  const handleToggleSpeech = () => {
-    if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
-    if (isSpeaking) {
-      window.speechSynthesis.cancel();
-      setIsSpeaking(false);
-    } else {
-      window.speechSynthesis.cancel();
-      const utterance = new SpeechSynthesisUtterance(message.content);
-      utterance.onend = () => setIsSpeaking(false);
-      utterance.onerror = () => setIsSpeaking(false);
-      setIsSpeaking(true);
-      window.speechSynthesis.speak(utterance);
-    }
-  };
+  useEffect(() => {
+    return () => {
+      if (isSpeaking) {
+        if (typeof (window as any)?.__aeioCancelSpeechQueue === 'function') {
+          (window as any).__aeioCancelSpeechQueue();
+        }
+        stopSpeaking().catch(() => {});
+        globalHumanVoice.stop();
+        if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+          window.speechSynthesis.cancel();
+          (window as any).__aeioActiveUtterance = null;
+        }
+      }
+    };
+  }, [isSpeaking]);
 
-  const handleFeedback = (type: 'up' | 'down') => {
-    setFeedback((prev) => (prev === type ? null : type));
+  const handleToggleSpeech = async () => {
+    if (isSpeaking) {
+      if (typeof (window as any)?.__aeioCancelSpeechQueue === 'function') {
+        (window as any).__aeioCancelSpeechQueue();
+      }
+      stopSpeaking().catch(() => {});
+      globalHumanVoice.stop();
+      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+        (window as any).__aeioActiveUtterance = null;
+      }
+      setIsSpeaking(false);
+      return;
+    }
+
+    const cleanText = globalHumanVoice.sanitizeSpeechText(message.content);
+    if (!cleanText) return;
+
+    setIsSpeaking(true);
+
+    // 1. If running inside Tauri, use native OS speech (/usr/bin/say on macOS, SAPI on Windows)
+    if (isTauri()) {
+      try {
+        await speakText(cleanText, 'Samantha');
+        // Estimate speech duration based on word count (~160 wpm) to auto-reset speaking state
+        const words = cleanText.split(/\s+/).filter(Boolean).length;
+        const durationMs = Math.max(2000, Math.round((words / 160) * 60 * 1000));
+        setTimeout(() => {
+          setIsSpeaking(false);
+        }, durationMs);
+        return;
+      } catch (err) {
+        console.warn('[ChatMessage] Native TTS failed, falling back to Web Speech:', err);
+      }
+    }
+
+    // 2. Web Speech API with sentence queue & Google US English priority (solves Chrome 15s hang and silent macOS voice bugs)
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      try {
+        if (window.speechSynthesis.speaking) {
+          window.speechSynthesis.cancel();
+          await new Promise((r) => setTimeout(r, 50));
+        }
+        window.speechSynthesis.resume();
+
+        let voices = window.speechSynthesis.getVoices();
+        if (!voices || voices.length === 0) {
+          await new Promise<void>((resolve) => {
+            const handler = () => {
+              window.speechSynthesis.removeEventListener('voiceschanged', handler);
+              resolve();
+            };
+            window.speechSynthesis.addEventListener('voiceschanged', handler);
+            setTimeout(resolve, 250);
+          });
+          voices = window.speechSynthesis.getVoices();
+        }
+
+        // Prioritize Chrome's built-in Google voices or Samantha (avoid silent Rishi)
+        const chosenVoice =
+          voices.find((v) => v.name.includes('Google US English')) ||
+          voices.find((v) => v.name.includes('Google UK English Female')) ||
+          voices.find((v) => v.name.includes('Google') && v.lang.startsWith('en')) ||
+          voices.find((v) => v.name === 'Samantha') ||
+          voices.find((v) => v.name.includes('Samantha')) ||
+          voices.find((v) => v.name.includes('Alex')) ||
+          voices.find((v) => v.lang.startsWith('en') && !v.name.includes('Rishi')) ||
+          voices[0];
+
+        // Break text into sentences so Chrome never exceeds buffer limits or freezes
+        const sentences = cleanText.match(/[^.!?]+[.!?]+|[^.!?]+$/g) || [cleanText];
+        const queue = sentences.map((s) => s.trim()).filter(Boolean);
+
+        if (queue.length === 0) {
+          setIsSpeaking(false);
+          return;
+        }
+
+        let queueIndex = 0;
+        let isCancelled = false;
+
+        (window as any).__aeioCancelSpeechQueue = () => {
+          isCancelled = true;
+          window.speechSynthesis.cancel();
+          (window as any).__aeioActiveUtterance = null;
+        };
+
+        const speakNextChunk = () => {
+          if (isCancelled || queueIndex >= queue.length) {
+            (window as any).__aeioActiveUtterance = null;
+            setIsSpeaking(false);
+            return;
+          }
+
+          const sentence = queue[queueIndex++];
+          const utterance = new SpeechSynthesisUtterance(sentence);
+          (window as any).__aeioActiveUtterance = utterance;
+
+          if (chosenVoice) {
+            utterance.voice = chosenVoice;
+          }
+          utterance.volume = 1.0;
+          utterance.rate = 1.0;
+
+          utterance.onend = () => {
+            speakNextChunk();
+          };
+
+          utterance.onerror = (e) => {
+            if (e.error !== 'interrupted' && e.error !== 'canceled') {
+              console.warn('[ChatMessage] Sentence TTS warning:', e);
+            }
+            speakNextChunk();
+          };
+
+          window.speechSynthesis.speak(utterance);
+          window.speechSynthesis.resume();
+        };
+
+        speakNextChunk();
+        return;
+      } catch (err) {
+        console.error('[ChatMessage] Speech error:', err);
+        setIsSpeaking(false);
+      }
+    } else {
+      setIsSpeaking(false);
+    }
   };
 
   const hasRecalled = !isUser && message.recalledMemories && message.recalledMemories.length > 0;
@@ -131,8 +253,15 @@ export const ChatMessageItem: React.FC<Props> = React.memo(({ message }) => {
   });
 
   if (isUser) {
+    if (
+      message.content.startsWith('[Tool Result:') ||
+      message.content.startsWith('[Tool Error:')
+    ) {
+      return null;
+    }
+
     return (
-      <div className="claude-message-row user-row">
+      <div className="claude-message-row claude-user-row user-row">
         <div className="claude-user-bubble">
           {message.screenSnapshot && (
             <div className="claude-screen-snapshot-card">
@@ -177,34 +306,7 @@ export const ChatMessageItem: React.FC<Props> = React.memo(({ message }) => {
 
   return (
     <div className="claude-message-row assistant-row">
-      {/* Claude-style Assistant Avatar */}
-      <div className="claude-avatar-column">
-        <div className="claude-avatar-frame">
-          <AeLogo height={14} />
-        </div>
-      </div>
-
       <div className="claude-body-column">
-        {/* Assistant Header: Name, Model Chip, Time */}
-        <div className="claude-message-header">
-          <span className="claude-sender-name">Aeio</span>
-
-          {message.providerInfo && (
-            <span
-              className={`claude-model-chip ${message.providerInfo.isLocal ? 'local' : 'cloud'}`}
-              title={message.providerInfo.modelName}
-            >
-              {message.providerInfo.isLocal ? (
-                <Cpu size={10} className="chip-icon" />
-              ) : (
-                <Bot size={10} className="chip-icon" />
-              )}
-              <span>{message.providerInfo.modelName}</span>
-            </span>
-          )}
-
-          <span className="claude-time">{formattedTime}</span>
-        </div>
 
         {/* Recalled Memories Pill (Transparent Recall) */}
         {hasRecalled && (
@@ -294,46 +396,14 @@ export const ChatMessageItem: React.FC<Props> = React.memo(({ message }) => {
               {copiedMessage ? <Check size={14} className="action-success" /> : <Copy size={14} />}
             </button>
 
-            {typeof window !== 'undefined' && 'speechSynthesis' in window && (
-              <button
-                type="button"
-                className={`claude-action-icon-btn ${isSpeaking ? 'active-speaking' : ''}`}
-                onClick={handleToggleSpeech}
-                title={isSpeaking ? 'Stop reading' : 'Read aloud'}
-                aria-label={isSpeaking ? 'Stop reading aloud' : 'Read aloud'}
-              >
-                <Volume2 size={14} />
-              </button>
-            )}
-
             <button
               type="button"
-              className={`claude-action-icon-btn ${feedback === 'up' ? 'active-thumbs' : ''}`}
-              onClick={() => handleFeedback('up')}
-              title="Good response"
-              aria-label="Good response"
+              className={`claude-action-icon-btn ${isSpeaking ? 'active-speaking' : ''}`}
+              onClick={handleToggleSpeech}
+              title={isSpeaking ? 'Stop reading' : 'Read aloud'}
+              aria-label={isSpeaking ? 'Stop reading aloud' : 'Read aloud'}
             >
-              <ThumbsUp size={14} />
-            </button>
-
-            <button
-              type="button"
-              className={`claude-action-icon-btn ${feedback === 'down' ? 'active-thumbs' : ''}`}
-              onClick={() => handleFeedback('down')}
-              title="Bad response"
-              aria-label="Bad response"
-            >
-              <ThumbsDown size={14} />
-            </button>
-
-            <button
-              type="button"
-              className="claude-action-icon-btn"
-              onClick={() => retryLastMessage()}
-              title="Retry"
-              aria-label="Retry response"
-            >
-              <RotateCw size={14} />
+              {isSpeaking ? <VolumeX size={14} /> : <Volume2 size={14} />}
             </button>
           </div>
         )}
@@ -350,8 +420,8 @@ export const ChatMessageItem: React.FC<Props> = React.memo(({ message }) => {
           </div>
         )}
 
-        {/* Tool Approval & Execution Cards */}
-        {hasTools && (
+        {/* Tool Approval & Execution Cards (shown when not wrapped in a multi-step plan) */}
+        {hasTools && !message.plan && (
           <div className="claude-tools-container">
             {message.toolExecutions!.map((tool, idx) => (
               <ToolApprovalCard

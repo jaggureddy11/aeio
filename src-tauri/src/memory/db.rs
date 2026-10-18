@@ -11,6 +11,7 @@ static INIT_VEC: Once = Once::new();
 
 pub fn ensure_sqlite_vec_registered() {
     INIT_VEC.call_once(|| {
+        #[allow(clippy::missing_transmute_annotations)]
         unsafe {
             sqlite3_auto_extension(Some(std::mem::transmute(sqlite3_vec_init as *const ())));
         }
@@ -678,29 +679,27 @@ impl MemoryDb {
                 row.get::<_, String>(0)
             }) {
                 let mut rank_counter = 1;
-                for id_res in iter {
-                    if let Ok(id) = id_res {
-                        if !cross_workspace {
-                            let target_ws = workspace_id.unwrap_or("default");
-                            let mem_ws: Result<Option<String>, _> = conn.query_row(
-                                "SELECT workspace_id FROM memories WHERE id = ?1",
-                                params![&id],
-                                |row| row.get(0),
-                            );
-                            let is_match = match mem_ws {
-                                Ok(Some(ref ws)) => ws == target_ws,
-                                Ok(None) => target_ws == "default",
-                                Err(_) => false,
-                            };
-                            if !is_match {
-                                continue;
-                            }
+                for id in iter.flatten() {
+                    if !cross_workspace {
+                        let target_ws = workspace_id.unwrap_or("default");
+                        let mem_ws: Result<Option<String>, _> = conn.query_row(
+                            "SELECT workspace_id FROM memories WHERE id = ?1",
+                            params![&id],
+                            |row| row.get(0),
+                        );
+                        let is_match = match mem_ws {
+                            Ok(Some(ref ws)) => ws == target_ws,
+                            Ok(None) => target_ws == "default",
+                            Err(_) => false,
+                        };
+                        if !is_match {
+                            continue;
                         }
-                        vec_ranks.insert(id, rank_counter);
-                        rank_counter += 1;
-                        if rank_counter > limit * 3 {
-                            break;
-                        }
+                    }
+                    vec_ranks.insert(id, rank_counter);
+                    rank_counter += 1;
+                    if rank_counter > limit * 3 {
+                        break;
                     }
                 }
             }
@@ -944,7 +943,7 @@ pub fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
 
 pub fn bytes_to_floats(bytes: &[u8]) -> Vec<f32> {
     bytes
-        .chunks_exact(4)
+        .as_chunks::<4>().0.iter()
         .map(|chunk| f32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]))
         .collect()
 }

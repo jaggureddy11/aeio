@@ -56,7 +56,7 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' http://localhost:11434 http://127.0.0.1:11434 http://localhost:8787 http://127.0.0.1:8787 https://api.anthropic.com https://api.openai.com https://generativelanguage.googleapis.com https://*.huggingface.co https://*.workers.dev https://*.amazonaws.com ws://localhost:1420 http://localhost:1420;"
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' data: blob: http://127.0.0.1:17493 http://localhost:17493 http://127.0.0.1:8880 http://localhost:8880; connect-src 'self' http://localhost:11434 http://127.0.0.1:11434 http://localhost:8787 http://127.0.0.1:8787 http://127.0.0.1:17493 http://localhost:17493 http://127.0.0.1:8880 http://localhost:8880 https://api.elevenlabs.io https://api.anthropic.com https://api.openai.com https://generativelanguage.googleapis.com https://*.huggingface.co https://*.workers.dev https://*.amazonaws.com ws://localhost:1420 http://localhost:1420;"
     }
   },
   "bundle": {

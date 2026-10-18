@@ -12,7 +12,6 @@ import {
   focusApp,
   toggleDarkMode,
   captureScreen,
-  speakText,
   stopSpeaking,
   playSystemEarcon,
   transcribeAudioBuffer,
@@ -159,11 +158,18 @@ export function cleanTextForSpeech(raw: string): string {
 
   // 1. Strip think / reasoning blocks
   s = s.replace(/<(?:think|thought)>[\s\S]*?<\/(?:think|thought)>/gi, ' ');
-  // 2. Strip plan and tool_call blocks
+  s = s.replace(/<(?:think|thought)\b[\s\S]*$/i, ' ');
+  // 2. Strip plan, step, and tool_call blocks
   s = s.replace(/<plan(?:\s+[^>]*)?>[\s\S]*?<\/plan>/gi, ' ');
+  s = s.replace(/<plan\b[\s\S]*$/i, ' ');
+  s = s.replace(/<step(?:\s+[^>]*)?>[\s\S]*?<\/step>/gi, ' ');
+  s = s.replace(/<step\b[\s\S]*$/i, ' ');
   s = s.replace(/<tool_call(?:\s+[^>]*)?>[\s\S]*?<\/tool_call>/gi, ' ');
   s = s.replace(/<tool_call(?:\s+[^>]*)\/>/gi, ' ');
+  s = s.replace(/<tool_call(?:\s+[^>]*)?>/gi, ' ');
+  s = s.replace(/<tool_call\b[\s\S]*$/i, ' ');
   s = s.replace(/<remember(?:\s+[^>]*)?>[\s\S]*?<\/remember>/gi, ' ');
+  s = s.replace(/<remember\b[\s\S]*$/i, ' ');
   // 3. Strip markdown code blocks
   s = s.replace(/```[\s\S]*?```/g, ' ');
   // 4. Strip inline code, markdown symbols, headers, bullet points
@@ -196,9 +202,11 @@ export function cleanTextForSpeech(raw: string): string {
   return s;
 }
 
+import { globalHumanVoice } from './humanVoiceEngine';
+
 /**
- * Text-to-Speech vocal synthesizer prioritizing native OS audio subsystem,
- * with graceful browser SpeechSynthesis fallback.
+ * Text-to-Speech vocal synthesizer prioritizing high-fidelity Human Voice Engine
+ * (Voicebox / Kokoro-82M / ElevenLabs BYOK), with native OS speech and browser synthesis fallbacks.
  */
 export function speakJARVISFeedback(text: string, onEnd?: () => void): void {
   const spokenText = cleanTextForSpeech(text);
@@ -207,62 +215,73 @@ export function speakJARVISFeedback(text: string, onEnd?: () => void): void {
     return;
   }
 
-  // First attempt native OS speech synthesis (works in background, minimized, locked)
-  speakText(spokenText)
-    .then((res) => {
-      if (res && res.success) {
-        if (onEnd) onEnd();
-        return;
+  // 1. Delegate to Human Voice Engine (Voicebox on port 17493, Kokoro on port 8880, ElevenLabs BYOK, or native speakText)
+  globalHumanVoice
+    .speak(spokenText, {
+      onEnd,
+      onError: () => {
+        // Fallback: Browser SpeechSynthesis
+        fallbackBrowserSpeech(spokenText, onEnd);
+      },
+    })
+    .then((success) => {
+      if (!success) {
+        fallbackBrowserSpeech(spokenText, onEnd);
       }
-      throw new Error(res?.message || 'Native speech returned unsuccessful');
     })
     .catch(() => {
-      // Fallback: Browser SpeechSynthesis
-      if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
-        if (onEnd) onEnd();
-        return;
-      }
-
-      try {
-        window.speechSynthesis.cancel();
-        const utterance = new SpeechSynthesisUtterance(spokenText);
-        utterance.rate = 1.0;
-        utterance.pitch = 1.0;
-        utterance.volume = 0.95;
-
-        const voices = window.speechSynthesis.getVoices();
-        const preferredVoice = voices.find(
-          (v) =>
-            v.name.includes('Daniel') ||
-            (v.lang.startsWith('en') && (v.name.includes('UK') || v.name.includes('Oliver') || v.name.includes('Arthur'))) ||
-            v.name.includes('Samantha') ||
-            v.name.includes('Alex')
-        );
-        if (preferredVoice) {
-          utterance.voice = preferredVoice;
-        }
-
-        utterance.onend = () => {
-          if (onEnd) onEnd();
-        };
-        utterance.onerror = () => {
-          if (onEnd) onEnd();
-        };
-
-        window.speechSynthesis.speak(utterance);
-      } catch {
-        if (onEnd) onEnd();
-      }
+      fallbackBrowserSpeech(spokenText, onEnd);
     });
 }
 
+function fallbackBrowserSpeech(spokenText: string, onEnd?: () => void): void {
+  if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
+    if (onEnd) onEnd();
+    return;
+  }
+
+  try {
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(spokenText);
+    utterance.rate = 1.0;
+    utterance.pitch = 1.0;
+    utterance.volume = 0.95;
+
+    const voices = window.speechSynthesis.getVoices();
+    const preferredVoice = voices.find(
+      (v) =>
+        v.name.includes('Daniel') ||
+        (v.lang.startsWith('en') && (v.name.includes('UK') || v.name.includes('Oliver') || v.name.includes('Arthur'))) ||
+        v.name.includes('Samantha') ||
+        v.name.includes('Alex')
+    );
+    if (preferredVoice) {
+      utterance.voice = preferredVoice;
+    }
+
+    utterance.onend = () => {
+      if (onEnd) onEnd();
+    };
+    utterance.onerror = () => {
+      if (onEnd) onEnd();
+    };
+
+    window.speechSynthesis.speak(utterance);
+  } catch {
+    if (onEnd) onEnd();
+  }
+}
+
 /**
- * Halts any ongoing speech immediately.
+ * Halts any ongoing speech immediately across all engines.
  */
 export function stopJARVISSpeaking(): void {
+  globalHumanVoice.stop();
   stopSpeaking().catch(() => {});
   if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-    window.speechSynthesis.cancel();
+    try {
+      window.speechSynthesis.cancel();
+    } catch {}
   }
 }
 
@@ -631,6 +650,9 @@ export async function matchAndExecuteFastAction(transcript: string): Promise<Voi
 export class VoiceEngine {
   private recognition: any = null;
   private isListening: boolean = false;
+  private mediaRecorder: MediaRecorder | null = null;
+  private recordedChunks: Blob[] = [];
+  private activeMediaStream: MediaStream | null = null;
   private stateChangeListeners: ((state: VoiceState) => void)[] = [];
   private transcriptListeners: ((transcript: string, isFinal: boolean) => void)[] = [];
   private statusListeners: ((message: string) => void)[] = [];
@@ -700,7 +722,12 @@ export class VoiceEngine {
   }
 
   public isAvailable(): boolean {
-    return !!this.recognition;
+    return (
+      !!this.recognition ||
+      (typeof navigator !== 'undefined' &&
+        !!navigator.mediaDevices &&
+        !!navigator.mediaDevices.getUserMedia)
+    );
   }
 
   public getIsListening(): boolean {
@@ -708,46 +735,111 @@ export class VoiceEngine {
   }
 
   public async startListening(): Promise<void> {
-    if (!this.recognition) {
-      this.initRecognition();
+    // 1. If native Web Speech API is present (Chrome / Chromium)
+    if (this.recognition) {
+      try {
+        if (this.isListening) {
+          this.recognition.stop();
+        }
+        this.recognition.start();
+        return;
+      } catch {
+        this.emitStatus('Microphone ready');
+      }
     }
 
-    // Proactively request microphone stream to trigger macOS TCC permission dialog smoothly
-    if (typeof navigator !== 'undefined' && navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+    // 2. High-performance fallback: MediaRecorder audio stream (WebKit / macOS desktop)
+    if (
+      typeof navigator !== 'undefined' &&
+      navigator.mediaDevices &&
+      navigator.mediaDevices.getUserMedia
+    ) {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        stream.getTracks().forEach((t) => t.stop());
+        this.activeMediaStream = stream;
+        this.recordedChunks = [];
+
+        const mimeType =
+          typeof MediaRecorder !== 'undefined' &&
+          MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+            ? 'audio/webm;codecs=opus'
+            : typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported('audio/webm')
+            ? 'audio/webm'
+            : 'audio/mp4';
+
+        const recorder = new MediaRecorder(stream, { mimeType });
+        this.mediaRecorder = recorder;
+
+        recorder.ondataavailable = (e) => {
+          if (e.data && e.data.size > 0) {
+            this.recordedChunks.push(e.data);
+          }
+        };
+
+        recorder.onstop = async () => {
+          this.emitState('processing');
+          this.emitStatus('Transcribing audio via local engine...');
+
+          const blob = new Blob(this.recordedChunks, { type: mimeType });
+          const reader = new FileReader();
+          reader.onloadend = async () => {
+            try {
+              const base64 = reader.result as string;
+              const format = mimeType.includes('mp4') ? 'mp4' : 'webm';
+              const result = await transcribeAudioBuffer(base64, format);
+              if (result.success && result.text && result.text.trim()) {
+                this.emitTranscript(result.text.trim(), true);
+                this.emitStatus('Command recognized');
+              } else {
+                this.emitStatus(result.error || 'No speech detected');
+              }
+            } catch (err: any) {
+              this.emitStatus(`Transcription failed: ${err?.message || err}`);
+            } finally {
+              this.emitState('idle');
+            }
+          };
+          reader.readAsDataURL(blob);
+        };
+
+        recorder.start(200);
+        this.isListening = true;
+        this.emitState('listening');
+        this.emitStatus('Listening for command (recording)...');
+        earcons.playWakeTone();
+        return;
       } catch (err: any) {
-        this.emitStatus(`Microphone permission required: ${err?.message || 'Access denied'}`);
+        this.emitStatus(`Microphone error: ${err?.message || 'Access denied'}`);
         this.emitState('idle');
         return;
       }
     }
 
-    if (!this.recognition) {
-      this.emitStatus('Speech recognition not supported in this environment. Type your command below.');
-      return;
-    }
-
-    try {
-      if (this.isListening) {
-        this.recognition.stop();
-      }
-      this.recognition.start();
-    } catch (e) {
-      // In case start is called while already starting
-      this.emitStatus('Microphone ready');
-    }
+    this.emitStatus('Speech recognition not supported in this environment. Type your command below.');
   }
 
   public stopListening(): void {
+    if (this.mediaRecorder && this.mediaRecorder.state !== 'inactive') {
+      try {
+        this.mediaRecorder.stop();
+      } catch {}
+    }
+
+    if (this.activeMediaStream) {
+      try {
+        this.activeMediaStream.getTracks().forEach((track) => track.stop());
+      } catch {}
+      this.activeMediaStream = null;
+    }
+
     if (this.recognition && this.isListening) {
       try {
         this.recognition.stop();
       } catch {}
-      this.isListening = false;
-      this.emitState('idle');
     }
+
+    this.isListening = false;
+    this.emitState('idle');
   }
 
   public onStateChange(fn: (state: VoiceState) => void): () => void {

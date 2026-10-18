@@ -81,7 +81,7 @@ pub fn classify_user_task(prompt: &str) -> TaskIntentVerdict {
         probabilities.insert(k, prob);
     }
 
-    let confidence = (highest_prob.max(0.0).min(1.0) * 100.0).round() / 100.0;
+    let confidence = (highest_prob.clamp(0.0, 1.0) * 100.0).round() / 100.0;
 
     // Recommended route & provider based on intent characteristics
     let (recommended_route, suggested_provider, suggested_system_prompt) = match best_intent.as_str() {

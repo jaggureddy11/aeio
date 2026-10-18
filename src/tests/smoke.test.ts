@@ -108,8 +108,8 @@ describe('End-to-End Smoke Test: Core Interactive Loop', () => {
       };
     });
 
-    // 2. Send message
-    const sendPromise = useChatStore.getState().sendMessage('Find App file');
+    // 2. Send message (with autoApproveSafeTools: false to test manual approval workflow)
+    const sendPromise = useChatStore.getState().sendMessage('Find App file', { autoApproveSafeTools: false });
     await sendPromise;
 
     // Verify messages created (user message + assistant message)

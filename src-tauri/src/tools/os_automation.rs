@@ -840,9 +840,10 @@ pub fn get_system_status() -> Result<SystemStatusInfo, String> {
                     battery_level = Some(pct);
                 }
             }
-            if text.contains("charging") && !text.contains("not charging") {
-                is_charging = Some(true);
-            } else if text.contains("AC Power") || text.contains("AC attached") {
+            if (text.contains("charging") && !text.contains("not charging"))
+                || text.contains("AC Power")
+                || text.contains("AC attached")
+            {
                 is_charging = Some(true);
             } else if text.contains("discharging") {
                 is_charging = Some(false);

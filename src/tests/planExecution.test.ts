@@ -4,6 +4,7 @@ import {
   classifyPlanSafety,
   normalizeToolName,
   ExecutionPlan,
+  cleanDisplayContent,
 } from '../lib/agent/plan';
 import { useChatStore } from '../stores/chatStore';
 import { useSettingsStore } from '../stores/settingsStore';
@@ -51,6 +52,46 @@ Let me know if you want to proceed.`;
       expect(plan?.hasDestructiveSteps).toBe(false);
       expect(cleanedText).not.toContain('<plan');
       expect(cleanedText).toContain('Here is the plan:');
+    });
+
+    it('correctly parses plans with single quotes in title attribute', () => {
+      const response = `<plan title="Open YouTube in Chrome and play 'Comrade Anthem' song by Vijay Devarakonda">
+  <step number="1" tool="open_app" description="Open 'Chrome' browser">{"name": "Chrome"}</step>
+  <step number="2" tool="open_target" description="Navigate to YouTube and play song">{"target": "https://www.youtube.com/results?search_query=comrade+anthem"}</step>
+</plan>`;
+
+      const { plan, cleanedText } = parsePlanFromResponse(response);
+      expect(plan).not.toBeNull();
+      expect(plan?.title).toBe("Open YouTube in Chrome and play 'Comrade Anthem' song by Vijay Devarakonda");
+      expect(plan?.steps).toHaveLength(2);
+      expect(plan?.steps[0].toolName).toBe('open_app');
+      expect(plan?.steps[0].description).toBe("Open 'Chrome' browser");
+      expect(plan?.steps[0].args.name).toBe('Chrome');
+      expect(plan?.steps[1].toolName).toBe('open_target');
+      expect(cleanedText).toBe('');
+    });
+
+    it('cleanDisplayContent strips complete and partial unclosed tags during streaming', () => {
+      // 1. Partial unclosed plan
+      const streamingPlan = `<plan title="Open YouTube in Chrome and play 'Comrade Anthem' song by Vijay Devarakonda">
+<step number="1" tool="open_app" description="Open Chrome browser">{"name": "Chrome"}</step> <step`;
+      expect(cleanDisplayContent(streamingPlan)).toBe('');
+
+      // 2. Partial unclosed tool call
+      const streamingTool = `Opening YouTube for you now!
+<tool_call name="search_web" args='{"query": "comrade`;
+      expect(cleanDisplayContent(streamingTool)).toBe('Opening YouTube for you now!');
+
+      // 3. Complete tool call with codeblock wrapper
+      const wrappedTool = `Executing command:
+\`\`\`xml
+<tool_call name="open_app" args='{"name": "Chrome"}'></tool_call>
+\`\`\``;
+      expect(cleanDisplayContent(wrappedTool)).toBe('Executing command:');
+
+      // 4. Think and remember blocks
+      const thinking = `<think>Internal thoughts</think>Hello world!<remember category="preference">User likes Chrome</remember>`;
+      expect(cleanDisplayContent(thinking)).toBe('Hello world!');
     });
 
     it('correctly parses JSON steps format and identifies destructive steps', () => {

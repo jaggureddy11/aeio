@@ -130,9 +130,20 @@ const getInitialBedrockModel = (): string => {
   return stored;
 };
 
+const getInitialActiveProvider = (): LLMProviderType => {
+  const stored = getStoredString('aeio_active_provider', 'bedrock');
+  if (!stored || stored === 'qwen-coder' || stored === 'ollama') {
+    try {
+      localStorage.setItem('aeio_active_provider', 'bedrock');
+    } catch {}
+    return 'bedrock';
+  }
+  return (stored as LLMProviderType) || 'bedrock';
+};
+
 export const useSettingsStore = create<SettingsState>((set, get) => ({
   activeTab: 'chat',
-  activeProvider: (getStoredString('aeio_active_provider', 'bedrock') as LLMProviderType) || 'bedrock',
+  activeProvider: getInitialActiveProvider(),
   theme: (getStoredString('aeio_theme_mode', 'light') as ThemeMode) || 'light',
   ollamaModel: getStoredString('aeio_ollama_model', 'qwen2.5:7b'),
   bedrockRegion: getStoredString('aeio_bedrock_region', 'ap-southeast-2'),

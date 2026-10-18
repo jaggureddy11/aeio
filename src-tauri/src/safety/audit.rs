@@ -256,9 +256,7 @@ pub fn execute_action_with_visual_audit(
     record_audit_receipt(&base_audit_dir, &receipt)?;
 
     // If execution was refused by policy, also propagate the Err for callers
-    if let Err(e) = execution_result {
-        return Err(e);
-    }
+    execution_result?;
 
     Ok(receipt)
 }

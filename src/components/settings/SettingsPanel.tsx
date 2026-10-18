@@ -30,9 +30,11 @@ import {
   Ban,
   Eye,
   Server,
+  Volume2,
 } from 'lucide-react';
 import { VisualAuditLogViewer } from '../safety/VisualAuditLogViewer';
 import { McpServerPanel } from './McpServerPanel';
+import { VoiceSettingsPanel } from './VoiceSettingsPanel';
 
 interface Props {
   isOpen?: boolean;
@@ -76,7 +78,7 @@ export const SettingsPanel: React.FC<Props> = ({ isOpen, onClose, onOpenOnboardi
     setGroundingModelType,
   } = useSettingsStore();
 
-  const [activeSection, setActiveSection] = useState<'providers' | 'memory' | 'privacy' | 'shortcuts' | 'computerControl' | 'mcp'>('providers');
+  const [activeSection, setActiveSection] = useState<'providers' | 'voice' | 'memory' | 'privacy' | 'shortcuts' | 'computerControl' | 'mcp'>('providers');
   const [newAppInput, setNewAppInput] = useState('');
   const [allowlistError, setAllowlistError] = useState<string | null>(null);
   const [pendingBrowserBundle, setPendingBrowserBundle] = useState<string | null>(null);
@@ -451,6 +453,16 @@ export const SettingsPanel: React.FC<Props> = ({ isOpen, onClose, onOpenOnboardi
         >
           <Cpu size={13} aria-hidden="true" />
           <span>Providers</span>
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={activeSection === 'voice'}
+          className={`settings-nav-tab ${activeSection === 'voice' ? 'active' : ''}`}
+          onClick={() => setActiveSection('voice')}
+        >
+          <Volume2 size={13} aria-hidden="true" />
+          <span>Voice & Speech</span>
         </button>
         <button
           type="button"
@@ -2127,6 +2139,12 @@ export const SettingsPanel: React.FC<Props> = ({ isOpen, onClose, onOpenOnboardi
                 </div>
               </div>
             </div>
+          </div>
+        )}
+
+        {activeSection === 'voice' && (
+          <div className="settings-section" role="tabpanel" aria-label="Human Voice and Speech Settings">
+            <VoiceSettingsPanel />
           </div>
         )}
 

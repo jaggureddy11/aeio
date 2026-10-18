@@ -32,7 +32,7 @@ pub fn rerank_memories(query: &str, results: Vec<SearchResult>) -> Vec<RerankedM
             };
 
             let base_sys1 = (token_ratio * 70.0 + category_boost).min(100.0);
-            let original_normalized = ((res.score as f64) * 100.0).max(0.0).min(100.0);
+            let original_normalized = ((res.score as f64) * 100.0).clamp(0.0, 100.0);
 
             // Blended final score: 60% System One semantic judgment + 40% embedding distance
             let final_score = ((base_sys1 * 0.60 + original_normalized * 0.40) * 10.0).round() / 10.0;

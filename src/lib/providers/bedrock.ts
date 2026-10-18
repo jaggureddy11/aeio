@@ -162,6 +162,24 @@ export async function resolveBedrockCredentials(
     } catch {}
   }
 
+  // 4. Local dev server auto-export fallback when running in browser mode
+  if ((!accessKeyId || !secretAccessKey) && typeof window !== 'undefined' && typeof fetch !== 'undefined') {
+    try {
+      const resp = await fetch('/api/aws-credentials');
+      if (resp.ok) {
+        const data = await resp.json();
+        if (data.accessKeyId && data.secretAccessKey) {
+          accessKeyId = data.accessKeyId;
+          secretAccessKey = data.secretAccessKey;
+          if (data.sessionToken) sessionToken = data.sessionToken;
+          if (typeof localStorage !== 'undefined') {
+            localStorage.setItem('aeio_bedrock_credentials', JSON.stringify(data));
+          }
+        }
+      }
+    } catch {}
+  }
+
   return {
     accessKeyId: accessKeyId.trim(),
     secretAccessKey: secretAccessKey.trim(),
@@ -286,11 +304,17 @@ export class BedrockProvider implements LLMProvider {
       creds
     );
 
+    const fetchHeaders: Record<string, string> = { ...signed.headers };
+    if (typeof window !== 'undefined') {
+      delete fetchHeaders['host'];
+      delete fetchHeaders['Host'];
+    }
+
     let response: Response;
     try {
       response = await fetch(signed.url, {
         method: signed.method,
-        headers: signed.headers,
+        headers: fetchHeaders,
         body: signed.body,
       });
     } catch (netErr: unknown) {
@@ -302,7 +326,7 @@ export class BedrockProvider implements LLMProvider {
         msg.includes('ENOTFOUND')
       ) {
         throw new Error(
-          `Network offline or AWS Bedrock unreachable in region ${region}. You can switch to local Ollama to continue offline.`
+          `Network offline or AWS Bedrock unreachable in selected Region (${region}). Please check your connection or AWS Settings.`
         );
       }
       throw netErr;

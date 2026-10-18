@@ -57,6 +57,27 @@ export class McpClientManager {
           .map(([k, v]) => `${k}='${v.replace(/'/g, "'\\''")}'`)
           .join(' ') + ' ';
     }
+
+    // Direct HTTP JSON-RPC endpoint (e.g. Voicebox /mcp or web MCP services)
+    if (config.command.startsWith('http://') || config.command.startsWith('https://')) {
+      const res = await fetch(config.command, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(config.env || {}),
+        },
+        body: JSON.stringify(request),
+      });
+      if (!res.ok) {
+        throw new Error(`HTTP MCP request to ${config.command} failed (status ${res.status})`);
+      }
+      const parsedResponse = (await res.json()) as JsonRpcResponse<T>;
+      if (parsedResponse.error) {
+        throw new Error(`MCP Server Error (${parsedResponse.error.code}): ${parsedResponse.error.message}`);
+      }
+      return parsedResponse.result as T;
+    }
+
     // Use printf into the target command with stdout capture
     const shellCmd = `printf '%s\\n' '${escapedPayload}' | ${envPrefix}${config.command} ${argsStr}`;
 

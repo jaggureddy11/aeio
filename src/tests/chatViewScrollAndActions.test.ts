@@ -46,9 +46,12 @@ describe('Chat View Scroll and Assistant Action Capabilities', () => {
       activeWorkspace: {
         id: 'ws-1',
         name: 'Dev Workspace',
-        rootPath: '/tmp',
-        createdAt: 0,
-        updatedAt: 0,
+        icon: '💼',
+        description: 'Development Workspace',
+        is_active: true,
+        is_archived: false,
+        created_at: 0,
+        updated_at: 0,
       },
     });
   });

@@ -56,7 +56,7 @@ export const ChatInput: React.FC<Props> = ({ onSend, isLoading }) => {
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
       const scrollH = textareaRef.current.scrollHeight;
-      textareaRef.current.style.height = `${Math.min(Math.max(scrollH, 44), 160)}px`;
+      textareaRef.current.style.height = `${Math.min(Math.max(scrollH, 26), 160)}px`;
     }
   }, [input]);
 
@@ -95,7 +95,7 @@ export const ChatInput: React.FC<Props> = ({ onSend, isLoading }) => {
     setInput('');
     setMatchedMemoriesCount(0);
     if (textareaRef.current) {
-      textareaRef.current.style.height = '44px';
+      textareaRef.current.style.height = '26px';
     }
   };
 
@@ -128,7 +128,7 @@ export const ChatInput: React.FC<Props> = ({ onSend, isLoading }) => {
         </div>
       )}
 
-      {/* Claude-style Floating Input Card */}
+      {/* Claude / ChatGPT Style Floating Input Card */}
       <div className={`claude-composer-box ${hasContent ? 'has-text' : ''} ${isLoading ? 'is-loading' : ''}`}>
         <textarea
           ref={textareaRef}
@@ -144,33 +144,32 @@ export const ChatInput: React.FC<Props> = ({ onSend, isLoading }) => {
         {/* Bottom Toolbar inside the Composer */}
         <div className="claude-composer-toolbar">
           <div className="composer-toolbar-left">
-            <span className="composer-agent-badge">
+            <span className="composer-agent-badge" title="Aeio Agent active with persistent memory">
               <span className="agent-status-dot" />
               <span>Aeio Agent</span>
             </span>
-            <span className="composer-workspace-indicator">{activeWs?.name || 'Workspace'}</span>
           </div>
 
           <div className="composer-toolbar-right">
             <button
               type="button"
-              className="claude-inspect-btn"
+              className="claude-composer-btn claude-inspect-btn"
               onClick={handleInspectScreen}
               disabled={isLoading}
               title="Inspect Active Screen (Cmd+Shift+O)"
               aria-label="Inspect active screen"
             >
-              <Eye size={16} />
+              <Eye size={15} />
             </button>
 
             <button
               type="button"
-              className={`claude-voice-btn ${isVoiceHUDOpen ? 'active' : ''}`}
+              className={`claude-composer-btn claude-voice-btn ${isVoiceHUDOpen ? 'active' : ''}`}
               onClick={() => toggleVoiceHUD()}
               title="Voice Automation / JARVIS Mode (Cmd+Shift+V)"
               aria-label="Toggle voice automation"
             >
-              <Mic size={16} />
+              <Mic size={15} />
             </button>
 
             <button
@@ -178,10 +177,11 @@ export const ChatInput: React.FC<Props> = ({ onSend, isLoading }) => {
               className={`claude-send-btn ${hasContent && !isLoading ? 'active' : ''}`}
               onClick={handleSend}
               disabled={!hasContent || isLoading}
+              title={isLoading ? 'Aeio is thinking...' : 'Send message (Enter)'}
               aria-label="Send message"
             >
               {isLoading ? (
-                <Loader2 size={16} className="send-spinner" />
+                <Loader2 size={15} className="send-spinner" />
               ) : (
                 <ArrowUp size={16} className="send-arrow" />
               )}
@@ -191,7 +191,7 @@ export const ChatInput: React.FC<Props> = ({ onSend, isLoading }) => {
       </div>
 
       <div className="claude-composer-subtext">
-        <span>Aeio runs locally with persistent long-term memory. Return to send · Cmd+Shift+V for voice · Cmd+Shift+O to inspect screen</span>
+        <span>Aeio runs locally with persistent memory · Return to send · Cmd+Shift+V for voice · Cmd+Shift+O to inspect screen</span>
       </div>
     </div>
   );

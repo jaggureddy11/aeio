@@ -128,6 +128,50 @@ function handleWebFallback<T>(cmd: string, args?: Record<string, unknown>): Prom
     } catch {}
     return Promise.resolve(false as unknown as T);
   }
+  if (cmd === 'speak_text') {
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      try {
+        if (window.speechSynthesis.speaking) {
+          window.speechSynthesis.cancel();
+        }
+        window.speechSynthesis.resume();
+        const text = String(args?.text || '');
+        const u = new SpeechSynthesisUtterance(text);
+        (window as any).__aeioWebUtterance = u;
+        const voices = window.speechSynthesis.getVoices();
+        const v =
+          voices.find((x) => x.name === 'Samantha' || x.name.includes('Samantha')) ||
+          voices.find((x) => x.name.includes('Google US English')) ||
+          voices.find((x) => x.name.includes('Alex')) ||
+          voices.find((x) => x.lang.startsWith('en') && !x.name.includes('Rishi')) ||
+          voices[0];
+        if (v) u.voice = v;
+        u.volume = 1.0;
+        u.rate = 1.0;
+        u.onend = () => {
+          (window as any).__aeioWebUtterance = null;
+        };
+        u.onerror = () => {
+          (window as any).__aeioWebUtterance = null;
+        };
+        window.speechSynthesis.speak(u);
+        window.speechSynthesis.resume();
+        return Promise.resolve({ success: true, message: 'Spoken in browser', voiceUsed: v?.name || 'default' } as unknown as T);
+      } catch (e: any) {
+        return Promise.resolve({ success: false, message: String(e), voiceUsed: 'none' } as unknown as T);
+      }
+    }
+    return Promise.resolve({ success: true, message: 'Speech unavailable', voiceUsed: 'none' } as unknown as T);
+  }
+  if (cmd === 'stop_speaking') {
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      try {
+        window.speechSynthesis.cancel();
+        (window as any).__aeioWebUtterance = null;
+      } catch {}
+    }
+    return Promise.resolve(undefined as unknown as T);
+  }
   if (
     cmd === 'read_clipboard' ||
     cmd === 'open_target' ||

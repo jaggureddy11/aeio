@@ -171,7 +171,7 @@ impl ErrorLogger {
             while let Some(start_idx) = result.find(prefix) {
                 let after_prefix = start_idx + prefix.len();
                 let end_idx = result[after_prefix..]
-                    .find(|c| c == '/' || c == ' ' || c == ':' || c == '"' || c == '\'' || c == '\n')
+                    .find(['/', ' ', ':', '"', '\'', '\n'])
                     .map(|rel| after_prefix + rel)
                     .unwrap_or(result.len());
 
@@ -194,7 +194,7 @@ impl ErrorLogger {
 
             let after_prefix = start_idx + win_prefix.len();
             let end_idx = result[after_prefix..]
-                .find(|c| c == '\\' || c == ' ' || c == ':' || c == '"' || c == '\'' || c == '\n')
+                .find(['\\', ' ', ':', '"', '\'', '\n'])
                 .map(|rel| after_prefix + rel)
                 .unwrap_or(result.len());
 

@@ -113,7 +113,34 @@ export function isGuiActionDestructive(args: any): boolean {
   }
 }
 
-const PLAN_BLOCK_REGEX = /<plan(?:\s+title=["']([^"']*)["'])?>([\s\S]*?)<\/plan>/i;
+export function cleanDisplayContent(text: string): string {
+  if (!text) return '';
+  return text
+    // 1. Remove complete or unclosed think tags
+    .replace(/<think>[\s\S]*?<\/think>/gi, '')
+    .replace(/<think>[\s\S]*$/i, '')
+    // 2. Remove complete or unclosed remember tags
+    .replace(/<remember(?:\s+[^>]*)?>[\s\S]*?<\/remember>/gi, '')
+    .replace(/<remember[\s\S]*$/i, '')
+    // 3. Remove complete plan tags
+    .replace(/<plan\b[^>]*>[\s\S]*?<\/plan>/gi, '')
+    // 4. Remove unclosed plan tag up to end of string
+    .replace(/<plan\b[\s\S]*$/i, '')
+    // 5. Remove complete or unclosed step tags (if outside plan)
+    .replace(/<step\b[^>]*>[\s\S]*?<\/step>/gi, '')
+    .replace(/<step\b[\s\S]*$/i, '')
+    // 6. Remove complete XML and JSON tool calls
+    .replace(/(?:```(?:xml|json)?\s*)?<tool_call(?:\s+name=(?:"[^"]*"|'[^']*'|[^\s>]+))?(?:\s+args=(?:"[^"]*"|'[^']*'|[^\s>]+))?>[\s\S]*?<\/tool_call>(?:\s*```)?/gi, '')
+    .replace(/(?:```(?:xml|json)?\s*)?<tool_call(?:\s+[^>]*)?>[\s\S]*?<\/tool_call>(?:\s*```)?/gi, '')
+    .replace(/<tool_call(?:\s+[^>]*)\/>/gi, '')
+    // 7. Remove unclosed tool_call
+    .replace(/(?:```(?:xml|json)?\s*)?<tool_call[\s\S]*$/i, '')
+    // 8. Clean trailing markdown code blocks or artifact wrappers
+    .replace(/```(?:xml|json)?\s*$/i, '')
+    .trim();
+}
+
+export const PLAN_BLOCK_REGEX = /<plan\b(?:\s+title=(?:"([^"]*)"|'([^']*)'|([^\s>]+)))?[^>]*>([\s\S]*?)<\/plan>/i;
 
 export function normalizeToolName(name: string): string {
   const lower = name.toLowerCase().trim();
@@ -169,11 +196,11 @@ export function normalizeToolName(name: string): string {
 export function parsePlanFromResponse(rawText: string): { plan: ExecutionPlan | null; cleanedText: string } {
   const planMatch = PLAN_BLOCK_REGEX.exec(rawText);
   if (!planMatch) {
-    return { plan: null, cleanedText: rawText };
+    return { plan: null, cleanedText: cleanDisplayContent(rawText) };
   }
 
-  const title = planMatch[1]?.trim() || 'Execution Plan';
-  const innerContent = planMatch[2]?.trim() || '';
+  const title = (planMatch[1] ?? planMatch[2] ?? planMatch[3] ?? '').trim() || 'Execution Plan';
+  const innerContent = planMatch[4]?.trim() || '';
 
   const steps: PlanStep[] = [];
 
@@ -221,7 +248,7 @@ export function parsePlanFromResponse(rawText: string): { plan: ExecutionPlan | 
       });
     });
 
-    const cleanedText = rawText.replace(PLAN_BLOCK_REGEX, '').trim();
+    const cleanedText = cleanDisplayContent(rawText);
     const hasDestructiveSteps = steps.some((s) => s.isDestructive);
 
     return {
@@ -247,13 +274,13 @@ export function parsePlanFromResponse(rawText: string): { plan: ExecutionPlan | 
     const payload = stepMatch[2]?.trim() || '{}';
 
     const numMatch = /number=["']?(\d+)["']?/i.exec(attrString);
-    const toolMatch = /tool=["']([^"']*)["']/i.exec(attrString);
-    const descMatch = /description=["']([^"']*)["']/i.exec(attrString);
+    const toolMatch = /tool=(?:"([^"]*)"|'([^']*)'|([^\s>]+))/i.exec(attrString);
+    const descMatch = /description=(?:"([^"]*)"|'([^']*)'|([^\s>]+))/i.exec(attrString);
 
     const stepNum = numMatch ? parseInt(numMatch[1], 10) : stepIndex;
-    const rawTool = toolMatch ? toolMatch[1].trim() : 'run_shell';
+    const rawTool = toolMatch ? (toolMatch[1] ?? toolMatch[2] ?? toolMatch[3] ?? '').trim() : 'run_shell';
     const toolName = normalizeToolName(rawTool);
-    const description = descMatch ? descMatch[1].trim() : `Step ${stepNum}: Execute ${toolName}`;
+    const description = descMatch ? (descMatch[1] ?? descMatch[2] ?? descMatch[3] ?? '').trim() : `Step ${stepNum}: Execute ${toolName}`;
 
     let args: Record<string, any> = {};
     try {
@@ -287,10 +314,10 @@ export function parsePlanFromResponse(rawText: string): { plan: ExecutionPlan | 
   }
 
   if (steps.length === 0) {
-    return { plan: null, cleanedText: rawText };
+    return { plan: null, cleanedText: cleanDisplayContent(rawText) };
   }
 
-  const cleanedText = rawText.replace(PLAN_BLOCK_REGEX, '').trim();
+  const cleanedText = cleanDisplayContent(rawText);
   const hasDestructiveSteps = steps.some((s) => s.isDestructive);
 
   return {

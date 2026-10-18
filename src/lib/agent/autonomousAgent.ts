@@ -380,7 +380,7 @@ export class AutonomousTaskRunner {
       }
     } catch {
       // 2. Try XML <tool_call> tags: <tool_call name="..." args='...'>
-      const xmlMatch = /<tool_call\s+name=["']?([^"'\s>]+)["']?(?:\s+args=(?:'([^']*)'|"([^"]*)"))?\s*(?:\/>|>([\s\S]*?)<\/tool_call>)/i.exec(rawText);
+      const xmlMatch = /(?:```(?:xml|json)?\s*)?<tool_call(?:\s+name=["']?([^"'\s>]+)["']?)?(?:\s+args=(?:'([^']*)'|"([^"]*)"))?\s*(?:\/>|>([\s\S]*?)<\/tool_call>|>|$)(?:\s*```)?/i.exec(rawText);
       if (xmlMatch) {
         const rawTool = xmlMatch[1];
         const argsStr = xmlMatch[2] || xmlMatch[3] || xmlMatch[4] || '{}';

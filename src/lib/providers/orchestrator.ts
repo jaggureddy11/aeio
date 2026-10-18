@@ -5,7 +5,7 @@ import { openAIProvider } from './openai';
 import { qwenCoderProvider } from './qwenCoder';
 import { ollamaProvider } from './ollama';
 import { aeioFreeProvider } from './aeioFree';
-import { bedrockProvider } from './bedrock';
+import { bedrockProvider, resolveBedrockCredentials } from './bedrock';
 import { getApiKey, classifyUserTask as ipcClassifyUserTask } from '../ipc';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { routeUserIntent } from '../systemOne/intentRouting';
@@ -229,6 +229,14 @@ async function getAvailableKeys(): Promise<{
       }
     } catch {}
   }
+  if (!bedrockKey) {
+    try {
+      const creds = await resolveBedrockCredentials();
+      if (creds.accessKeyId && creds.secretAccessKey) {
+        bedrockKey = JSON.stringify(creds);
+      }
+    } catch {}
+  }
 
   return { geminiKey, claudeKey, openAIKey, bedrockKey };
 }
@@ -272,15 +280,15 @@ export async function orchestrateChat(
   ];
 
   const cloudCandidates: ProviderCandidate[] = [];
+  // 1. Bedrock is always production candidate #1
+  cloudCandidates.push({
+    provider: bedrockProvider,
+    apiKey: keys.bedrockKey,
+    model: settings.bedrockModel || 'amazon.nova-lite-v1:0',
+    isLocal: false,
+  });
+
   if (taskType === 'code' || taskType === 'planning') {
-    if (keys.bedrockKey) {
-      cloudCandidates.push({
-        provider: bedrockProvider,
-        apiKey: keys.bedrockKey,
-        model: settings.bedrockModel || 'amazon.nova-lite-v1:0',
-        isLocal: false,
-      });
-    }
     if (keys.claudeKey) {
       cloudCandidates.push({
         provider: claudeProvider,
@@ -306,14 +314,6 @@ export async function orchestrateChat(
       });
     }
   } else {
-    if (keys.bedrockKey) {
-      cloudCandidates.push({
-        provider: bedrockProvider,
-        apiKey: keys.bedrockKey,
-        model: settings.bedrockModel || 'amazon.nova-lite-v1:0',
-        isLocal: false,
-      });
-    }
     if (keys.geminiKey) {
       cloudCandidates.push({
         provider: geminiProvider,
@@ -356,9 +356,6 @@ export async function orchestrateChat(
   // Privacy Protection Mode: strictly local inference only
   if (settings.neverSendMemoriesToCloud) {
     candidates.push(...localCandidates);
-  } else if (settings.activeProvider === 'ollama' || settings.activeProvider === 'qwen-coder') {
-    // Explicit local selection
-    candidates.push(...localCandidates);
   } else if (settings.activeProvider === 'bedrock') {
     // Explicit Bedrock selection
     candidates.push({
@@ -383,16 +380,18 @@ export async function orchestrateChat(
   } else if (settings.activeProvider === 'aeio-free') {
     // Explicit Aeio Free hosted selection
     candidates.push(freeCloudCandidate, ...cloudCandidates, ...localCandidates);
+  } else if (settings.activeProvider === 'ollama' || settings.activeProvider === 'qwen-coder') {
+    // Production Cloud Priority: Route to Bedrock first, then local fallback
+    candidates.push({
+      provider: bedrockProvider,
+      apiKey: keys.bedrockKey,
+      model: settings.bedrockModel || 'amazon.nova-lite-v1:0',
+      isLocal: false,
+    });
+    candidates.push(...localCandidates);
   } else {
-    // Intelligent Multi-Provider Model Router (Tier 3 Auto Mode)
-    if (recommendedRoute === 'cloud_boost') {
-      // 1. Coding & Multi-Step Planning -> Cloud-boost for peak reasoning with local fallback
-      candidates.push(...cloudFallbackList, ...localCandidates);
-    } else {
-      // 2. Routine Conversational, OS Actions, Private Notes, & Search Retrieval
-      // -> Strictly Local-First (Ollama qwen2.5:7b / llama3.2)
-      candidates.push(...localCandidates, ...cloudFallbackList);
-    }
+    // Production Auto Mode: Prioritize AWS Bedrock Cloud Intelligence with automatic failover
+    candidates.push(...cloudFallbackList, ...localCandidates);
   }
 
   let lastError: Error | null = null;

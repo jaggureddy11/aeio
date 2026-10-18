@@ -32,3 +32,6 @@ dist-ssr
 src-tauri/resources/models/
 *.safetensors
 *.onnx
+
+# Cloned Voicebox service
+voicebox/

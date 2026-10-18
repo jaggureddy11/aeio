@@ -72,8 +72,8 @@ export const ChatView: React.FC<Props> = ({ onOpenSettings }) => {
     if (!scrollAreaRef.current) return;
     const { scrollTop, scrollHeight, clientHeight } = scrollAreaRef.current;
     const distanceToBottom = scrollHeight - (scrollTop + clientHeight);
-    isUserNearBottom.current = distanceToBottom < 180;
-    setShowScrollBottomBtn(distanceToBottom > 220);
+    isUserNearBottom.current = distanceToBottom < 75;
+    setShowScrollBottomBtn(distanceToBottom > 140);
   };
 
   const scrollToBottom = (smooth = true) => {
@@ -87,18 +87,36 @@ export const ChatView: React.FC<Props> = ({ onOpenSettings }) => {
 
   const handleSend = (text: string) => {
     isUserNearBottom.current = true;
-    sendMessage(text);
-    // Smooth scroll down immediately after sending
-    setTimeout(() => {
+    sendMessage(text, { autoApproveSafeTools: true });
+    requestAnimationFrame(() => {
       scrollToBottom(true);
-    }, 50);
+    });
   };
 
+  // Keep scroll pinned to bottom during message changes and streaming IF user is near bottom
   useEffect(() => {
     if (isUserNearBottom.current && scrollAreaRef.current) {
       scrollAreaRef.current.scrollTop = scrollAreaRef.current.scrollHeight;
     }
-  }, [messages, isLoading, composerHeight]);
+  }, [messages, isLoading]);
+
+  // Content resize observer for dynamic streaming markdown / code block expansion
+  useEffect(() => {
+    const scrollContainer = scrollAreaRef.current;
+    if (!scrollContainer) return;
+
+    const readingCol = scrollContainer.querySelector('.claude-reading-column');
+    if (!readingCol) return;
+
+    const resizeObserver = new ResizeObserver(() => {
+      if (isUserNearBottom.current && scrollAreaRef.current) {
+        scrollAreaRef.current.scrollTop = scrollAreaRef.current.scrollHeight;
+      }
+    });
+
+    resizeObserver.observe(readingCol);
+    return () => resizeObserver.disconnect();
+  }, []);
 
   const topBarTitle =
     messages.length === 0
@@ -127,7 +145,7 @@ export const ChatView: React.FC<Props> = ({ onOpenSettings }) => {
         className="claude-scroll-canvas"
         ref={scrollAreaRef}
         onScroll={handleScroll}
-        style={{ paddingBottom: `${Math.max(composerHeight + 64, 240)}px` }}
+        style={{ paddingBottom: '32px' }}
       >
         <div className="claude-reading-column">
           {messages.length === 0 ? (
@@ -265,6 +283,16 @@ export const ChatView: React.FC<Props> = ({ onOpenSettings }) => {
               </div>
             </div>
           )}
+          {/* Dedicated bottom spacer to guarantee messages are never hidden under the bottom composer */}
+          <div
+            className="claude-scroll-bottom-spacer"
+            style={{
+              height: `${Math.max(composerHeight + 52, 190)}px`,
+              width: '100%',
+              flexShrink: 0,
+            }}
+            aria-hidden="true"
+          />
           {/* Scroll Sentinel Anchor for reliable full-height scrolling */}
           <div ref={messagesEndRef} className="claude-scroll-sentinel" aria-hidden="true" />
         </div>

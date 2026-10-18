@@ -139,7 +139,11 @@ describe('VoiceEngine - Native TTS Speech Synthesis & Earcons', () => {
 
     // Wait for the promise resolution
     await vi.waitFor(() => {
-      expect(ipc.speakText).toHaveBeenCalledWith('Task completed successfully, sir.');
+      expect(ipc.speakText).toHaveBeenCalledWith(
+        'Task completed successfully, sir.',
+        undefined,
+        expect.any(Number)
+      );
       expect(onEnd).toHaveBeenCalled();
     });
   });
