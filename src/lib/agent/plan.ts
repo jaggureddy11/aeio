@@ -181,6 +181,9 @@ export function normalizeToolName(name: string): string {
   if (lower === 'manage_window' || lower === 'window_control' || lower === 'tile_window' || lower === 'maximize_window') return 'manage_window';
   if (lower === 'search_local_files' || lower === 'spotlight_search' || lower === 'find_file' || lower === 'locate_file') return 'search_local_files';
   if (lower === 'get_power_status' || lower === 'power_status' || lower === 'battery' || lower === 'battery_status' || lower === 'battery_level') return 'get_power_status';
+  if (lower === 'get_active_window_context' || lower === 'active_window' || lower === 'active_app' || lower === 'current_app' || lower === 'window_context' || lower === 'frontmost_app') return 'get_active_window_context';
+  if (lower === 'get_hardware_telemetry' || lower === 'hardware_telemetry' || lower === 'system_telemetry' || lower === 'hardware_stats' || lower === 'cpu_usage' || lower === 'memory_usage' || lower === 'ram_usage' || lower === 'top_processes') return 'get_hardware_telemetry';
+  if (lower === 'get_global_shortcuts' || lower === 'global_shortcuts' || lower === 'keyboard_shortcuts' || lower === 'list_shortcuts' || lower === 'hotkeys') return 'get_global_shortcuts';
   if (lower === 'take_screenshot' || lower === 'capture_screen' || lower === 'screenshot' || lower === 'screen_capture') return 'take_screenshot';
   if (lower === 'gui_click' || lower === 'click' || lower === 'mouse_click') return 'gui_click';
   if (lower === 'gui_move' || lower === 'move' || lower === 'mouse_move' || lower === 'move_cursor' || lower === 'move_mouse') return 'gui_move';

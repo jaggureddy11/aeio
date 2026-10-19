@@ -272,6 +272,48 @@ async function handleWebFallback<T>(cmd: string, args?: Record<string, unknown>)
       time_remaining_minutes: null,
     } as unknown as T);
   }
+  if (cmd === 'get_active_window_context') {
+    return Promise.resolve({
+      app_name: 'Aeio Browser Studio',
+      window_title: 'Aeio — Desktop Assistant',
+      pid: 1420,
+      bounds: { x: 0, y: 0, width: 1440, height: 900 },
+    } as unknown as T);
+  }
+  if (cmd === 'get_hardware_telemetry') {
+    return Promise.resolve({
+      cpu_usage_percent: 18.5,
+      memory_total_mb: 16384,
+      memory_used_mb: 8192,
+      memory_used_percent: 50.0,
+      disk_total_gb: 512.0,
+      disk_available_gb: 245.8,
+      top_processes: [
+        { pid: 101, name: 'Aeio Desktop', cpu_percent: 4.2, memory_mb: 180.5 },
+        { pid: 102, name: 'Renderer', cpu_percent: 3.1, memory_mb: 220.0 },
+        { pid: 103, name: 'WindowServer', cpu_percent: 2.5, memory_mb: 145.2 },
+      ],
+    } as unknown as T);
+  }
+  if (cmd === 'get_global_shortcuts') {
+    return Promise.resolve([
+      {
+        shortcut: 'CmdOrCtrl+Shift+Space',
+        action: 'toggle_main_window',
+        description: 'Summon or hide the main Aeio assistant window',
+      },
+      {
+        shortcut: 'CmdOrCtrl+Shift+V',
+        action: 'toggle_voice_notch',
+        description: 'Toggle Dynamic Island Notch and Voice HUD',
+      },
+      {
+        shortcut: 'CmdOrCtrl+Shift+O',
+        action: 'inspect_screen',
+        description: 'Inspect active screen and capture visual context',
+      },
+    ] as unknown as T);
+  }
 
   if (
     cmd === 'read_clipboard' ||
@@ -779,6 +821,55 @@ export async function searchLocalFiles(query: string, limit?: number): Promise<F
 
 export async function getPowerStatus(): Promise<PowerStatusInfo> {
   return invoke<PowerStatusInfo>('get_power_status');
+}
+
+export interface WindowBounds {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export interface WindowContextInfo {
+  app_name: string;
+  window_title: string;
+  pid?: number | null;
+  bounds?: WindowBounds | null;
+}
+
+export interface ProcessSummary {
+  pid: number;
+  name: string;
+  cpu_percent: number;
+  memory_mb: number;
+}
+
+export interface HardwareTelemetryInfo {
+  cpu_usage_percent: number;
+  memory_total_mb: number;
+  memory_used_mb: number;
+  memory_used_percent: number;
+  disk_total_gb: number;
+  disk_available_gb: number;
+  top_processes: ProcessSummary[];
+}
+
+export interface GlobalShortcutInfo {
+  shortcut: string;
+  action: string;
+  description: string;
+}
+
+export async function getActiveWindowContext(): Promise<WindowContextInfo> {
+  return invoke<WindowContextInfo>('get_active_window_context');
+}
+
+export async function getHardwareTelemetry(): Promise<HardwareTelemetryInfo> {
+  return invoke<HardwareTelemetryInfo>('get_hardware_telemetry');
+}
+
+export async function getGlobalShortcuts(): Promise<GlobalShortcutInfo[]> {
+  return invoke<GlobalShortcutInfo[]>('get_global_shortcuts');
 }
 
 export async function captureScreen(outputPath: string): Promise<string> {

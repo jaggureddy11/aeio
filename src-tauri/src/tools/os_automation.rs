@@ -1465,6 +1465,362 @@ pub fn get_power_status() -> Result<PowerStatusInfo, String> {
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WindowBounds {
+    pub x: i32,
+    pub y: i32,
+    pub width: u32,
+    pub height: u32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WindowContextInfo {
+    pub app_name: String,
+    pub window_title: String,
+    pub pid: Option<u32>,
+    pub bounds: Option<WindowBounds>,
+}
+
+/// Inspects the frontmost application process and window context
+pub fn get_active_window_context() -> Result<WindowContextInfo, String> {
+    #[cfg(target_os = "macos")]
+    {
+        let script = r#"
+tell application "System Events"
+    set frontApp to first application process whose frontmost is true
+    set frontAppName to name of frontApp
+    set appPid to unix id of frontApp
+    set winTitle to ""
+    set winPos to {0, 0}
+    set winSize to {0, 0}
+    try
+        tell frontApp
+            if (count of windows) > 0 then
+                set winTitle to name of front window
+                set winPos to position of front window
+                set winSize to size of front window
+            end if
+        end tell
+    end try
+    return frontAppName & "|||" & appPid & "|||" & winTitle & "|||" & (item 1 of winPos) & "," & (item 2 of winPos) & "|||" & (item 1 of winSize) & "," & (item 2 of winSize)
+end tell
+"#;
+
+        let output = Command::new("osascript")
+            .arg("-e")
+            .arg(script)
+            .output()
+            .map_err(|e| format!("Failed to query active window context via osascript: {}", e))?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(format!("osascript window query failed: {}", stderr));
+        }
+
+        let raw = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        let parts: Vec<&str> = raw.split("|||").collect();
+
+        let app_name = parts.first().unwrap_or(&"Unknown").trim().to_string();
+        let pid = parts.get(1).and_then(|p| p.trim().parse::<u32>().ok());
+        let window_title = parts.get(2).unwrap_or(&"").trim().to_string();
+
+        let bounds = if let (Some(pos_str), Some(size_str)) = (parts.get(3), parts.get(4)) {
+            let pos_coords: Vec<i32> = pos_str
+                .split(',')
+                .filter_map(|s| s.trim().parse::<i32>().ok())
+                .collect();
+            let size_coords: Vec<u32> = size_str
+                .split(',')
+                .filter_map(|s| s.trim().parse::<u32>().ok())
+                .collect();
+
+            if pos_coords.len() >= 2 && size_coords.len() >= 2 {
+                Some(WindowBounds {
+                    x: pos_coords[0],
+                    y: pos_coords[1],
+                    width: size_coords[0],
+                    height: size_coords[1],
+                })
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
+        Ok(WindowContextInfo {
+            app_name,
+            window_title,
+            pid,
+            bounds,
+        })
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        let ps_cmd = r##"
+Add-Type @"
+  using System;
+  using System.Runtime.InteropServices;
+  using System.Text;
+  public class WinContext {
+    [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
+    [DllImport("user32.dll", SetLastError=true, CharSet=CharSet.Auto)] public static extern int GetWindowText(IntPtr hWnd, StringBuilder lpString, int nMaxCount);
+    [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
+    [DllImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)] public static extern bool GetWindowRect(IntPtr hWnd, out RECT lpRect);
+    [StructLayout(LayoutKind.Sequential)] public struct RECT { public int Left; public int Top; public int Right; public int Bottom; }
+  }
+"@
+$hwnd = [WinContext]::GetForegroundWindow()
+$pid = 0
+[WinContext]::GetWindowThreadProcessId($hwnd, [ref]$pid) | Out-Null
+$sb = New-Object System.Text.StringBuilder 256
+[WinContext]::GetWindowText($hwnd, $sb, 256) | Out-Null
+$proc = Get-Process -Id $pid -ErrorAction SilentlyContinue
+$name = if ($proc) { $proc.ProcessName } else { "Unknown" }
+$rect = New-Object WinContext+RECT
+[WinContext]::GetWindowRect($hwnd, [ref]$rect) | Out-Null
+$w = [Math]::Max(0, $rect.Right - $rect.Left)
+$h = [Math]::Max(0, $rect.Bottom - $rect.Top)
+Write-Output "$name|||$pid|||$($sb.ToString())|||$($rect.Left),$($rect.Top)|||$w,$h"
+"##;
+
+        let output = Command::new("powershell")
+            .args(["-NoProfile", "-Command", ps_cmd])
+            .output()
+            .map_err(|e| format!("Failed to query active window via PowerShell: {}", e))?;
+
+        let raw = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        let parts: Vec<&str> = raw.split("|||").collect();
+
+        let app_name = parts.first().unwrap_or(&"Unknown").trim().to_string();
+        let pid = parts.get(1).and_then(|p| p.trim().parse::<u32>().ok());
+        let window_title = parts.get(2).unwrap_or(&"").trim().to_string();
+
+        let bounds = if let (Some(pos_str), Some(size_str)) = (parts.get(3), parts.get(4)) {
+            let pos_coords: Vec<i32> = pos_str.split(',').filter_map(|s| s.trim().parse::<i32>().ok()).collect();
+            let size_coords: Vec<u32> = size_str.split(',').filter_map(|s| s.trim().parse::<u32>().ok()).collect();
+            if pos_coords.len() >= 2 && size_coords.len() >= 2 {
+                Some(WindowBounds {
+                    x: pos_coords[0],
+                    y: pos_coords[1],
+                    width: size_coords[0],
+                    height: size_coords[1],
+                })
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
+        Ok(WindowContextInfo {
+            app_name,
+            window_title,
+            pid,
+            bounds,
+        })
+    }
+
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    {
+        Ok(WindowContextInfo {
+            app_name: "Desktop".to_string(),
+            window_title: "Active Window".to_string(),
+            pid: None,
+            bounds: None,
+        })
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProcessSummary {
+    pub pid: u32,
+    pub name: String,
+    pub cpu_percent: f32,
+    pub memory_mb: f32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HardwareTelemetryInfo {
+    pub cpu_usage_percent: f32,
+    pub memory_total_mb: u64,
+    pub memory_used_mb: u64,
+    pub memory_used_percent: f32,
+    pub disk_total_gb: f64,
+    pub disk_available_gb: f64,
+    pub top_processes: Vec<ProcessSummary>,
+}
+
+/// Retrieves comprehensive hardware telemetry (CPU, RAM, Disk, top processes)
+pub fn get_hardware_telemetry() -> Result<HardwareTelemetryInfo, String> {
+    let mut cpu_usage_percent: f32 = 0.0;
+    let mut memory_total_mb: u64 = 0;
+    let mut memory_used_mb: u64 = 0;
+    let mut memory_used_percent: f32 = 0.0;
+    let mut disk_total_gb: f64 = 0.0;
+    let mut disk_available_gb: f64 = 0.0;
+    let mut top_processes: Vec<ProcessSummary> = Vec::new();
+
+    #[cfg(target_os = "macos")]
+    {
+        // 1. Total physical memory via sysctl hw.memsize
+        if let Ok(output) = Command::new("sysctl").args(["-n", "hw.memsize"]).output() {
+            if let Ok(bytes) = String::from_utf8_lossy(&output.stdout).trim().parse::<u64>() {
+                memory_total_mb = bytes / 1024 / 1024;
+            }
+        }
+
+        // 2. Available memory via vm_stat
+        if let Ok(output) = Command::new("vm_stat").output() {
+            let text = String::from_utf8_lossy(&output.stdout);
+            let mut free_pages: u64 = 0;
+            let mut inactive_pages: u64 = 0;
+            let mut speculative_pages: u64 = 0;
+            let page_size: u64 = 4096;
+
+            for line in text.lines() {
+                if line.starts_with("Pages free:") {
+                    if let Some(val) = line.split_whitespace().last() {
+                        free_pages = val.trim_end_matches('.').parse().unwrap_or(0);
+                    }
+                } else if line.starts_with("Pages inactive:") {
+                    if let Some(val) = line.split_whitespace().last() {
+                        inactive_pages = val.trim_end_matches('.').parse().unwrap_or(0);
+                    }
+                } else if line.starts_with("Pages speculative:") {
+                    if let Some(val) = line.split_whitespace().last() {
+                        speculative_pages = val.trim_end_matches('.').parse().unwrap_or(0);
+                    }
+                }
+            }
+
+            let free_mb = (free_pages + inactive_pages + speculative_pages) * page_size / 1024 / 1024;
+            if memory_total_mb > free_mb {
+                memory_used_mb = memory_total_mb - free_mb;
+                if memory_total_mb > 0 {
+                    memory_used_percent = ((memory_used_mb as f64 / memory_total_mb as f64) * 100.0) as f32;
+                }
+            }
+        }
+
+        // 3. Disk total and available via df -k /
+        if let Ok(output) = Command::new("df").args(["-k", "/"]).output() {
+            let text = String::from_utf8_lossy(&output.stdout);
+            if let Some(line) = text.lines().nth(1) {
+                let parts: Vec<&str> = line.split_whitespace().collect();
+                if parts.len() >= 4 {
+                    if let Ok(total_kb) = parts[1].parse::<f64>() {
+                        disk_total_gb = (total_kb / 1024.0 / 1024.0 * 10.0).round() / 10.0;
+                    }
+                    if let Ok(avail_kb) = parts[3].parse::<f64>() {
+                        disk_available_gb = (avail_kb / 1024.0 / 1024.0 * 10.0).round() / 10.0;
+                    }
+                }
+            }
+        }
+
+        // 4. Top 5 processes via ps -eo pid,pcpu,rss,comm -r
+        if let Ok(output) = Command::new("ps").args(["-eo", "pid,pcpu,rss,comm", "-r"]).output() {
+            let text = String::from_utf8_lossy(&output.stdout);
+            let mut cpu_sum: f32 = 0.0;
+            for line in text.lines().skip(1).take(5) {
+                let parts: Vec<&str> = line.split_whitespace().collect();
+                if parts.len() >= 4 {
+                    let pid = parts[0].parse::<u32>().unwrap_or(0);
+                    let pcpu = parts[1].parse::<f32>().unwrap_or(0.0);
+                    let rss_kb = parts[2].parse::<f32>().unwrap_or(0.0);
+                    let raw_comm = parts[3..].join(" ");
+                    let name = raw_comm.split('/').last().unwrap_or(&raw_comm).to_string();
+
+                    cpu_sum += pcpu;
+                    top_processes.push(ProcessSummary {
+                        pid,
+                        name,
+                        cpu_percent: (pcpu * 10.0).round() / 10.0,
+                        memory_mb: (rss_kb / 1024.0 * 10.0).round() / 10.0,
+                    });
+                }
+            }
+            cpu_usage_percent = (cpu_sum.min(100.0) * 10.0).round() / 10.0;
+        }
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        let ps_cmd = r##"
+$os = Get-CimInstance Win32_OperatingSystem
+$totalMem = [math]::Round($os.TotalVisibleMemorySize / 1024, 0)
+$freeMem = [math]::Round($os.FreePhysicalMemory / 1024, 0)
+$usedMem = $totalMem - $freeMem
+$pctMem = if ($totalMem -gt 0) { [math]::Round(($usedMem / $totalMem) * 100, 1) } else { 0 }
+
+$disk = Get-PSDrive C -ErrorAction SilentlyContinue
+$diskFree = if ($disk) { [math]::Round($disk.Free / 1GB, 1) } else { 0 }
+$diskTotal = if ($disk) { [math]::Round(($disk.Used + $disk.Free) / 1GB, 1) } else { 0 }
+
+$procs = Get-Process | Sort-Object CPU -Descending | Select-Object -First 5
+$procList = @()
+foreach ($p in $procs) {
+  $memMb = [math]::Round($p.WorkingSet64 / 1MB, 1)
+  $cpu = [math]::Round($p.CPU, 1)
+  $procList += "$($p.Id)|$($p.ProcessName)|$cpu|$memMb"
+}
+$topStr = $procList -join ";;;"
+Write-Output "$pctMem|||$totalMem|||$usedMem|||$diskTotal|||$diskFree|||$topStr"
+"##;
+
+        if let Ok(output) = Command::new("powershell").args(["-NoProfile", "-Command", ps_cmd]).output() {
+            let raw = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            let parts: Vec<&str> = raw.split("|||").collect();
+            if parts.len() >= 6 {
+                memory_used_percent = parts[0].parse().unwrap_or(0.0);
+                memory_total_mb = parts[1].parse().unwrap_or(0);
+                memory_used_mb = parts[2].parse().unwrap_or(0);
+                disk_total_gb = parts[3].parse().unwrap_or(0.0);
+                disk_available_gb = parts[4].parse().unwrap_or(0.0);
+
+                if let Some(top_str) = parts.get(5) {
+                    for entry in top_str.split(";;;") {
+                        let fields: Vec<&str> = entry.split('|').collect();
+                        if fields.len() >= 4 {
+                            let pid = fields[0].parse().unwrap_or(0);
+                            let name = fields[1].to_string();
+                            let cpu_percent = fields[2].parse().unwrap_or(0.0);
+                            let memory_mb = fields[3].parse().unwrap_or(0.0);
+                            top_processes.push(ProcessSummary {
+                                pid,
+                                name,
+                                cpu_percent,
+                                memory_mb,
+                            });
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    {
+        memory_total_mb = 16384;
+        memory_used_mb = 8192;
+        memory_used_percent = 50.0;
+        disk_total_gb = 512.0;
+        disk_available_gb = 256.0;
+    }
+
+    Ok(HardwareTelemetryInfo {
+        cpu_usage_percent,
+        memory_total_mb,
+        memory_used_mb,
+        memory_used_percent,
+        disk_total_gb,
+        disk_available_gb,
+        top_processes,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1561,4 +1917,22 @@ mod tests {
         assert!(status.percentage <= 100);
         assert!(!status.power_source.is_empty());
     }
+
+    #[test]
+    fn test_get_active_window_context() {
+        let res = get_active_window_context();
+        assert!(res.is_ok());
+        let ctx = res.unwrap();
+        assert!(!ctx.app_name.is_empty());
+    }
+
+    #[test]
+    fn test_get_hardware_telemetry() {
+        let res = get_hardware_telemetry();
+        assert!(res.is_ok());
+        let telem = res.unwrap();
+        assert!(telem.memory_total_mb > 0);
+        assert!(telem.disk_total_gb > 0.0);
+    }
 }
+

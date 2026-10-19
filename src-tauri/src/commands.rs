@@ -689,3 +689,41 @@ pub fn toggle_main_window(app: tauri::AppHandle) -> Result<bool, String> {
     }
 }
 
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct GlobalShortcutInfo {
+    pub shortcut: String,
+    pub action: String,
+    pub description: String,
+}
+
+#[tauri::command]
+pub fn get_global_shortcuts() -> Vec<GlobalShortcutInfo> {
+    vec![
+        GlobalShortcutInfo {
+            shortcut: "CmdOrCtrl+Shift+Space".to_string(),
+            action: "toggle_main_window".to_string(),
+            description: "Summon or hide the main Aeio assistant window".to_string(),
+        },
+        GlobalShortcutInfo {
+            shortcut: "CmdOrCtrl+Shift+V".to_string(),
+            action: "toggle_voice_notch".to_string(),
+            description: "Toggle Dynamic Island Notch and Voice HUD".to_string(),
+        },
+        GlobalShortcutInfo {
+            shortcut: "CmdOrCtrl+Shift+O".to_string(),
+            action: "inspect_screen".to_string(),
+            description: "Inspect active screen and capture visual context".to_string(),
+        },
+    ]
+}
+
+#[tauri::command]
+pub fn get_active_window_context() -> Result<crate::tools::WindowContextInfo, String> {
+    crate::tools::get_active_window_context()
+}
+
+#[tauri::command]
+pub fn get_hardware_telemetry() -> Result<crate::tools::HardwareTelemetryInfo, String> {
+    crate::tools::get_hardware_telemetry()
+}
+

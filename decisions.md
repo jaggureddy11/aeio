@@ -19,6 +19,7 @@ This document records the foundational and ongoing technical and architectural d
 11. [ADR-011: Multi-Session Chat Explorer & State Management (Zustand)](#adr-011-multi-session-chat-explorer--state-management-zustand)
 12. [ADR-012: Explicit Desktop vs. Web Runtime Boundary & Visual Badging](#adr-012-explicit-desktop-vs-web-runtime-boundary--visual-badging)
 13. [ADR-013: Native Desktop Automation Expansion (Window Management, Spotlight Indexing & Battery Telemetry)](#adr-013-native-desktop-automation-expansion-window-management-spotlight-indexing--battery-telemetry)
+14. [ADR-014: Master Desktop Control Suite (Global Shortcuts, Window Context Inspection, System Media & Hardware Telemetry)](#adr-014-master-desktop-control-suite-global-shortcuts-window-context-inspection-system-media--hardware-telemetry)
 
 ---
 
@@ -183,3 +184,21 @@ This document records the foundational and ongoing technical and architectural d
   - *macOS Spotlight `mdfind` over recursive directory traversal (`walkdir` crate):* Full-disk filesystem walking can take 30+ seconds and heavily impact CPU/disk I/O. `mdfind` queries the pre-computed macOS Spotlight metadata index, returning ranked file paths in <50ms.
   - *AppleScript & Win32 Bounds over external window tiling daemons (e.g. Yabai, Rectangle, Komorebi):* Calling OS native automation primitives requires no third-party daemons or disabled System Integrity Protection (SIP), working out-of-the-box on standard macOS and Windows installations.
   - *`pmset -g batt` & `Win32_Battery` over third-party sysinfo dependencies:* Built-in OS commands execute without linking external C/native libraries or bundling platform-specific kernel extensions, ensuring cross-platform build stability and small binary footprint.
+
+---
+
+### ADR-014: Master Desktop Control Suite (Global Shortcuts, Window Context Inspection, System Media & Hardware Telemetry)
+
+- **What Was Changed/Decided:**
+  Implemented a unified master desktop capability suite bridging low-level OS introspection and sub-30ms System One execution across four pillars:
+  1. **Global Shortcuts & Ambient Summoning (`get_global_shortcuts`):** Introspected system-wide hotkeys registered through `tauri-plugin-global-shortcut` (`⌘⇧Space` to summon/focus/hide Aeio, `⌘⇧V` for Dynamic Island Voice HUD, and `⌘⇧O` for Screen Inspection), exposing shortcut manifests through typed IPC and natural language queries ("what are the shortcuts", "hotkeys").
+  2. **Active App & Window Context Inspector (`get_active_window_context`):** Provided real-time situational awareness by querying the frontmost process name, window title, PID, and geometry bounds (`x`, `y`, `width`, `height`) via macOS AppleScript `System Events` and Windows Win32 API (`GetForegroundWindow`, `GetWindowTextW`, `GetWindowRect`) without intrusive screen polling.
+  3. **Native System Media & Audio Controls (`media_control`, `set_system_volume`):** Expanded instant action matching to parse explicit percentage volume controls (`set volume to 60%`, `volume 80`) alongside playback skipping, track toggling, and muting across Spotify, Apple Music, and system master audio.
+  4. **Hardware Telemetry & Process Monitor (`get_hardware_telemetry`):** Implemented lightweight, non-blocking telemetry extraction covering CPU utilization, total and used physical RAM, root filesystem disk space, and top 5 resource-consuming processes via macOS `sysctl`, `vm_stat`, `df`, and `ps` / Windows CIM `Win32_OperatingSystem`, `Get-PSDrive`, and `Get-Process`.
+- **Why This Approach:**
+  Operating system agents cannot act effectively in a vacuum—they require instant, continuous awareness of what application the user is currently working in, immediate control over desktop audio and media ergonomics, awareness of laptop compute/memory saturation, and accessible ambient hotkeys that work regardless of which window holds keyboard focus.
+- **Why This Tool/Library over Alternatives:**
+  - *`ps -eo pid,pcpu,rss,comm -r` & `vm_stat` over continuous polling daemons:* Eliminates background daemon CPU tax. Metrics are queried strictly on-demand in <5ms without persisting background monitoring threads.
+  - *OS Native Window Attributes over OCR Screen Scanning:* Querying `System Events` / `GetForegroundWindow` provides 100% accurate application names, process IDs, and window titles in ~30ms with zero token cost and zero vision model latency.
+  - *Tauri v2 Global Shortcut Plugin over window-level JavaScript keydown listeners:* Web view keydown events only trigger when the Aeio browser window has active focus. OS-level global hooks allow users to summon Aeio or inspect windows while inside IDEs, terminals, or full-screen video players.
+

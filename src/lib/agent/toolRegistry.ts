@@ -26,6 +26,9 @@ import {
   manageActiveWindow,
   searchLocalFiles,
   getPowerStatus,
+  getActiveWindowContext,
+  getHardwareTelemetry,
+  getGlobalShortcuts,
   captureScreen,
   readClipboard,
   writeClipboard,
@@ -674,6 +677,30 @@ export const AVAILABLE_AGENT_TOOLS: AgentToolDefinition[] = [
     },
   },
   {
+    name: 'get_active_window_context',
+    description: 'Inspects the frontmost application process, window title, PID, and window bounds.',
+    parameters: {
+      type: 'object',
+      properties: {},
+    },
+  },
+  {
+    name: 'get_hardware_telemetry',
+    description: 'Queries comprehensive hardware performance metrics: CPU load percentage, RAM usage (used/total/percent), disk space, and top resource-consuming processes.',
+    parameters: {
+      type: 'object',
+      properties: {},
+    },
+  },
+  {
+    name: 'get_global_shortcuts',
+    description: 'Retrieves all registered system-wide global hotkeys and their desktop automation actions.',
+    parameters: {
+      type: 'object',
+      properties: {},
+    },
+  },
+  {
     name: 'finish',
     description: 'Call this tool when the overall goal has been completely achieved, providing a concise final summary.',
     parameters: {
@@ -834,6 +861,18 @@ export async function executeAgentTool(toolName: string, args: Record<string, an
 
     case 'get_power_status': {
       return await getPowerStatus();
+    }
+
+    case 'get_active_window_context': {
+      return await getActiveWindowContext();
+    }
+
+    case 'get_hardware_telemetry': {
+      return await getHardwareTelemetry();
+    }
+
+    case 'get_global_shortcuts': {
+      return await getGlobalShortcuts();
     }
 
     case 'math_evaluate': {

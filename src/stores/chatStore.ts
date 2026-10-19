@@ -41,6 +41,9 @@ import {
   manageActiveWindow,
   searchLocalFiles,
   getPowerStatus,
+  getActiveWindowContext,
+  getHardwareTelemetry,
+  getGlobalShortcuts,
 } from '../lib/ipc';
 import { inspectActiveScreen } from '../lib/vision/screenInspector';
 import { evaluateMath, solveEquation, solveSystem } from '../lib/agent/tools/mathTool';
@@ -2007,6 +2010,18 @@ export const useChatStore = create<ChatState>((set, get) => ({
             result = await getPowerStatus();
             break;
           }
+          case 'get_active_window_context': {
+            result = await getActiveWindowContext();
+            break;
+          }
+          case 'get_hardware_telemetry': {
+            result = await getHardwareTelemetry();
+            break;
+          }
+          case 'get_global_shortcuts': {
+            result = await getGlobalShortcuts();
+            break;
+          }
           default: {
             result = await executeAgentTool(instantAction.toolName, instantAction.args);
             break;
@@ -2041,6 +2056,19 @@ export const useChatStore = create<ChatState>((set, get) => ({
               const items = result.slice(0, 8).map((f: any) => `- \`${f.path}\``).join('\n');
               finalMsg = `Found ${result.length} matching file${result.length > 1 ? 's' : ''} for "${instantAction.args.query}":\n${items}`;
             }
+          } else if (instantAction.toolName === 'get_active_window_context' && result) {
+            const boundsStr = result.bounds ? ` (${result.bounds.width}x${result.bounds.height} at ${result.bounds.x},${result.bounds.y})` : '';
+            const titleStr = result.window_title ? ` — *"${result.window_title}"*` : '';
+            const pidStr = result.pid ? ` (PID: ${result.pid})` : '';
+            finalMsg = `Active Window: **${result.app_name}**${titleStr}${pidStr}${boundsStr}`;
+          } else if (instantAction.toolName === 'get_hardware_telemetry' && result) {
+            const topProcStr = Array.isArray(result.top_processes) && result.top_processes.length > 0
+              ? '\n\n**Top Processes:**\n' + result.top_processes.map((p: any) => `- **${p.name}** (PID ${p.pid}): ${p.cpu_percent}% CPU, ${p.memory_mb} MB RAM`).join('\n')
+              : '';
+            finalMsg = `🖥️ **System Telemetry:**\n- **CPU Load:** ${result.cpu_usage_percent}%\n- **Memory:** ${result.memory_used_mb} MB / ${result.memory_total_mb} MB (${result.memory_used_percent}%)\n- **Disk (Root):** ${(result.disk_total_gb - result.disk_available_gb).toFixed(1)} GB used of ${result.disk_total_gb} GB (${result.disk_available_gb} GB free)${topProcStr}`;
+          } else if (instantAction.toolName === 'get_global_shortcuts' && Array.isArray(result)) {
+            const shortcutsList = result.map((s: any) => `- \`${s.shortcut}\`: ${s.description}`).join('\n');
+            finalMsg = `⌨️ **Registered Global Shortcuts:**\n${shortcutsList}`;
           }
 
           get().updateMessageContent(

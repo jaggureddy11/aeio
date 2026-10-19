@@ -635,6 +635,57 @@ export function matchInstantAction(prompt: string): InstantActionMatch | null {
     };
   }
 
+  // 20. Explicit System Volume Percentage
+  const volPctMatch = trimmed.match(/^(?:set\s+)?(?:system\s+)?volume\s+(?:to\s+)?(\d{1,3})%?$/i);
+  if (volPctMatch && volPctMatch[1]) {
+    const level = Math.min(100, Math.max(0, parseInt(volPctMatch[1], 10)));
+    return {
+      toolName: 'set_system_volume',
+      args: { level },
+      statusText: `Setting system volume to ${level}%...`,
+      completedMessage: `System volume set to ${level}%.`,
+      isDestructive: false,
+      riskTier: 'low',
+    };
+  }
+
+  // 21. Active App & Window Context Query
+  if (/^(?:what\s+app\s+am\s+i\s+using|what(?:'s|\s+is)\s+(?:the\s+)?(?:active|current|frontmost)\s+(?:app|application|window)|active\s+(?:window|app)|current\s+(?:app|window)|inspect\s+(?:active\s+|current\s+)?(?:app|window))$/i.test(trimmed)) {
+    return {
+      toolName: 'get_active_window_context',
+      args: {},
+      statusText: 'Inspecting frontmost application and active window context...',
+      completedMessage: 'Active window context retrieved.',
+      isDestructive: false,
+      riskTier: 'low',
+    };
+  }
+
+  // 22. Hardware Telemetry & Performance Query
+  if (/^(?:(?:check|get|what(?:'s|\s+is))\s+(?:my\s+|the\s+)?(?:system\s+(?:performance|telemetry|status|health)|hardware\s+(?:stats|telemetry|status)|cpu(?:\s+usage|\s+load)?|ram(?:\s+usage)?|memory\s+usage)|(?:system\s+(?:performance|telemetry|status|health)|hardware\s+stats|cpu\s+usage|ram\s+usage|memory\s+usage|disk\s+space|top\s+processes))$/i.test(trimmed)) {
+    return {
+      toolName: 'get_hardware_telemetry',
+      args: {},
+      statusText: 'Collecting hardware performance & telemetry metrics...',
+      completedMessage: 'System hardware telemetry retrieved.',
+      isDestructive: false,
+      riskTier: 'low',
+    };
+  }
+
+  // 23. Global Keyboard Shortcuts Info
+  if (/^(?:(?:show|list|what\s+are)\s+(?:the\s+)?(?:keyboard\s+)?(?:shortcuts|hotkeys)|keyboard\s+shortcuts|hotkeys)$/i.test(trimmed)) {
+    return {
+      toolName: 'get_global_shortcuts',
+      args: {},
+      statusText: 'Retrieving registered global shortcuts and hotkeys...',
+      completedMessage: 'Registered global shortcuts retrieved.',
+      isDestructive: false,
+      riskTier: 'low',
+    };
+  }
+
   return null;
 }
+
 

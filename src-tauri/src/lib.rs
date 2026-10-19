@@ -282,6 +282,9 @@ pub fn run() {
             commands::get_notch_window_state,
             commands::show_main_window,
             commands::toggle_main_window,
+            commands::get_global_shortcuts,
+            commands::get_active_window_context,
+            commands::get_hardware_telemetry,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
