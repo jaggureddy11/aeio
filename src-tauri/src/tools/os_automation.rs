@@ -1275,6 +1275,196 @@ pub fn capture_screen_data() -> Result<ScreenData, String> {
     })
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FileSearchResult {
+    pub path: String,
+    pub name: String,
+    pub is_dir: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PowerStatusInfo {
+    pub percentage: u8,
+    pub is_charging: bool,
+    pub power_source: String,
+    pub time_remaining_minutes: Option<u32>,
+}
+
+/// Search local files using native OS indexed search (Spotlight mdfind on macOS, PowerShell on Windows)
+pub fn search_local_files(query: &str, limit: Option<usize>) -> Result<Vec<FileSearchResult>, String> {
+    let max_results = limit.unwrap_or(20).min(100);
+    let trimmed = query.trim();
+    if trimmed.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        let output = Command::new("mdfind")
+            .arg("-name")
+            .arg(trimmed)
+            .output()
+            .map_err(|e| format!("Failed to run mdfind: {}", e))?;
+
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let mut results = Vec::new();
+        for line in stdout.lines() {
+            let path_str = line.trim();
+            if path_str.is_empty() {
+                continue;
+            }
+            let path = std::path::Path::new(path_str);
+            let name = path.file_name()
+                .map(|n| n.to_string_lossy().to_string())
+                .unwrap_or_else(|| path_str.to_string());
+            let is_dir = path.is_dir();
+
+            results.push(FileSearchResult {
+                path: path_str.to_string(),
+                name,
+                is_dir,
+            });
+
+            if results.len() >= max_results {
+                break;
+            }
+        }
+        Ok(results)
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        let ps_cmd = format!(
+            "Get-ChildItem -Path $env:USERPROFILE -Filter '*{0}*' -Recurse -ErrorAction SilentlyContinue | Select-Object -First {1} | ForEach-Object {{ $_.FullName + '|||' + $_.PSIsContainer }}",
+            trimmed, max_results
+        );
+        let output = Command::new("powershell")
+            .args(["-NoProfile", "-NonInteractive", "-Command", &ps_cmd])
+            .output()
+            .map_err(|e| format!("Failed to run powershell file search: {}", e))?;
+
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let mut results = Vec::new();
+        for line in stdout.lines() {
+            let parts: Vec<&str> = line.trim().split("|||").collect();
+            if let Some(p) = parts.first() {
+                if !p.is_empty() {
+                    let path = std::path::Path::new(p);
+                    let name = path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_else(|| p.to_string());
+                    let is_dir = parts.get(1).map(|v| v.trim().eq_ignore_ascii_case("true")).unwrap_or(false);
+                    results.push(FileSearchResult {
+                        path: p.to_string(),
+                        name,
+                        is_dir,
+                    });
+                }
+            }
+        }
+        Ok(results)
+    }
+
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    {
+        Ok(Vec::new())
+    }
+}
+
+/// Retrieve current battery percentage, charging state, and power source.
+pub fn get_power_status() -> Result<PowerStatusInfo, String> {
+    #[cfg(target_os = "macos")]
+    {
+        let output = Command::new("pmset")
+            .args(["-g", "batt"])
+            .output()
+            .map_err(|e| format!("Failed to execute pmset: {}", e))?;
+
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let power_source = if stdout.contains("'AC Power'") {
+            "AC Power".to_string()
+        } else {
+            "Battery Power".to_string()
+        };
+
+        let is_charging = stdout.contains("charging") && !stdout.contains("not charging");
+
+        let mut percentage = 100u8;
+        let mut time_remaining_minutes: Option<u32> = None;
+
+        for line in stdout.lines() {
+            if line.contains('%') {
+                if let Some(pct_idx) = line.find('%') {
+                    let prefix = &line[..pct_idx];
+                    if let Some(last_token) = prefix.split(|c: char| c.is_whitespace() || c == '\t' || c == '(').last() {
+                        if let Ok(val) = last_token.parse::<u8>() {
+                            percentage = val;
+                        }
+                    }
+                }
+                if let Some(rem_idx) = line.find(" remaining") {
+                    let before_rem = &line[..rem_idx];
+                    if let Some(time_str) = before_rem.split(';').last().map(|s| s.trim()) {
+                        let parts: Vec<&str> = time_str.split(':').collect();
+                        if parts.len() == 2 {
+                            if let (Ok(h), Ok(m)) = (parts[0].parse::<u32>(), parts[1].parse::<u32>()) {
+                                time_remaining_minutes = Some(h * 60 + m);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        Ok(PowerStatusInfo {
+            percentage,
+            is_charging,
+            power_source,
+            time_remaining_minutes,
+        })
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        let ps_cmd = r#"
+            $b = Get-CimInstance -ClassName Win32_Battery -ErrorAction SilentlyContinue
+            if ($b) {
+                $charge = $b.EstimatedChargeRemaining
+                $status = $b.BatteryStatus
+                $isCharging = ($status -eq 6 -or $status -eq 2)
+                "$charge|||$isCharging|||Battery Power"
+            } else {
+                "100|||True|||AC Power"
+            }
+        "#;
+        let output = Command::new("powershell")
+            .args(["-NoProfile", "-NonInteractive", "-Command", ps_cmd])
+            .output()
+            .map_err(|e| format!("Failed to query battery via PowerShell: {}", e))?;
+
+        let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        let parts: Vec<&str> = stdout.split("|||").collect();
+        let percentage = parts.first().and_then(|p| p.trim().parse::<u8>().ok()).unwrap_or(100);
+        let is_charging = parts.get(1).map(|v| v.trim().eq_ignore_ascii_case("true")).unwrap_or(true);
+        let power_source = parts.get(2).unwrap_or(&"AC Power").trim().to_string();
+
+        Ok(PowerStatusInfo {
+            percentage,
+            is_charging,
+            power_source,
+            time_remaining_minutes: None,
+        })
+    }
+
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    {
+        Ok(PowerStatusInfo {
+            percentage: 100,
+            is_charging: true,
+            power_source: "AC Power".to_string(),
+            time_remaining_minutes: None,
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1351,5 +1541,24 @@ mod tests {
         // Invalid short header returns None
         header.truncate(10);
         assert_eq!(get_png_dimensions(&header), None);
+    }
+
+    #[test]
+    fn test_search_local_files_empty_and_query() {
+        let empty_res = search_local_files("", Some(5));
+        assert!(empty_res.is_ok());
+        assert!(empty_res.unwrap().is_empty());
+
+        let res = search_local_files("package.json", Some(3));
+        assert!(res.is_ok());
+    }
+
+    #[test]
+    fn test_get_power_status() {
+        let res = get_power_status();
+        assert!(res.is_ok());
+        let status = res.unwrap();
+        assert!(status.percentage <= 100);
+        assert!(!status.power_source.is_empty());
     }
 }

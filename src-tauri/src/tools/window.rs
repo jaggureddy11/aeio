@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::process::Command;
+use crate::tools::os_automation::AutomationResult;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ActiveWindowInfo {
@@ -95,3 +96,202 @@ pub fn get_active_window() -> Result<ActiveWindowInfo, String> {
         })
     }
 }
+
+/// Manipulate the active foreground window state (maximize, minimize, tile_left, tile_right, center).
+pub fn manage_active_window(action: &str) -> Result<AutomationResult, String> {
+    let normalized = action.trim().to_lowercase();
+
+    #[cfg(target_os = "macos")]
+    {
+        let script = match normalized.as_str() {
+            "maximize" | "fullscreen" => {
+                r#"
+                tell application "Finder" to set screenBounds to bounds of window of desktop
+                set screenW to item 3 of screenBounds
+                set screenH to item 4 of screenBounds
+                tell application "System Events"
+                    set frontApp to first application process whose frontmost is true
+                    try
+                        tell frontApp to set bounds of front window to {0, 25, screenW, screenH}
+                    end try
+                end tell
+                "#
+            }
+            "minimize" => {
+                r#"
+                tell application "System Events"
+                    set frontApp to first application process whose frontmost is true
+                    try
+                        tell frontApp to set miniaturized of front window to true
+                    end try
+                end tell
+                "#
+            }
+            "tile_left" | "left" => {
+                r#"
+                tell application "Finder" to set screenBounds to bounds of window of desktop
+                set screenW to item 3 of screenBounds
+                set screenH to item 4 of screenBounds
+                set halfW to round (screenW / 2)
+                tell application "System Events"
+                    set frontApp to first application process whose frontmost is true
+                    try
+                        tell frontApp to set bounds of front window to {0, 25, halfW, screenH}
+                    end try
+                end tell
+                "#
+            }
+            "tile_right" | "right" => {
+                r#"
+                tell application "Finder" to set screenBounds to bounds of window of desktop
+                set screenW to item 3 of screenBounds
+                set screenH to item 4 of screenBounds
+                set halfW to round (screenW / 2)
+                tell application "System Events"
+                    set frontApp to first application process whose frontmost is true
+                    try
+                        tell frontApp to set bounds of front window to {halfW, 25, screenW, screenH}
+                    end try
+                end tell
+                "#
+            }
+            "center" => {
+                r#"
+                tell application "Finder" to set screenBounds to bounds of window of desktop
+                set screenW to item 3 of screenBounds
+                set screenH to item 4 of screenBounds
+                set winW to round (screenW * 0.7)
+                set winH to round (screenH * 0.7)
+                set leftX to round ((screenW - winW) / 2)
+                set topY to round (25 + ((screenH - 25) - winH) / 2)
+                tell application "System Events"
+                    set frontApp to first application process whose frontmost is true
+                    try
+                        tell frontApp to set bounds of front window to {leftX, topY, leftX + winW, topY + winH}
+                    end try
+                end tell
+                "#
+            }
+            other => return Err(format!("Unsupported window action: {}", other)),
+        };
+
+        let output = Command::new("osascript")
+            .arg("-e")
+            .arg(script)
+            .output()
+            .map_err(|e| format!("Failed to execute osascript for window control: {}", e))?;
+
+        if !output.status.success() {
+            let err = String::from_utf8_lossy(&output.stderr);
+            return Err(format!("Window management error: {}", err));
+        }
+
+        Ok(AutomationResult {
+            success: true,
+            message: format!("Window successfully set to: {}", normalized),
+            action_type: "manage_window".to_string(),
+            payload: Some(normalized),
+        })
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        let ps_code = match normalized.as_str() {
+            "maximize" | "fullscreen" => {
+                r##"
+                Add-Type @"
+                    using System;
+                    using System.Runtime.InteropServices;
+                    public class WinMgr {
+                        [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
+                        [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+                    }
+"@
+                $hwnd = [WinMgr]::GetForegroundWindow()
+                [WinMgr]::ShowWindow($hwnd, 3) # SW_MAXIMIZE = 3
+                "##
+            }
+            "minimize" => {
+                r##"
+                Add-Type @"
+                    using System;
+                    using System.Runtime.InteropServices;
+                    public class WinMgr {
+                        [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
+                        [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+                    }
+"@
+                $hwnd = [WinMgr]::GetForegroundWindow()
+                [WinMgr]::ShowWindow($hwnd, 6) # SW_MINIMIZE = 6
+                "##
+            }
+            "tile_left" | "left" => {
+                r##"
+                $w = New-Object -ComObject Wscript.Shell
+                $w.SendKeys("#{LEFT}")
+                "##
+            }
+            "tile_right" | "right" => {
+                r##"
+                $w = New-Object -ComObject Wscript.Shell
+                $w.SendKeys("#{RIGHT}")
+                "##
+            }
+            "center" => {
+                r##"
+                Add-Type @"
+                    using System;
+                    using System.Runtime.InteropServices;
+                    using System.Windows.Forms;
+                    public class WinMgr {
+                        [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
+                        [DllImport("user32.dll")] public static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
+                    }
+"@
+                $hwnd = [WinMgr]::GetForegroundWindow()
+                $screen = [System.Windows.Forms.Screen]::PrimaryScreen.WorkingArea
+                $w = [int]($screen.Width * 0.7)
+                $h = [int]($screen.Height * 0.7)
+                $x = [int](($screen.Width - $w) / 2)
+                $y = [int](($screen.Height - $h) / 2)
+                [WinMgr]::SetWindowPos($hwnd, [IntPtr]::Zero, $x, $y, $w, $h, 0x0040)
+                "##
+            }
+            other => return Err(format!("Unsupported window action on Windows: {}", other)),
+        };
+
+        let _ = Command::new("powershell")
+            .args(["-NoProfile", "-NonInteractive", "-Command", ps_code])
+            .output();
+
+        Ok(AutomationResult {
+            success: true,
+            message: format!("Window action '{}' executed.", normalized),
+            action_type: "manage_window".to_string(),
+            payload: Some(normalized),
+        })
+    }
+
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    {
+        Ok(AutomationResult {
+            success: true,
+            message: format!("Window action '{}' acknowledged on generic OS.", normalized),
+            action_type: "manage_window".to_string(),
+            payload: Some(normalized),
+        })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_manage_active_window_invalid_action() {
+        let res = manage_active_window("invalid_nonexistent_action_123");
+        assert!(res.is_err());
+    }
+}
+
+

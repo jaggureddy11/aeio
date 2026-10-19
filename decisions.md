@@ -18,6 +18,7 @@ This document records the foundational and ongoing technical and architectural d
 10. [ADR-010: Native Credentials & Vault Security — OS Native Keyrings](#adr-010-native-credentials--vault-security--os-native-keyrings)
 11. [ADR-011: Multi-Session Chat Explorer & State Management (Zustand)](#adr-011-multi-session-chat-explorer--state-management-zustand)
 12. [ADR-012: Explicit Desktop vs. Web Runtime Boundary & Visual Badging](#adr-012-explicit-desktop-vs-web-runtime-boundary--visual-badging)
+13. [ADR-013: Native Desktop Automation Expansion (Window Management, Spotlight Indexing & Battery Telemetry)](#adr-013-native-desktop-automation-expansion-window-management-spotlight-indexing--battery-telemetry)
 
 ---
 
@@ -165,3 +166,20 @@ This document records the foundational and ongoing technical and architectural d
   The capabilities of the desktop application (full OS input automation, local application launching, global hotkeys) differ fundamentally from a browser tab (sandboxed, restricted to DOM). Clear visual badging and runtime branching eliminate user confusion regarding why certain OS-level actions only execute when running the native binary.
 - **Why This Tool/Library over Alternatives:**
   - *Dynamic `@tauri-apps/api/core` detection (`window.__TAURI_INTERNALS__`) over build-time environment flags:* Allows the exact same compiled frontend bundle to run in Vite development mode, web testing environments, and inside the native Tauri container without separate builds.
+
+---
+
+### ADR-013: Native Desktop Automation Expansion (Window Management, Spotlight Indexing & Battery Telemetry)
+
+- **What Was Changed/Decided:**
+  Expanded Aeio's native desktop automation toolkit across three core system capabilities:
+  1. **Window Management (`manage_active_window`):** Supported `maximize`, `minimize`, `tile_left`, `tile_right`, and `center` on the frontmost application window via macOS AppleScript window bounds and Windows Win32 / WScript `SendKeys` (`#{LEFT}`, `#{RIGHT}`, `#{UP}`, `#{DOWN}`).
+  2. **Fast Local File Discovery (`search_local_files`):** Integrated native operating system metadata indexes (macOS Spotlight `mdfind` and Windows PowerShell `Get-ChildItem`) with configurable match limits.
+  3. **Battery & Power Telemetry (`get_power_status`):** Extracted real-time power metrics (percentage, charging state, power source, estimated time remaining) using macOS `pmset -g batt` and Windows CIM `Win32_Battery`.
+  Integrated all three tools into System One sub-30ms instant action regexes (`src/lib/systemOne/instantActions.ts`), Claude 3.5 Sonnet agent tool definitions (`src/lib/agent/toolRegistry.ts`), and planner normalization (`src/lib/agent/plan.ts`).
+- **Why This Approach:**
+  Users commanding a desktop assistant expect immediate operating system ergonomics—arranging workspace windows, locating local project files, and monitoring laptop battery health—without incurring expensive multi-second LLM planning cycles when issuing simple voice or typed commands (e.g. "maximize window", "find file package.json", "check battery").
+- **Why This Tool/Library over Alternatives:**
+  - *macOS Spotlight `mdfind` over recursive directory traversal (`walkdir` crate):* Full-disk filesystem walking can take 30+ seconds and heavily impact CPU/disk I/O. `mdfind` queries the pre-computed macOS Spotlight metadata index, returning ranked file paths in <50ms.
+  - *AppleScript & Win32 Bounds over external window tiling daemons (e.g. Yabai, Rectangle, Komorebi):* Calling OS native automation primitives requires no third-party daemons or disabled System Integrity Protection (SIP), working out-of-the-box on standard macOS and Windows installations.
+  - *`pmset -g batt` & `Win32_Battery` over third-party sysinfo dependencies:* Built-in OS commands execute without linking external C/native libraries or bundling platform-specific kernel extensions, ensuring cross-platform build stability and small binary footprint.

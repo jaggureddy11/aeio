@@ -173,12 +173,14 @@ export function normalizeToolName(name: string): string {
   if (lower === 'simulate_scroll' || lower === 'scroll_page') return 'simulate_scroll';
   if (lower === 'inject_text' || lower === 'type_text') return 'inject_text';
   if (lower === 'browse_page' || lower === 'browse' || lower === 'web_browse' || lower === 'read_webpage') return 'browse_page';
-  if (lower === 'extract_links' || lower === 'get_links' || lower === 'page_links') return 'extract_links';
-  if (lower === 'get_system_status' || lower === 'system_status' || lower === 'battery' || lower === 'battery_status' || lower === 'battery_level') return 'get_system_status';
+  if (lower === 'get_system_status' || lower === 'system_status') return 'get_system_status';
   if (lower === 'send_notification' || lower === 'notify' || lower === 'notification' || lower === 'display_notification') return 'send_notification';
   if (lower === 'list_running_apps' || lower === 'running_apps' || lower === 'list_apps' || lower === 'open_apps') return 'list_running_apps';
   if (lower === 'focus_app' || lower === 'activate_app' || lower === 'switch_to_app' || lower === 'bring_to_front') return 'focus_app';
   if (lower === 'toggle_dark_mode' || lower === 'dark_mode' || lower === 'toggle_theme' || lower === 'toggle_appearance') return 'toggle_dark_mode';
+  if (lower === 'manage_window' || lower === 'window_control' || lower === 'tile_window' || lower === 'maximize_window') return 'manage_window';
+  if (lower === 'search_local_files' || lower === 'spotlight_search' || lower === 'find_file' || lower === 'locate_file') return 'search_local_files';
+  if (lower === 'get_power_status' || lower === 'power_status' || lower === 'battery' || lower === 'battery_status' || lower === 'battery_level') return 'get_power_status';
   if (lower === 'take_screenshot' || lower === 'capture_screen' || lower === 'screenshot' || lower === 'screen_capture') return 'take_screenshot';
   if (lower === 'gui_click' || lower === 'click' || lower === 'mouse_click') return 'gui_click';
   if (lower === 'gui_move' || lower === 'move' || lower === 'mouse_move' || lower === 'move_cursor' || lower === 'move_mouse') return 'gui_move';

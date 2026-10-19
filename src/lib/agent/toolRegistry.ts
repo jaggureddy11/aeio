@@ -23,6 +23,9 @@ import {
   listRunningApps,
   focusApp,
   toggleDarkMode,
+  manageActiveWindow,
+  searchLocalFiles,
+  getPowerStatus,
   captureScreen,
   readClipboard,
   writeClipboard,
@@ -636,6 +639,41 @@ export const AVAILABLE_AGENT_TOOLS: AgentToolDefinition[] = [
     },
   },
   {
+    name: 'manage_window',
+    description: 'Manipulates the active foreground application window (maximize, minimize, tile_left, tile_right, center, fullscreen).',
+    parameters: {
+      type: 'object',
+      properties: {
+        action: {
+          type: 'string',
+          enum: ['maximize', 'minimize', 'tile_left', 'tile_right', 'center', 'fullscreen'],
+          description: 'Window layout action to execute',
+        },
+      },
+      required: ['action'],
+    },
+  },
+  {
+    name: 'search_local_files',
+    description: 'Searches local indexed files on the host machine using native OS search indexers (Spotlight mdfind on macOS, Windows Search on Windows). Returns matching file paths and names.',
+    parameters: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: 'File name, pattern, or search query to find' },
+        limit: { type: 'number', description: 'Maximum number of results to return (default: 20)' },
+      },
+      required: ['query'],
+    },
+  },
+  {
+    name: 'get_power_status',
+    description: 'Queries real-time battery percentage, charging state (charging/discharging), power source (AC/Battery), and remaining battery runtime.',
+    parameters: {
+      type: 'object',
+      properties: {},
+    },
+  },
+  {
     name: 'finish',
     description: 'Call this tool when the overall goal has been completely achieved, providing a concise final summary.',
     parameters: {
@@ -781,6 +819,21 @@ export async function executeAgentTool(toolName: string, args: Record<string, an
 
     case 'lock_screen': {
       return await lockScreen();
+    }
+
+    case 'manage_window': {
+      const action = args.action || 'maximize';
+      return await manageActiveWindow(action);
+    }
+
+    case 'search_local_files': {
+      const query = args.query || args.filename || args.name || '';
+      const limit = typeof args.limit === 'number' ? args.limit : undefined;
+      return await searchLocalFiles(query, limit);
+    }
+
+    case 'get_power_status': {
+      return await getPowerStatus();
     }
 
     case 'math_evaluate': {

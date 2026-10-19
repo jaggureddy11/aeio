@@ -530,6 +530,21 @@ pub fn toggle_dark_mode() -> Result<crate::tools::AutomationResult, String> {
     crate::tools::toggle_dark_mode()
 }
 
+#[tauri::command]
+pub fn manage_active_window(action: String) -> Result<crate::tools::AutomationResult, String> {
+    crate::tools::manage_active_window(&action)
+}
+
+#[tauri::command]
+pub fn search_local_files(query: String, limit: Option<usize>) -> Result<Vec<crate::tools::FileSearchResult>, String> {
+    crate::tools::search_local_files(&query, limit)
+}
+
+#[tauri::command]
+pub fn get_power_status() -> Result<crate::tools::PowerStatusInfo, String> {
+    crate::tools::get_power_status()
+}
+
 // Native Speech & Audio Commands
 #[tauri::command]
 pub fn speak_text(

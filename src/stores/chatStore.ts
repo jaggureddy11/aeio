@@ -38,6 +38,9 @@ import {
   captureScreenData,
   playSystemEarcon,
   showMainWindow,
+  manageActiveWindow,
+  searchLocalFiles,
+  getPowerStatus,
 } from '../lib/ipc';
 import { inspectActiveScreen } from '../lib/vision/screenInspector';
 import { evaluateMath, solveEquation, solveSystem } from '../lib/agent/tools/mathTool';
@@ -1992,6 +1995,18 @@ export const useChatStore = create<ChatState>((set, get) => ({
             result = await simulateScroll(instantAction.args.direction, instantAction.args.amount);
             break;
           }
+          case 'manage_window': {
+            result = await manageActiveWindow(instantAction.args.action);
+            break;
+          }
+          case 'search_local_files': {
+            result = await searchLocalFiles(instantAction.args.query, instantAction.args.limit);
+            break;
+          }
+          case 'get_power_status': {
+            result = await getPowerStatus();
+            break;
+          }
           default: {
             result = await executeAgentTool(instantAction.toolName, instantAction.args);
             break;
@@ -2015,6 +2030,17 @@ export const useChatStore = create<ChatState>((set, get) => ({
           } else if (instantAction.toolName === 'get_system_volume') {
             const vol = typeof result === 'object' && result !== null ? (result.level ?? result.volume ?? JSON.stringify(result)) : result;
             finalMsg = `Current system volume is ${vol}%.`;
+          } else if (instantAction.toolName === 'get_power_status' && result) {
+            const chargeStr = result.is_charging ? 'Charging' : 'Discharging';
+            const timeStr = result.time_remaining_minutes ? `, ~${result.time_remaining_minutes} min remaining` : '';
+            finalMsg = `Battery is at ${result.percentage}% (${chargeStr} on ${result.power_source}${timeStr}).`;
+          } else if (instantAction.toolName === 'search_local_files' && Array.isArray(result)) {
+            if (result.length === 0) {
+              finalMsg = `No local files found matching "${instantAction.args.query}".`;
+            } else {
+              const items = result.slice(0, 8).map((f: any) => `- \`${f.path}\``).join('\n');
+              finalMsg = `Found ${result.length} matching file${result.length > 1 ? 's' : ''} for "${instantAction.args.query}":\n${items}`;
+            }
           }
 
           get().updateMessageContent(

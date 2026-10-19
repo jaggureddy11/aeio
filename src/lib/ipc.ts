@@ -216,6 +216,9 @@ async function handleWebFallback<T>(cmd: string, args?: Record<string, unknown>)
     'list_running_apps',
     'focus_app',
     'toggle_dark_mode',
+    'manage_active_window',
+    'search_local_files',
+    'get_power_status',
     'send_system_notification',
     'execute_computer_action',
     'capture_screen',
@@ -240,6 +243,34 @@ async function handleWebFallback<T>(cmd: string, args?: Record<string, unknown>)
     } catch (e) {
       console.warn(`[Aeio IPC] /api/system-action request failed for ${cmd}:`, e);
     }
+  }
+
+  if (cmd === 'manage_active_window') {
+    const action = (args?.action as string) || 'maximize';
+    return Promise.resolve({
+      success: true,
+      message: `Window action '${action}' simulated in web mode.`,
+      action_type: 'manage_window',
+      payload: action,
+    } as unknown as T);
+  }
+  if (cmd === 'search_local_files') {
+    const query = (args?.query as string) || '';
+    return Promise.resolve([
+      {
+        path: `/mock/workspace/${query || 'package.json'}`,
+        name: query || 'package.json',
+        is_dir: false,
+      },
+    ] as unknown as T);
+  }
+  if (cmd === 'get_power_status') {
+    return Promise.resolve({
+      percentage: 100,
+      is_charging: true,
+      power_source: 'AC Power',
+      time_remaining_minutes: null,
+    } as unknown as T);
   }
 
   if (
@@ -723,6 +754,31 @@ export async function focusApp(name: string): Promise<AutomationResult> {
 
 export async function toggleDarkMode(): Promise<AutomationResult> {
   return invoke<AutomationResult>('toggle_dark_mode');
+}
+
+export interface FileSearchResult {
+  path: string;
+  name: string;
+  is_dir: boolean;
+}
+
+export interface PowerStatusInfo {
+  percentage: number;
+  is_charging: boolean;
+  power_source: string;
+  time_remaining_minutes?: number | null;
+}
+
+export async function manageActiveWindow(action: 'maximize' | 'minimize' | 'tile_left' | 'tile_right' | 'center' | 'fullscreen'): Promise<AutomationResult> {
+  return invoke<AutomationResult>('manage_active_window', { action });
+}
+
+export async function searchLocalFiles(query: string, limit?: number): Promise<FileSearchResult[]> {
+  return invoke<FileSearchResult[]>('search_local_files', { query, limit: limit ?? null });
+}
+
+export async function getPowerStatus(): Promise<PowerStatusInfo> {
+  return invoke<PowerStatusInfo>('get_power_status');
 }
 
 export async function captureScreen(outputPath: string): Promise<string> {

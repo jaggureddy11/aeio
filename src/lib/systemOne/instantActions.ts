@@ -562,5 +562,79 @@ export function matchInstantAction(prompt: string): InstantActionMatch | null {
     };
   }
 
+  // 17. Window Management Controls
+  if (/^(?:maximize|fullscreen)(?:\s+(?:the\s+|active\s+)?window)?$/i.test(trimmed)) {
+    return {
+      toolName: 'manage_window',
+      args: { action: 'maximize' },
+      statusText: 'Maximizing active window...',
+      completedMessage: 'Active window maximized.',
+      isDestructive: false,
+      riskTier: 'low',
+    };
+  }
+
+  if (/^(?:minimize)(?:\s+(?:the\s+|active\s+)?window)?$/i.test(trimmed)) {
+    return {
+      toolName: 'manage_window',
+      args: { action: 'minimize' },
+      statusText: 'Minimizing active window...',
+      completedMessage: 'Active window minimized.',
+      isDestructive: false,
+      riskTier: 'low',
+    };
+  }
+
+  const tileMatch = trimmed.match(/^(?:tile|snap)(?:\s+(?:the\s+|active\s+)?window)?\s+(?:to\s+(?:the\s+)?)?(left|right)$/i);
+  if (tileMatch) {
+    const dir = tileMatch[1].toLowerCase() as 'left' | 'right';
+    return {
+      toolName: 'manage_window',
+      args: { action: `tile_${dir}` },
+      statusText: `Tiling active window to the ${dir}...`,
+      completedMessage: `Active window tiled ${dir}.`,
+      isDestructive: false,
+      riskTier: 'low',
+    };
+  }
+
+  if (/^(?:center)(?:\s+(?:the\s+|active\s+)?window)?$/i.test(trimmed)) {
+    return {
+      toolName: 'manage_window',
+      args: { action: 'center' },
+      statusText: 'Centering active window...',
+      completedMessage: 'Active window centered on display.',
+      isDestructive: false,
+      riskTier: 'low',
+    };
+  }
+
+  // 18. Local File Search via OS Indexer (Spotlight mdfind / Windows Search)
+  const fileSearchMatch = trimmed.match(/^(?:find\s+file|locate\s+file|search\s+(?:local\s+)?files?\s+(?:for|named)?)\s+([^\s]+)$/i);
+  if (fileSearchMatch && fileSearchMatch[1]) {
+    const query = fileSearchMatch[1].trim();
+    return {
+      toolName: 'search_local_files',
+      args: { query },
+      statusText: `Searching local files for "${query}" via native indexer...`,
+      completedMessage: `Local file search completed for "${query}".`,
+      isDestructive: false,
+      riskTier: 'low',
+    };
+  }
+
+  // 19. System Power and Battery Status Query
+  if (/^(?:(?:check|get|what(?:'s|\s+is))\s+(?:my\s+|the\s+)?(?:battery(?:\s+level|\s+percentage|\s+status)?|power)|battery(?:\s+status|\s+percentage|\s+level)?)$/i.test(trimmed)) {
+    return {
+      toolName: 'get_power_status',
+      args: {},
+      statusText: 'Querying system battery and power telemetry...',
+      completedMessage: 'System battery status retrieved.',
+      isDestructive: false,
+      riskTier: 'low',
+    };
+  }
+
   return null;
 }
+
