@@ -8,12 +8,22 @@ import {
   X,
   ExternalLink,
   Volume2,
+  VolumeX,
   CheckCircle2,
   Sparkles,
   Lightbulb,
   Play,
+  SkipBack,
+  SkipForward,
   Eye,
   Activity,
+  Cpu,
+  Layers,
+  Battery,
+  BatteryCharging,
+  AppWindow,
+  Lock,
+  Columns,
 } from 'lucide-react';
 import { globalVoiceEngine, VoiceState, matchAndExecuteFastAction, speakJARVISFeedback } from '../../lib/voice/voiceEngine';
 import { globalProactiveCopilot, ProactiveNudge } from '../../lib/agent/proactiveCopilot';
@@ -26,6 +36,19 @@ import {
   resizeNotchWindow,
   playSystemEarcon,
   showMainWindow,
+  getHardwareTelemetry,
+  getPowerStatus,
+  getActiveWindowContext,
+  getSystemVolume,
+  setSystemVolume,
+  setSystemMute,
+  mediaControl,
+  lockScreen,
+  manageActiveWindow,
+  HardwareTelemetryInfo,
+  PowerStatusInfo,
+  WindowContextInfo,
+  VolumeStatus,
 } from '../../lib/ipc';
 
 export const DynamicIslandNotchWindow: React.FC = () => {
@@ -36,12 +59,48 @@ export const DynamicIslandNotchWindow: React.FC = () => {
   const [feedback, setFeedback] = useState<string | null>(null);
   const [nudge, setNudge] = useState<ProactiveNudge | null>(null);
 
+  // Live System Telemetry & Media State
+  const [telemetry, setTelemetry] = useState<HardwareTelemetryInfo | null>(null);
+  const [power, setPower] = useState<PowerStatusInfo | null>(null);
+  const [activeWindow, setActiveWindow] = useState<WindowContextInfo | null>(null);
+  const [volumeStatus, setVolumeStatus] = useState<VolumeStatus | null>(null);
+
   const { wakeWordEnabled, toggleWakeWord, vadSpeaking } = useVoiceStore();
   const sendMessage = useChatStore((state) => state.sendMessage);
 
   const isListening = voiceState === 'listening';
   const isExpandedRef = useRef(isExpanded);
   isExpandedRef.current = isExpanded;
+
+  // Poll hardware telemetry & active window context
+  useEffect(() => {
+    let isMounted = true;
+    const fetchStats = async () => {
+      try {
+        const [t, p, w, v] = await Promise.all([
+          getHardwareTelemetry().catch(() => null),
+          getPowerStatus().catch(() => null),
+          getActiveWindowContext().catch(() => null),
+          getSystemVolume().catch(() => null),
+        ]);
+        if (isMounted) {
+          if (t) setTelemetry(t);
+          if (p) setPower(p);
+          if (w) setActiveWindow(w);
+          if (v) setVolumeStatus(v);
+        }
+      } catch {}
+    };
+
+    fetchStats();
+    // Poll every 3 seconds when expanded, or every 10 seconds when collapsed
+    const interval = setInterval(fetchStats, isExpanded ? 3000 : 10000);
+
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, [isExpanded]);
 
   // Run proactive copilot suggestion
   const handleRunNudge = async (targetNudge: ProactiveNudge) => {
@@ -83,7 +142,7 @@ export const DynamicIslandNotchWindow: React.FC = () => {
     const next = !isExpanded;
     setIsExpanded(next);
     if (next) {
-      await resizeNotchWindow(440, 160).catch(() => {});
+      await resizeNotchWindow(460, 220).catch(() => {});
     } else {
       await resizeNotchWindow(380, 48).catch(() => {});
     }
@@ -119,6 +178,63 @@ export const DynamicIslandNotchWindow: React.FC = () => {
       setFeedback(null);
       globalVoiceEngine.startListening();
     }
+  };
+
+  // Quick Media Actions
+  const handleMediaControl = async (action: 'play_pause' | 'next' | 'previous') => {
+    playSystemEarcon('processing').catch(() => {});
+    try {
+      const res = await mediaControl(action);
+      setFeedback(res.message);
+      playSystemEarcon('success').catch(() => {});
+      setTimeout(() => setFeedback(null), 2500);
+    } catch {
+      playSystemEarcon('error').catch(() => {});
+    }
+  };
+
+  const handleToggleMute = async () => {
+    const nextMute = !volumeStatus?.is_muted;
+    try {
+      await setSystemMute(nextMute);
+      setVolumeStatus((prev) => (prev ? { ...prev, is_muted: nextMute } : null));
+      setFeedback(nextMute ? 'Volume Muted' : 'Volume Unmuted');
+      playSystemEarcon('success').catch(() => {});
+      setTimeout(() => setFeedback(null), 2000);
+    } catch {
+      playSystemEarcon('error').catch(() => {});
+    }
+  };
+
+  const handleVolumeStep = async (delta: number) => {
+    const current = volumeStatus?.volume ?? 50;
+    const next = Math.max(0, Math.min(100, current + delta));
+    try {
+      await setSystemVolume(next);
+      setVolumeStatus((prev) => (prev ? { ...prev, volume: next, is_muted: false } : null));
+      setFeedback(`Volume ${next}%`);
+      setTimeout(() => setFeedback(null), 2000);
+    } catch {}
+  };
+
+  // Quick Lock Screen
+  const handleLockScreen = async () => {
+    playSystemEarcon('processing').catch(() => {});
+    try {
+      await lockScreen();
+      setFeedback('Screen Locked');
+      playSystemEarcon('success').catch(() => {});
+    } catch {}
+  };
+
+  // Quick Window Tiling
+  const handleTileWindow = async (dir: 'left' | 'right') => {
+    try {
+      await manageActiveWindow(dir === 'left' ? 'tile_left' : 'tile_right');
+      setFeedback(`Tiled ${dir}`);
+      playSystemEarcon('success').catch(() => {});
+      setTimeout(() => setFeedback(null), 2000);
+    } catch {}
   };
 
   // Wire Voice Engine & Proactive Copilot listeners
@@ -233,6 +349,13 @@ export const DynamicIslandNotchWindow: React.FC = () => {
     };
   }, [sendMessage]);
 
+  // Compute color tier for progress bars
+  const getProgressColor = (percent: number) => {
+    if (percent > 80) return 'red';
+    if (percent > 50) return 'orange';
+    return 'green';
+  };
+
   return (
     <div className="dynamic-island-screen-container">
       <div
@@ -264,7 +387,7 @@ export const DynamicIslandNotchWindow: React.FC = () => {
             </div>
           </div>
 
-          {/* Center: Live label / transcript / autonomous step / proactive nudge */}
+          {/* Center: Live label / transcript / autonomous step / compact telemetry */}
           <div className="dynamic-island-center" onClick={handleToggleExpand}>
             {feedback ? (
               <span className="dynamic-island-status-text success">
@@ -285,6 +408,29 @@ export const DynamicIslandNotchWindow: React.FC = () => {
                 )}
                 {' '}{nudge.title}
               </span>
+            ) : !isListening && !vadSpeaking && (telemetry || activeWindow || power) ? (
+              /* Ambient Compact Telemetry Pill View */
+              <div className="dynamic-island-compact-badges">
+                {activeWindow?.app_name && (
+                  <span className="compact-app-badge" title={activeWindow.window_title}>
+                    {activeWindow.app_name}
+                  </span>
+                )}
+                {telemetry && (
+                  <span
+                    className={`compact-telemetry-pill ${telemetry.cpu_usage_percent > 75 ? 'warn' : ''}`}
+                    title={`CPU: ${telemetry.cpu_usage_percent}% | RAM: ${telemetry.memory_used_percent}%`}
+                  >
+                    <Cpu size={10} /> {Math.round(telemetry.cpu_usage_percent)}%
+                  </span>
+                )}
+                {power && (
+                  <span className="compact-telemetry-pill" title={power.power_source}>
+                    {power.is_charging ? <BatteryCharging size={10} /> : <Battery size={10} />}
+                    {power.percentage}%
+                  </span>
+                )}
+              </div>
             ) : (
               <span className="dynamic-island-status-text idle">
                 {isListening
@@ -352,10 +498,177 @@ export const DynamicIslandNotchWindow: React.FC = () => {
           </div>
         </div>
 
-        {/* Expanded Drawer Content */}
+        {/* Expanded Drawer Content: Rich Native HUD */}
         {isExpanded && (
           <div className="dynamic-island-expanded-drawer">
             <div className="dynamic-island-expanded-content">
+              {/* 1. Real-Time Hardware Telemetry Grid */}
+              <div className="dynamic-island-telemetry-grid">
+                {/* CPU Card */}
+                <div className="telemetry-metric-card">
+                  <div className="metric-header">
+                    <span className="metric-icon-group">
+                      <Cpu size={11} /> CPU
+                    </span>
+                    <span className="metric-value">
+                      {telemetry ? `${Math.round(telemetry.cpu_usage_percent)}%` : '--'}
+                    </span>
+                  </div>
+                  <div className="metric-progress-track">
+                    <div
+                      className={`metric-progress-fill ${getProgressColor(telemetry?.cpu_usage_percent ?? 0)}`}
+                      style={{ width: `${Math.min(100, telemetry?.cpu_usage_percent ?? 0)}%` }}
+                    />
+                  </div>
+                </div>
+
+                {/* RAM Card */}
+                <div className="telemetry-metric-card">
+                  <div className="metric-header">
+                    <span className="metric-icon-group">
+                      <Layers size={11} /> RAM
+                    </span>
+                    <span className="metric-value">
+                      {telemetry ? `${Math.round(telemetry.memory_used_percent)}%` : '--'}
+                    </span>
+                  </div>
+                  <div className="metric-progress-track">
+                    <div
+                      className={`metric-progress-fill ${getProgressColor(telemetry?.memory_used_percent ?? 0)}`}
+                      style={{ width: `${Math.min(100, telemetry?.memory_used_percent ?? 0)}%` }}
+                    />
+                  </div>
+                </div>
+
+                {/* Battery / Power Card */}
+                <div className="telemetry-metric-card">
+                  <div className="metric-header">
+                    <span className="metric-icon-group">
+                      {power?.is_charging ? <BatteryCharging size={11} /> : <Battery size={11} />}
+                      {power?.is_charging ? 'Charging' : 'Battery'}
+                    </span>
+                    <span className="metric-value">
+                      {power ? `${power.percentage}%` : '--'}
+                    </span>
+                  </div>
+                  <div className="metric-progress-track">
+                    <div
+                      className={`metric-progress-fill ${getProgressColor(100 - (power?.percentage ?? 100))}`}
+                      style={{ width: `${Math.min(100, power?.percentage ?? 0)}%` }}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* 2. Native System Media & Audio Controls */}
+              <div className="dynamic-island-media-bar">
+                <div className="media-left-info" title={activeWindow?.window_title || 'Active Window'}>
+                  <AppWindow size={13} style={{ flexShrink: 0, color: '#38bdf8' }} />
+                  <span>{activeWindow?.app_name || 'Aeio Native'}</span>
+                </div>
+
+                <div className="media-controls-group">
+                  <button
+                    type="button"
+                    className="media-btn"
+                    onClick={() => handleMediaControl('previous')}
+                    title="Previous Track"
+                    aria-label="Previous Track"
+                  >
+                    <SkipBack size={12} />
+                  </button>
+
+                  <button
+                    type="button"
+                    className="media-btn play-primary"
+                    onClick={() => handleMediaControl('play_pause')}
+                    title="Play / Pause"
+                    aria-label="Play or Pause Media"
+                  >
+                    <Play size={12} />
+                  </button>
+
+                  <button
+                    type="button"
+                    className="media-btn"
+                    onClick={() => handleMediaControl('next')}
+                    title="Next Track"
+                    aria-label="Next Track"
+                  >
+                    <SkipForward size={12} />
+                  </button>
+                </div>
+
+                <div className="volume-controls-group">
+                  <button
+                    type="button"
+                    className="media-btn"
+                    onClick={handleToggleMute}
+                    title={volumeStatus?.is_muted ? 'Unmute' : 'Mute'}
+                    aria-label="Mute or Unmute"
+                  >
+                    {volumeStatus?.is_muted ? <VolumeX size={12} style={{ color: '#ef4444' }} /> : <Volume2 size={12} />}
+                  </button>
+
+                  <button
+                    type="button"
+                    className="vol-step-btn"
+                    onClick={() => handleVolumeStep(-10)}
+                    title="Lower Volume (-10%)"
+                  >
+                    -10%
+                  </button>
+                  <button
+                    type="button"
+                    className="vol-step-btn"
+                    onClick={() => handleVolumeStep(10)}
+                    title="Raise Volume (+10%)"
+                  >
+                    +10%
+                  </button>
+                </div>
+              </div>
+
+              {/* 3. Quick Action Launchers */}
+              <div className="dynamic-island-quick-pills">
+                <button
+                  type="button"
+                  className="quick-pill-btn"
+                  onClick={handleLockScreen}
+                  title="Lock Desktop Immediately"
+                >
+                  <Lock size={11} /> Lock Screen
+                </button>
+
+                <button
+                  type="button"
+                  className="quick-pill-btn"
+                  onClick={() => handleTileWindow('left')}
+                  title="Tile Active Window to Left Half"
+                >
+                  <Columns size={11} /> Tile Left
+                </button>
+
+                <button
+                  type="button"
+                  className="quick-pill-btn"
+                  onClick={() => handleTileWindow('right')}
+                  title="Tile Active Window to Right Half"
+                >
+                  <Columns size={11} /> Tile Right
+                </button>
+
+                <button
+                  type="button"
+                  className="quick-pill-btn"
+                  onClick={handleInspectScreen}
+                  title="Take Screen Snapshot and Inspect"
+                >
+                  <Eye size={11} /> Inspect Screen
+                </button>
+              </div>
+
+              {/* 4. Active Proactive Nudge (if any) */}
               {nudge && (
                 <div className={`dynamic-island-expanded-nudge ${nudge.category === 'system' ? 'system-alert' : ''}`}>
                   <div className="nudge-header">
@@ -385,20 +698,15 @@ export const DynamicIslandNotchWindow: React.FC = () => {
                 </div>
               )}
 
-              {transcript ? (
+              {/* 5. Spoken Transcript Display */}
+              {transcript && (
                 <div className="dynamic-island-expanded-transcript">
                   <span className="drawer-label">Spoken:</span>
                   <p className="drawer-text">"{transcript}"</p>
                 </div>
-              ) : !nudge ? (
-                <div className="dynamic-island-expanded-hint">
-                  <Volume2 size={14} />
-                  <span>
-                    Speak naturally or say <strong style={{ color: 'var(--claude-accent)' }}>"Hey Aeio"</strong> followed by your command.
-                  </span>
-                </div>
-              ) : null}
+              )}
 
+              {/* 6. Active Step Badge */}
               {activeStepText && (
                 <div className="dynamic-island-expanded-step">
                   <span className="step-badge">Autonomous Step</span>
