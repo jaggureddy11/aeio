@@ -2069,6 +2069,12 @@ export const useChatStore = create<ChatState>((set, get) => ({
           } else if (instantAction.toolName === 'get_global_shortcuts' && Array.isArray(result)) {
             const shortcutsList = result.map((s: any) => `- \`${s.shortcut}\`: ${s.description}`).join('\n');
             finalMsg = `⌨️ **Registered Global Shortcuts:**\n${shortcutsList}`;
+          } else if (instantAction.toolName === 'read_url_content' && result) {
+            const r = result as { title?: string; url?: string; char_count?: number; content?: string; truncated?: boolean };
+            finalMsg = `🌐 **[${r.title || 'Web Document'}](${r.url})**\n*Extracted ${r.char_count || 0} characters${r.truncated ? ' (budget limit)' : ''}*\n\n${r.content || ''}`;
+          } else if (instantAction.toolName === 'rewrite_selection_in_place' && result) {
+            const r = result as { original?: string; transformed?: string };
+            finalMsg = `✨ **Selection Rewritten In-Place**\n\n**Original:**\n> ${r.original?.slice(0, 150) || ''}${r.original && r.original.length > 150 ? '...' : ''}\n\n**Transformed Replacement:**\n> ${r.transformed?.slice(0, 150) || ''}${r.transformed && r.transformed.length > 150 ? '...' : ''}`;
           }
 
           get().updateMessageContent(

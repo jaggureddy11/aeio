@@ -32,6 +32,8 @@ import {
   captureScreen,
   readClipboard,
   writeClipboard,
+  readUrlContent,
+  rewriteSelectionInPlace,
 } from '../ipc';
 import { useWorkspaceStore } from '../../stores/workspaceStore';
 import { isDestructiveCommandClient, normalizeToolName } from './plan';
@@ -104,6 +106,29 @@ export const AVAILABLE_AGENT_TOOLS: AgentToolDefinition[] = [
         url: { type: 'string', description: 'HTTP or HTTPS URL to fetch' },
       },
       required: ['url'],
+    },
+  },
+  {
+    name: 'read_url_content',
+    description: 'Fetches any public HTTP/HTTPS URL, strips HTML/script/nav boilerplate, and returns clean readable markdown text with page title and word count.',
+    parameters: {
+      type: 'object',
+      properties: {
+        url: { type: 'string', description: 'HTTP or HTTPS URL to read' },
+        max_chars: { type: 'number', description: 'Optional character budget limit (default 15000)' },
+      },
+      required: ['url'],
+    },
+  },
+  {
+    name: 'rewrite_selection_in_place',
+    description: 'Captures highlighted text from the frontmost desktop application (or clipboard), rewrites it according to the instruction, and pastes it directly back in-place.',
+    parameters: {
+      type: 'object',
+      properties: {
+        instruction: { type: 'string', description: 'Transformation instruction, e.g. "rewrite professionally", "fix grammar", "translate to Spanish"' },
+      },
+      required: ['instruction'],
     },
   },
   {
@@ -802,6 +827,30 @@ export async function executeAgentTool(toolName: string, args: Record<string, an
 
     case 'read_clipboard': {
       return await readClipboard();
+    }
+
+    case 'read_url_content': {
+      const url = args.url || '';
+      const maxChars = typeof args.max_chars === 'number' ? args.max_chars : undefined;
+      return await readUrlContent(url, maxChars);
+    }
+
+    case 'rewrite_selection_in_place': {
+      const instruction = args.instruction || args.prompt || '';
+      return await rewriteSelectionInPlace(instruction, async (selected, instr) => {
+        const { chatWithActiveProvider } = await import('../providers/providerRegistry');
+        const res = await chatWithActiveProvider([
+          {
+            role: 'system',
+            content: 'You are an in-place text transformation assistant. Transform the provided text exactly according to the user instructions. Do not add conversational commentary or preamble. Output ONLY the transformed replacement text.',
+          },
+          {
+            role: 'user',
+            content: `Instruction: ${instr}\n\nOriginal text:\n"""\n${selected}\n"""`,
+          },
+        ]);
+        return res.trim();
+      });
     }
 
     case 'write_clipboard': {

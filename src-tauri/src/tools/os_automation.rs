@@ -460,6 +460,188 @@ pub fn search_web_platform(query: &str, platform: &str, app: Option<&str>) -> Re
     })
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct UrlContentResult {
+    pub url: String,
+    pub title: String,
+    pub content: String,
+    pub char_count: usize,
+    pub truncated: bool,
+    pub status: u16,
+}
+
+pub fn decode_html_entities(input: &str) -> String {
+    input
+        .replace("&nbsp;", " ")
+        .replace("&amp;", "&")
+        .replace("&lt;", "<")
+        .replace("&gt;", ">")
+        .replace("&quot;", "\"")
+        .replace("&#39;", "'")
+        .replace("&apos;", "'")
+        .replace("&mdash;", "—")
+        .replace("&ndash;", "–")
+}
+
+/// Parses HTML into a clean, LLM-ready markdown/text document with title extracted
+/// and script/style/svg/nav boilerplate stripped.
+pub fn extract_clean_text_from_html(html: &str) -> (String, String) {
+    let lower_html = html.to_lowercase();
+
+    // 1. Extract title
+    let mut title = String::new();
+    if let Some(start_t) = lower_html.find("<title") {
+        if let Some(open_end) = lower_html[start_t..].find('>') {
+            let title_content_start = start_t + open_end + 1;
+            if let Some(close_t) = lower_html[title_content_start..].find("</title>") {
+                let raw_title = &html[title_content_start..title_content_start + close_t];
+                title = decode_html_entities(raw_title).trim().to_string();
+            }
+        }
+    }
+
+    // 2. Remove non-content tags & their inner bodies: <script>, <style>, <svg>, <nav>, <header>, <footer>
+    let mut cleaned = html.to_string();
+    let strip_tags = ["script", "style", "svg", "nav", "header", "footer"];
+    for tag in strip_tags {
+        let open_pattern = format!("<{}", tag);
+        let close_pattern = format!("</{}>", tag);
+        while let Some(start_idx) = cleaned.to_lowercase().find(&open_pattern) {
+            if let Some(end_offset) = cleaned.to_lowercase()[start_idx..].find(&close_pattern) {
+                let end_idx = start_idx + end_offset + close_pattern.len();
+                cleaned.replace_range(start_idx..end_idx, " ");
+            } else if let Some(tag_end) = cleaned[start_idx..].find('>') {
+                cleaned.replace_range(start_idx..start_idx + tag_end + 1, " ");
+            } else {
+                break;
+            }
+        }
+    }
+
+    // Remove comments <!-- ... -->
+    while let Some(start_idx) = cleaned.find("<!--") {
+        if let Some(end_offset) = cleaned[start_idx..].find("-->") {
+            cleaned.replace_range(start_idx..start_idx + end_offset + 3, " ");
+        } else {
+            break;
+        }
+    }
+
+    // 3. Convert markdown/structural breaks
+    let mut result = String::with_capacity(cleaned.len());
+    let mut in_tag = false;
+    let mut current_tag = String::new();
+
+    for ch in cleaned.chars() {
+        if ch == '<' {
+            in_tag = true;
+            current_tag.clear();
+        } else if ch == '>' {
+            in_tag = false;
+            let tag_lower = current_tag.to_lowercase();
+            let tag_name = tag_lower.split_whitespace().next().unwrap_or("");
+            match tag_name {
+                "h1" => result.push_str("\n\n# "),
+                "h2" => result.push_str("\n\n## "),
+                "h3" => result.push_str("\n\n### "),
+                "h4" | "h5" | "h6" => result.push_str("\n\n#### "),
+                "p" | "div" | "article" | "section" | "tr" => result.push('\n'),
+                "br" | "hr" => result.push('\n'),
+                "li" => result.push_str("\n- "),
+                _ => {}
+            }
+        } else if in_tag {
+            current_tag.push(ch);
+        } else {
+            result.push(ch);
+        }
+    }
+
+    // 4. Decode HTML entities
+    let decoded = decode_html_entities(&result);
+
+    // 5. Clean up redundant whitespace & newlines
+    let mut final_lines = Vec::new();
+    let mut prev_was_empty = false;
+
+    for line in decoded.lines() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            if !prev_was_empty && !final_lines.is_empty() {
+                final_lines.push("");
+                prev_was_empty = true;
+            }
+        } else {
+            final_lines.push(trimmed);
+            prev_was_empty = false;
+        }
+    }
+
+    let final_content = final_lines.join("\n").trim().to_string();
+    (title, final_content)
+}
+
+/// Reads and extracts clean LLM-ready markdown / text content from a web URL.
+pub fn read_url_content(url: &str, max_chars: Option<usize>) -> Result<UrlContentResult, String> {
+    let clean_url = url.trim();
+    if !clean_url.starts_with("http://") && !clean_url.starts_with("https://") {
+        return Err("URL must start with http:// or https://".to_string());
+    }
+
+    let budget = max_chars.unwrap_or(15_000).clamp(500, 100_000);
+
+    let output = Command::new("curl")
+        .args([
+            "-sSL",
+            "-A",
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+            "--max-time",
+            "10",
+            "--write-out",
+            "\n__HTTP_STATUS__:%{http_code}",
+            clean_url,
+        ])
+        .output()
+        .map_err(|e| format!("Failed to execute curl: {}", e))?;
+
+    let raw_output = String::from_utf8_lossy(&output.stdout).to_string();
+    let mut status = 200u16;
+    let html_body = if let Some(idx) = raw_output.rfind("\n__HTTP_STATUS__:") {
+        let (body, stat_part) = raw_output.split_at(idx);
+        let stat_str = stat_part.trim_start_matches("\n__HTTP_STATUS__:");
+        if let Ok(parsed) = stat_str.trim().parse::<u16>() {
+            status = parsed;
+        }
+        body
+    } else {
+        &raw_output
+    };
+
+    if status >= 400 {
+        return Err(format!("HTTP Error {} while fetching URL: {}", status, clean_url));
+    }
+
+    let (title, text) = extract_clean_text_from_html(html_body);
+    let original_len = text.chars().count();
+    let (content, truncated) = if original_len > budget {
+        let truncated_str: String = text.chars().take(budget).collect();
+        (truncated_str, true)
+    } else {
+        (text, false)
+    };
+
+    let char_count = content.chars().count();
+
+    Ok(UrlContentResult {
+        url: clean_url.to_string(),
+        title,
+        content,
+        char_count,
+        truncated,
+        status,
+    })
+}
+
 /// Locks the system workstation / puts display to sleep.
 pub fn lock_screen() -> Result<AutomationResult, String> {
     #[cfg(target_os = "macos")]
@@ -1934,5 +2116,61 @@ mod tests {
         assert!(telem.memory_total_mb > 0);
         assert!(telem.disk_total_gb > 0.0);
     }
+
+    #[test]
+    fn test_decode_html_entities() {
+        let input = "Hello&nbsp;World &amp; &lt;friends&gt; &quot;quote&#39; &mdash; &ndash;";
+        let out = decode_html_entities(input);
+        assert_eq!(out, "Hello World & <friends> \"quote' — –");
+    }
+
+    #[test]
+    fn test_extract_clean_text_from_html() {
+        let html = r#"
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>Awesome Article &amp; Guide</title>
+                <style>body { color: red; }</style>
+                <script>console.log("secret tracker");</script>
+            </head>
+            <body>
+                <header><nav><a href="/">Home</a></nav></header>
+                <h1>Main Heading</h1>
+                <p>First paragraph with <strong>bold</strong> text and &lt;code&gt; snippet.</p>
+                <!-- Comment that should vanish -->
+                <h2>Sub Heading</h2>
+                <ul>
+                    <li>First bullet item</li>
+                    <li>Second bullet item</li>
+                </ul>
+                <svg><path d="M0 0h24v24H0z"/></svg>
+                <footer>Copyright 2026</footer>
+            </body>
+            </html>
+        "#;
+        let (title, content) = extract_clean_text_from_html(html);
+        assert_eq!(title, "Awesome Article & Guide");
+        assert!(content.contains("# Main Heading"));
+        assert!(content.contains("First paragraph with bold text and <code> snippet."));
+        assert!(content.contains("## Sub Heading"));
+        assert!(content.contains("- First bullet item"));
+        assert!(content.contains("- Second bullet item"));
+        assert!(!content.contains("secret tracker"));
+        assert!(!content.contains("color: red"));
+        assert!(!content.contains("Copyright 2026"));
+        assert!(!content.contains("M0 0h24v24H0z"));
+    }
+
+    #[test]
+    fn test_read_url_content_validation() {
+        let bad_scheme = read_url_content("file:///etc/passwd", None);
+        assert!(bad_scheme.is_err());
+        assert!(bad_scheme.unwrap_err().contains("http:// or https://"));
+
+        let bad_scheme2 = read_url_content("ftp://ftp.example.com", None);
+        assert!(bad_scheme2.is_err());
+    }
 }
+
 

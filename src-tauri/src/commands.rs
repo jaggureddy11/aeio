@@ -476,6 +476,11 @@ pub fn search_web_platform(query: String, platform: String, app: Option<String>)
 }
 
 #[tauri::command]
+pub fn read_url_content(url: String, max_chars: Option<usize>) -> Result<crate::tools::UrlContentResult, String> {
+    crate::tools::read_url_content(&url, max_chars)
+}
+
+#[tauri::command]
 pub fn lock_screen() -> Result<crate::tools::AutomationResult, String> {
     crate::tools::lock_screen()
 }

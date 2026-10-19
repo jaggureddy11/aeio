@@ -250,6 +250,7 @@ pub fn run() {
             commands::play_spotify,
             commands::media_control,
             commands::search_web_platform,
+            commands::read_url_content,
             commands::lock_screen,
             commands::inject_text_to_active_app,
             commands::capture_selected_text_from_active_app,

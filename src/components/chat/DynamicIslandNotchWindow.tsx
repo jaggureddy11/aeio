@@ -237,6 +237,35 @@ export const DynamicIslandNotchWindow: React.FC = () => {
     } catch {}
   };
 
+  // Quick In-Place Selection Rewrite
+  const handleRewriteSelection = async () => {
+    try {
+      setFeedback('Rewriting selection...');
+      const { rewriteSelectionInPlace } = await import('../../lib/ipc');
+      await rewriteSelectionInPlace('rewrite professionally and fix grammar', async (selected, instr) => {
+        const { chatWithActiveProvider } = await import('../../lib/providers/providerRegistry');
+        const out = await chatWithActiveProvider([
+          {
+            role: 'system',
+            content: 'Transform the provided text to be professional, clear, and grammatically flawless. Output ONLY the replacement text without commentary.',
+          },
+          {
+            role: 'user',
+            content: `Instruction: ${instr}\n\nOriginal text:\n"""\n${selected}\n"""`,
+          },
+        ]);
+        return out.trim();
+      });
+      playSystemEarcon('success').catch(() => {});
+      setFeedback('Selection rewritten in-place!');
+      setTimeout(() => setFeedback(null), 3000);
+    } catch (err: any) {
+      setFeedback(`Rewrite failed: ${err?.message || 'No text selected'}`);
+      playSystemEarcon('error').catch(() => {});
+      setTimeout(() => setFeedback(null), 3500);
+    }
+  };
+
   // Wire Voice Engine & Proactive Copilot listeners
   useEffect(() => {
     const unsubNudge = globalProactiveCopilot.subscribe((n) => {
@@ -665,6 +694,15 @@ export const DynamicIslandNotchWindow: React.FC = () => {
                   title="Take Screen Snapshot and Inspect"
                 >
                   <Eye size={11} /> Inspect Screen
+                </button>
+
+                <button
+                  type="button"
+                  className="quick-pill-btn"
+                  onClick={handleRewriteSelection}
+                  title="Rewrite selected text in-place across active app"
+                >
+                  <Sparkles size={11} /> Rewrite Selection
                 </button>
               </div>
 

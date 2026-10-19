@@ -358,7 +358,7 @@ export function matchInstantAction(prompt: string): InstantActionMatch | null {
   }
 
   // 11. Clipboard reading
-  if (/^(?:read\s+clipboard|get\s+clipboard|check\s+clipboard|show\s+clipboard|view\s+clipboard|what(?:'s|\s+is)\s+on\s+my\s+clipboard)$/i.test(target)) {
+  if (/^(?:read\s+clipboard|get\s+clipboard|check\s+clipboard|show\s+clipboard|view\s+clipboard|what(?:'s|\s+is)\s+(?:on\s+(?:my\s+)?)?clipboard|what\s+did\s+i\s+copy|inspect\s+clipboard|clipboard\s+content)$/i.test(target)) {
     return {
       toolName: 'read_clipboard',
       args: {},
@@ -684,6 +684,34 @@ export function matchInstantAction(prompt: string): InstantActionMatch | null {
       args: {},
       statusText: 'Retrieving registered global shortcuts and hotkeys...',
       completedMessage: 'Registered global shortcuts retrieved.',
+      isDestructive: false,
+      riskTier: 'low',
+    };
+  }
+
+  // 24. Deep Web Reader / URL Content Ingestion
+  const readUrlMatch = target.match(/^(?:read|fetch|scrape|browse|summarize)\s+(?:url|website|link|page)?\s*(https?:\/\/[^\s]+)$/i);
+  if (readUrlMatch && readUrlMatch[1]) {
+    const url = readUrlMatch[1].trim();
+    return {
+      toolName: 'read_url_content',
+      args: { url },
+      statusText: `Reading and extracting content from ${url}...`,
+      completedMessage: `Extracted readable content from ${url}.`,
+      isDestructive: false,
+      riskTier: 'low',
+    };
+  }
+
+  // 25. In-Place Selection Rewriter
+  const rewriteSelectionMatch = target.match(/^(?:rewrite|polish|fix)\s+(?:this|selection|highlighted(?:\s+text)?)(?::\s*|\s+)(.+)$/i);
+  if (rewriteSelectionMatch && rewriteSelectionMatch[1]) {
+    const instruction = rewriteSelectionMatch[1].trim();
+    return {
+      toolName: 'rewrite_selection_in_place',
+      args: { instruction },
+      statusText: `Rewriting selection in active app: "${instruction}"...`,
+      completedMessage: `Selection rewritten in active app.`,
       isDestructive: false,
       riskTier: 'low',
     };

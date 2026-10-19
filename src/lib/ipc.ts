@@ -315,6 +315,18 @@ async function handleWebFallback<T>(cmd: string, args?: Record<string, unknown>)
     ] as unknown as T);
   }
 
+  if (cmd === 'read_url_content') {
+    const url = (args?.url as string) || '';
+    return Promise.resolve({
+      url,
+      title: 'Mock Web Page',
+      content: `# Web Content: ${url}\n\nExtracted reader text and clean markdown structure ready for processing.`,
+      char_count: 85,
+      truncated: false,
+      status: 200,
+    } as unknown as T);
+  }
+
   if (
     cmd === 'read_clipboard' ||
     cmd === 'open_target' ||
@@ -750,6 +762,80 @@ export async function injectTextToActiveApp(text: string): Promise<AutomationRes
 
 export async function captureSelectedTextFromActiveApp(): Promise<string> {
   return invoke<string>('capture_selected_text_from_active_app');
+}
+
+export interface UrlContentResult {
+  url: string;
+  title: string;
+  content: string;
+  char_count: number;
+  truncated: boolean;
+  status: number;
+}
+
+export async function readUrlContent(url: string, max_chars?: number): Promise<UrlContentResult> {
+  const cleanUrl = url.trim();
+  if (!cleanUrl) {
+    throw new Error('URL cannot be empty');
+  }
+  const clampedBudget = max_chars ? Math.max(500, Math.min(100000, max_chars)) : 15000;
+  return invoke<UrlContentResult>('read_url_content', { url: cleanUrl, max_chars: clampedBudget });
+}
+
+export interface RewriteSelectionResult {
+  original: string;
+  transformed: string;
+  success: boolean;
+  action_type: 'rewrite_selection';
+}
+
+export async function rewriteSelectionInPlace(
+  instruction: string,
+  transformFn?: (selectedText: string, instruction: string) => Promise<string>
+): Promise<RewriteSelectionResult> {
+  const cleanInstruction = instruction.trim();
+  if (!cleanInstruction) {
+    throw new Error('Rewrite instruction cannot be empty');
+  }
+
+  // 1. Capture highlighted text from focused application
+  let selected = '';
+  try {
+    selected = await captureSelectedTextFromActiveApp();
+  } catch {
+    selected = '';
+  }
+
+  // 2. Fallback to system clipboard if no active text was highlighted
+  if (!selected || !selected.trim()) {
+    try {
+      selected = await readClipboard();
+    } catch {
+      selected = '';
+    }
+  }
+
+  if (!selected || !selected.trim()) {
+    throw new Error('No text found in selection or clipboard to rewrite.');
+  }
+
+  // 3. Transform via provided transformFn or default formatting
+  let transformed = '';
+  if (transformFn) {
+    transformed = await transformFn(selected, cleanInstruction);
+  } else {
+    transformed = selected.trim();
+  }
+
+  // 4. Inject transformed text directly back into active native application
+  await injectTextToActiveApp(transformed);
+
+  return {
+    original: selected,
+    transformed,
+    success: true,
+    action_type: 'rewrite_selection',
+  };
 }
 
 export async function simulateKeyPress(key: string): Promise<AutomationResult> {
