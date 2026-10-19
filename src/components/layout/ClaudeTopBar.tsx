@@ -1,7 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { MoreHorizontal, Check, Sun, Moon, Laptop, Plus, Trash2, Brain, Settings } from 'lucide-react';
+import { MoreHorizontal, Check, Sun, Moon, Laptop, Plus, Trash2, Brain, Settings, Monitor, Globe } from 'lucide-react';
 import { AeLogo } from '../common/AeLogo';
 import { useSettingsStore, ThemeMode } from '../../stores/settingsStore';
+import { isTauri } from '../../lib/ipc';
 
 interface Props {
   title?: string;
@@ -77,6 +78,18 @@ export const ClaudeTopBar: React.FC<Props> = ({
 
       {/* Right: Model Status & Options Menu */}
       <div className="top-bar-right">
+        <div
+          className={`top-bar-runtime-chip ${isTauri() ? 'desktop' : 'web'}`}
+          title={
+            isTauri()
+              ? 'Native Desktop Application: Local OS automation, cursor controls, and local app access enabled'
+              : 'Web Browser Mode: Cloud LLM & Web Research active (Native OS control requires Desktop App)'
+          }
+        >
+          {isTauri() ? <Monitor size={12} className="runtime-icon" /> : <Globe size={12} className="runtime-icon" />}
+          <span>{isTauri() ? 'Desktop App' : 'Web Mode'}</span>
+        </div>
+
         {onOpenSettings && (
           <button
             type="button"

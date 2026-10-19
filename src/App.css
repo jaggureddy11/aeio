@@ -5726,6 +5726,37 @@ html, body, #root {
   font-weight: 500;
 }
 
+/* Top Bar Runtime Mode Chip (Desktop Native vs Web Browser) */
+.top-bar-runtime-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 28px;
+  padding: 0 9px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  user-select: none;
+  -webkit-app-region: no-drag !important;
+}
+
+.top-bar-runtime-chip.desktop {
+  background: rgba(16, 185, 129, 0.1);
+  border: 1px solid rgba(16, 185, 129, 0.28);
+  color: #10b981;
+}
+
+.top-bar-runtime-chip.web {
+  background: rgba(59, 130, 246, 0.1);
+  border: 1px solid rgba(59, 130, 246, 0.28);
+  color: #3b82f6;
+}
+
+.top-bar-runtime-chip .runtime-icon {
+  flex-shrink: 0;
+}
+
 .top-bar-icon-btn {
   display: inline-flex;
   align-items: center;
