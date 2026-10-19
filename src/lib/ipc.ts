@@ -812,11 +812,18 @@ export interface PowerStatusInfo {
 }
 
 export async function manageActiveWindow(action: 'maximize' | 'minimize' | 'tile_left' | 'tile_right' | 'center' | 'fullscreen'): Promise<AutomationResult> {
+  const allowed = ['maximize', 'minimize', 'tile_left', 'tile_right', 'center', 'fullscreen'];
+  if (!allowed.includes(action)) {
+    return { success: false, message: `Unsupported window management action: ${action}`, action_type: 'manage_active_window' };
+  }
   return invoke<AutomationResult>('manage_active_window', { action });
 }
 
 export async function searchLocalFiles(query: string, limit?: number): Promise<FileSearchResult[]> {
-  return invoke<FileSearchResult[]>('search_local_files', { query, limit: limit ?? null });
+  const cleanQuery = query.trim();
+  if (!cleanQuery) return [];
+  const clampedLimit = limit !== undefined ? Math.max(1, Math.min(100, limit)) : 20;
+  return invoke<FileSearchResult[]>('search_local_files', { query: cleanQuery, limit: clampedLimit });
 }
 
 export async function getPowerStatus(): Promise<PowerStatusInfo> {

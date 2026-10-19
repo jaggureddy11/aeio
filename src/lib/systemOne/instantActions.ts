@@ -36,8 +36,12 @@ export function matchInstantAction(prompt: string): InstantActionMatch | null {
     return null;
   }
 
+  // Strip trailing punctuation (?, !, .) for conversational/voice queries
+  const target = trimmed.replace(/[?.!]+$/, '').trim();
+  if (!target) return null;
+
   // 1. Open / Launch desktop applications
-  const openAppMatch = trimmed.match(/^(?:open|launch|start)\s+(?:the\s+)?([a-zA-Z0-9\s._-]+?)(?:\s+app|\s+application)?$/i);
+  const openAppMatch = target.match(/^(?:open|launch|start)\s+(?:the\s+)?([a-zA-Z0-9\s._-]+?)(?:\s+app|\s+application)?$/i);
   if (openAppMatch && openAppMatch[1]) {
     const rawTarget = openAppMatch[1].trim();
     // Exclude generic queries or file targets
@@ -58,7 +62,7 @@ export function matchInstantAction(prompt: string): InstantActionMatch | null {
   }
 
   // 2. Set system volume
-  const volNumberMatch = trimmed.match(/^(?:set\s+)?(?:system\s+)?volume\s+(?:to\s+)?(\d{1,3})%?$/i);
+  const volNumberMatch = target.match(/^(?:set\s+)?(?:system\s+)?volume\s+(?:to\s+)?(\d{1,3})%?$/i);
   if (volNumberMatch && volNumberMatch[1]) {
     const level = Math.min(100, Math.max(0, parseInt(volNumberMatch[1], 10)));
     return {
@@ -68,11 +72,11 @@ export function matchInstantAction(prompt: string): InstantActionMatch | null {
       completedMessage: `System volume set to ${level}%.`,
       isDestructive: false,
       riskTier: 'low',
-    };
+      };
   }
 
   // Volume relative adjustment
-  if (/^(?:volume\s+up|increase\s+volume|turn\s+up\s+volume)$/i.test(trimmed)) {
+  if (/^(?:volume\s+up|increase\s+volume|turn\s+up\s+volume)$/i.test(target)) {
     return {
       toolName: 'set_system_volume',
       args: { level: 75 },
@@ -83,7 +87,7 @@ export function matchInstantAction(prompt: string): InstantActionMatch | null {
     };
   }
 
-  if (/^(?:volume\s+down|decrease\s+volume|lower\s+volume|turn\s+down\s+volume)$/i.test(trimmed)) {
+  if (/^(?:volume\s+down|decrease\s+volume|lower\s+volume|turn\s+down\s+volume)$/i.test(target)) {
     return {
       toolName: 'set_system_volume',
       args: { level: 30 },
@@ -95,7 +99,7 @@ export function matchInstantAction(prompt: string): InstantActionMatch | null {
   }
 
   // 3. Mute / Unmute
-  if (/^(?:mute|mute\s+volume|silence)$/i.test(trimmed)) {
+  if (/^(?:mute|mute\s+volume|silence)$/i.test(target)) {
     return {
       toolName: 'set_system_mute',
       args: { mute: true },
@@ -106,7 +110,7 @@ export function matchInstantAction(prompt: string): InstantActionMatch | null {
     };
   }
 
-  if (/^(?:unmute|unmute\s+volume)$/i.test(trimmed)) {
+  if (/^(?:unmute|unmute\s+volume)$/i.test(target)) {
     return {
       toolName: 'set_system_mute',
       args: { mute: false },
@@ -118,7 +122,7 @@ export function matchInstantAction(prompt: string): InstantActionMatch | null {
   }
 
   // 4. Media playback controls
-  if (/^(?:play|resume|play\s+music|resume\s+music)$/i.test(trimmed)) {
+  if (/^(?:play|resume|play\s+music|resume\s+music)$/i.test(target)) {
     return {
       toolName: 'media_control',
       args: { action: 'play' },
@@ -129,7 +133,7 @@ export function matchInstantAction(prompt: string): InstantActionMatch | null {
     };
   }
 
-  if (/^(?:pause|stop\s+music|pause\s+music)$/i.test(trimmed)) {
+  if (/^(?:pause|stop\s+music|pause\s+music)$/i.test(target)) {
     return {
       toolName: 'media_control',
       args: { action: 'pause' },
@@ -140,7 +144,7 @@ export function matchInstantAction(prompt: string): InstantActionMatch | null {
     };
   }
 
-  if (/^(?:next\s+track|next\s+song|skip\s+song|skip\s+track)$/i.test(trimmed)) {
+  if (/^(?:next\s+track|next\s+song|skip\s+song|skip\s+track)$/i.test(target)) {
     return {
       toolName: 'media_control',
       args: { action: 'next' },
@@ -151,7 +155,7 @@ export function matchInstantAction(prompt: string): InstantActionMatch | null {
     };
   }
 
-  if (/^(?:previous\s+track|previous\s+song|prev\s+track)$/i.test(trimmed)) {
+  if (/^(?:previous\s+track|previous\s+song|prev\s+track)$/i.test(target)) {
     return {
       toolName: 'media_control',
       args: { action: 'previous' },
@@ -163,7 +167,7 @@ export function matchInstantAction(prompt: string): InstantActionMatch | null {
   }
 
   // 5. Compound browser & platform playback (e.g. "open youtube in jiosphere and play paradise interval BGM")
-  const compoundBrowserMatch = trimmed.match(
+  const compoundBrowserMatch = target.match(
     /^(?:open|launch)\s+(youtube|spotify|netflix|github|google|chatgpt|twitter|x|reddit)\s+(?:in\s+([a-zA-Z0-9\s._-]+?)\s+)?and\s+(?:play|search(?:\s+for)?)\s+(.+)$/i
   );
   if (compoundBrowserMatch) {
@@ -184,7 +188,7 @@ export function matchInstantAction(prompt: string): InstantActionMatch | null {
   }
 
   // Play <song> on <platform> in <browser/app> (e.g. "play paradise interval BGM on youtube in jiosphere")
-  const playInAppMatch = trimmed.match(
+  const playInAppMatch = target.match(
     /^(?:play|search(?:\s+for)?)\s+(.+?)\s+(?:on|in)\s+(youtube|spotify)\s+in\s+([a-zA-Z0-9\s._-]+?)$/i
   );
   if (playInAppMatch) {
@@ -204,27 +208,27 @@ export function matchInstantAction(prompt: string): InstantActionMatch | null {
   }
 
   // Open <platform/url> in <app> (e.g. "open youtube in jiosphere", "open https://news.ycombinator.com in chrome")
-  const openInAppMatch = trimmed.match(
-    /^(?:open|launch)\s+(youtube|spotify|netflix|github|google|chatgpt|twitter|x|reddit|https?:\/\/\S+)\s+in\s+([a-zA-Z0-9\s._-]+?)$/i
+  const openInAppMatch = target.match(
+    /^(?:open|launch)\s+(youtube|spotify|netflix|github|google|chatgpt|twitter|x|reddit|https?:\/\/[^\s]+)\s+in\s+([a-zA-Z0-9\s._-]+?)$/i
   );
   if (openInAppMatch) {
-    const target = openInAppMatch[1].trim();
+    const matchedTarget = openInAppMatch[1].trim();
     const app = openInAppMatch[2].trim();
-    const lower = target.toLowerCase();
+    const lower = matchedTarget.toLowerCase();
     const isUrl = lower.startsWith('http://') || lower.startsWith('https://');
 
     return {
       toolName: 'search_web',
-      args: { query: isUrl ? target : '', platform: isUrl ? 'url' : lower, app },
-      statusText: `Opening ${target} in ${app}...`,
-      completedMessage: `Opened ${target} in ${app}.`,
+      args: { query: isUrl ? matchedTarget : '', platform: isUrl ? 'url' : lower, app },
+      statusText: `Opening ${matchedTarget} in ${app}...`,
+      completedMessage: `Opened ${matchedTarget} in ${app}.`,
       isDestructive: false,
       riskTier: 'low',
     };
   }
 
   // 6. YouTube playback and search
-  const ytPlayMatch = trimmed.match(/^(?:play\s+)?(.+?)\s+(?:on\s+youtube|in\s+youtube)$/i);
+  const ytPlayMatch = target.match(/^(?:play\s+)?(.+?)\s+(?:on\s+youtube|in\s+youtube)$/i);
   if (ytPlayMatch && ytPlayMatch[1]) {
     const query = ytPlayMatch[1].trim();
     if (query) {
@@ -239,7 +243,7 @@ export function matchInstantAction(prompt: string): InstantActionMatch | null {
     }
   }
 
-  const ytSearchMatch = trimmed.match(/^(?:search\s+youtube\s+for|youtube)\s+(.+)$/i);
+  const ytSearchMatch = target.match(/^(?:search\s+youtube\s+for|youtube)\s+(.+)$/i);
   if (ytSearchMatch && ytSearchMatch[1]) {
     const query = ytSearchMatch[1].trim();
     if (query) {
@@ -255,7 +259,7 @@ export function matchInstantAction(prompt: string): InstantActionMatch | null {
   }
 
   // 6. Spotify playback
-  const spotifyMatch = trimmed.match(/^(?:play\s+)?(.+?)\s+(?:on\s+spotify|in\s+spotify)$/i);
+  const spotifyMatch = target.match(/^(?:play\s+)?(.+?)\s+(?:on\s+spotify|in\s+spotify)$/i);
   if (spotifyMatch && spotifyMatch[1]) {
     const query = spotifyMatch[1].trim();
     if (query) {
@@ -271,7 +275,7 @@ export function matchInstantAction(prompt: string): InstantActionMatch | null {
   }
 
   // 7. General Web / Google search
-  const webSearchMatch = trimmed.match(/^(?:search\s+(?:the\s+)?web\s+for|search\s+google\s+for|google)\s+(.+)$/i);
+  const webSearchMatch = target.match(/^(?:search\s+(?:the\s+)?web\s+for|search\s+google\s+for|google)\s+(.+)$/i);
   if (webSearchMatch && webSearchMatch[1]) {
     const query = webSearchMatch[1].trim();
     if (query) {
@@ -287,7 +291,7 @@ export function matchInstantAction(prompt: string): InstantActionMatch | null {
   }
 
   // 8. Lock screen
-  if (/^(?:lock\s+screen|lock\s+mac|lock\s+computer|lock\s+desktop)$/i.test(trimmed)) {
+  if (/^(?:lock\s+screen|lock\s+mac|lock\s+computer|lock\s+desktop)$/i.test(target)) {
     return {
       toolName: 'lock_screen',
       args: {},
@@ -299,7 +303,7 @@ export function matchInstantAction(prompt: string): InstantActionMatch | null {
   }
 
   // 9. Fast Math Evaluation
-  const mathCalcMatch = trimmed.match(/^(?:calculate|compute|evaluate|what\s+is)\s+([0-9+\-*/^().\s]{3,})$/i);
+  const mathCalcMatch = target.match(/^(?:calculate|compute|evaluate|what\s+is)\s+([0-9+\-*/^().\s]{3,})$/i);
   if (mathCalcMatch && mathCalcMatch[1]) {
     const expr = mathCalcMatch[1].trim();
     if (/^[0-9+\-*/^().\s]+$/.test(expr)) {
@@ -315,19 +319,19 @@ export function matchInstantAction(prompt: string): InstantActionMatch | null {
   }
 
   // Pure mathematical expression like "45 * 12" or "250 / 5"
-  if (/^\s*\d+(?:\.\d+)?\s*[+\-*/^]\s*\d+(?:\.\d+)?(?:\s*[+\-*/^]\s*\d+(?:\.\d+)?)*\s*$/.test(trimmed)) {
+  if (/^\s*\d+(?:\.\d+)?\s*[+\-*/^]\s*\d+(?:\.\d+)?(?:\s*[+\-*/^]\s*\d+(?:\.\d+)?)*\s*$/.test(target)) {
     return {
       toolName: 'math_evaluate',
-      args: { expression: trimmed },
-      statusText: `Evaluating ${trimmed}...`,
-      completedMessage: `Evaluated ${trimmed}.`,
+      args: { expression: target },
+      statusText: `Evaluating ${target}...`,
+      completedMessage: `Evaluated ${target}.`,
       isDestructive: false,
       riskTier: 'low',
     };
   }
 
   // 10. Direct URL or File Path Opening (open_target)
-  const urlMatch = trimmed.match(/^(?:open|navigate\s+to|go\s+to)\s+(https?:\/\/[^\s]+)$/i);
+  const urlMatch = target.match(/^(?:open|navigate\s+to|go\s+to)\s+(https?:\/\/[^\s]+)$/i);
   if (urlMatch && urlMatch[1]) {
     const url = urlMatch[1].trim();
     return {
@@ -340,7 +344,7 @@ export function matchInstantAction(prompt: string): InstantActionMatch | null {
     };
   }
 
-  const filePathMatch = trimmed.match(/^(?:open\s+(?:file|folder|directory)\s+|open\s+)([\/~][^\s]+)$/i);
+  const filePathMatch = target.match(/^(?:open\s+(?:file|folder|directory)\s+|open\s+)([\/~][^\s]+)$/i);
   if (filePathMatch && filePathMatch[1]) {
     const targetPath = filePathMatch[1].trim();
     return {
@@ -354,7 +358,7 @@ export function matchInstantAction(prompt: string): InstantActionMatch | null {
   }
 
   // 11. Clipboard reading
-  if (/^(?:read\s+clipboard|get\s+clipboard|check\s+clipboard|show\s+clipboard|view\s+clipboard|what(?:'s|\s+is)\s+on\s+my\s+clipboard)$/i.test(trimmed)) {
+  if (/^(?:read\s+clipboard|get\s+clipboard|check\s+clipboard|show\s+clipboard|view\s+clipboard|what(?:'s|\s+is)\s+on\s+my\s+clipboard)$/i.test(target)) {
     return {
       toolName: 'read_clipboard',
       args: {},
@@ -366,7 +370,7 @@ export function matchInstantAction(prompt: string): InstantActionMatch | null {
   }
 
   // 12. Volume status query
-  if (/^(?:get\s+volume|check\s+volume|current\s+volume|what(?:'s|\s+is)\s+the\s+volume)$/i.test(trimmed)) {
+  if (/^(?:get\s+volume|check\s+volume|current\s+volume|what(?:'s|\s+is)\s+the\s+volume)$/i.test(target)) {
     return {
       toolName: 'get_system_volume',
       args: {},
@@ -378,7 +382,7 @@ export function matchInstantAction(prompt: string): InstantActionMatch | null {
   }
 
   // 13. Keyboard key press simulation
-  const keyPressMatch = trimmed.match(/^(?:press|hit)\s+(enter|return|space|spacebar|esc|escape|tab)$/i);
+  const keyPressMatch = target.match(/^(?:press|hit)\s+(enter|return|space|spacebar|esc|escape|tab)$/i);
   if (keyPressMatch && keyPressMatch[1]) {
     let key = keyPressMatch[1].toLowerCase();
     if (key === 'return') key = 'enter';
@@ -395,7 +399,7 @@ export function matchInstantAction(prompt: string): InstantActionMatch | null {
   }
 
   // 14. Scrolling simulation
-  const scrollMatch = trimmed.match(/^(?:scroll\s+(down|up|left|right)|scroll\s+page\s+(down|up))$/i);
+  const scrollMatch = target.match(/^(?:scroll\s+(down|up|left|right)|scroll\s+page\s+(down|up))$/i);
   if (scrollMatch) {
     const direction = (scrollMatch[1] || scrollMatch[2]).toLowerCase() as 'down' | 'up' | 'left' | 'right';
     return {
@@ -405,12 +409,12 @@ export function matchInstantAction(prompt: string): InstantActionMatch | null {
       completedMessage: `Scrolled ${direction}.`,
       isDestructive: false,
       riskTier: 'low',
-    };
+      };
   }
 
   // 15. Cursor & Mouse Controls
   // Mouse cursor movement: "move mouse to 500 300", "move cursor 500, 300"
-  const mouseMoveMatch = trimmed.match(/^(?:move\s+(?:mouse|cursor)\s+(?:to\s+)?|cursor\s+(?:to\s+)?)(-?\d+)[,\s]+(-?\d+)$/i);
+  const mouseMoveMatch = target.match(/^(?:move\s+(?:mouse|cursor)\s+(?:to\s+)?|cursor\s+(?:to\s+)?)(-?\d+)[,\s]+(-?\d+)$/i);
   if (mouseMoveMatch) {
     const x = parseInt(mouseMoveMatch[1], 10);
     const y = parseInt(mouseMoveMatch[2], 10);
@@ -425,7 +429,7 @@ export function matchInstantAction(prompt: string): InstantActionMatch | null {
   }
 
   // Center cursor: "center cursor", "center mouse", "move cursor to center"
-  const centerMatch = trimmed.match(/^(?:center\s+(?:mouse|cursor)|move\s+(?:mouse|cursor)\s+to\s+center)$/i);
+  const centerMatch = target.match(/^(?:center\s+(?:mouse|cursor)|move\s+(?:mouse|cursor)\s+to\s+center)$/i);
   if (centerMatch) {
     return {
       toolName: 'gui_move',
@@ -438,13 +442,13 @@ export function matchInstantAction(prompt: string): InstantActionMatch | null {
   }
 
   // Mouse click: "click at 500 300", "double click 500 300", "right click", "click"
-  const mouseClickMatch = trimmed.match(/^(?:(left|right|double)\s+)?click(?:\s+(?:mouse|cursor|at))?(?:\s+(-?\d+)[,\s]+(-?\d+))?$/i);
+  const mouseClickMatch = target.match(/^(?:(left|right|double)\s+)?click(?:\s+(?:mouse|cursor|at))?(?:\s+(-?\d+)[,\s]+(-?\d+))?$/i);
   if (mouseClickMatch) {
     const modifier = (mouseClickMatch[1] || '').toLowerCase();
     const x = mouseClickMatch[2] !== undefined ? parseInt(mouseClickMatch[2], 10) : undefined;
     const y = mouseClickMatch[3] !== undefined ? parseInt(mouseClickMatch[3], 10) : undefined;
-    const isRight = modifier === 'right' || /\bright\b/i.test(trimmed);
-    const isDouble = modifier === 'double' || /\bdouble\b/i.test(trimmed);
+    const isRight = modifier === 'right' || /\bright\b/i.test(target);
+    const isDouble = modifier === 'double' || /\bdouble\b/i.test(target);
     return {
       toolName: 'gui_click',
       args: { x, y, button: isRight ? 'right' : 'left', double: isDouble },
@@ -456,7 +460,7 @@ export function matchInstantAction(prompt: string): InstantActionMatch | null {
   }
 
   // Mouse drag: "drag mouse from 100 100 to 500 500", "drag from 100,100 to 500,500"
-  const mouseDragMatch = trimmed.match(/^(?:drag(?:\s+mouse)?\s+from\s+)(-?\d+)[,\s]+(-?\d+)\s+to\s+(-?\d+)[,\s]+(-?\d+)$/i);
+  const mouseDragMatch = target.match(/^(?:drag(?:\s+mouse)?\s+from\s+)(-?\d+)[,\s]+(-?\d+)\s+to\s+(-?\d+)[,\s]+(-?\d+)$/i);
   if (mouseDragMatch) {
     const startX = parseInt(mouseDragMatch[1], 10);
     const startY = parseInt(mouseDragMatch[2], 10);
@@ -474,13 +478,13 @@ export function matchInstantAction(prompt: string): InstantActionMatch | null {
 
   // 16. Puppeteer Browser Automation Workflows (works with or without the word 'puppeteer')
   // Pattern A: Search and screenshot (e.g. "search for MrBeast and save screenshot as mrbeast.png")
-  const puppeteerSearchNavMatch = trimmed.match(
+  const puppeteerSearchNavMatch = target.match(
     /^(?:puppeteer\s+)?(?:headed\s+|visible\s+)?(?:search\s+(?:for\s+)?|find\s+)(.+?)\s+and\s+(?:take\s+|save\s+)?screenshot\s+(?:to|as)\s+([^\s]+)$/i
   );
   if (puppeteerSearchNavMatch && puppeteerSearchNavMatch[1] && puppeteerSearchNavMatch[2]) {
     const query = puppeteerSearchNavMatch[1].trim();
     const outputPath = puppeteerSearchNavMatch[2].trim();
-    const headed = /\b(?:headed|visible|show browser)\b/i.test(trimmed);
+    const headed = /\b(?:headed|visible|show browser)\b/i.test(target);
     return {
       toolName: 'puppeteer_search_and_navigate',
       args: {
@@ -497,13 +501,13 @@ export function matchInstantAction(prompt: string): InstantActionMatch | null {
   }
 
   // Pattern B: Direct page screenshot (e.g. "take screenshot of https://github.com to github.png")
-  const puppeteerScreenshotMatch = trimmed.match(
+  const puppeteerScreenshotMatch = target.match(
     /^(?:puppeteer\s+)?(?:headed\s+|visible\s+)?(?:take\s+)?screenshot\s+(?:of\s+)?(https?:\/\/[^\s]+)(?:\s+(?:to|as)\s+([^\s]+))?$/i
   );
   if (puppeteerScreenshotMatch && puppeteerScreenshotMatch[1]) {
     const url = puppeteerScreenshotMatch[1].trim();
     const outputPath = (puppeteerScreenshotMatch[2] || 'screenshot.png').trim();
-    const headed = /\b(?:headed|visible|show browser)\b/i.test(trimmed);
+    const headed = /\b(?:headed|visible|show browser)\b/i.test(target);
     return {
       toolName: 'puppeteer_screenshot',
       args: {
@@ -519,7 +523,7 @@ export function matchInstantAction(prompt: string): InstantActionMatch | null {
   }
 
   // Pattern C: Headless Page Scraping (e.g. "scrape content from https://news.ycombinator.com" or "puppeteer scrape https://example.com")
-  const puppeteerScrapeMatch = trimmed.match(
+  const puppeteerScrapeMatch = target.match(
     /^(?:puppeteer\s+)?(?:scrape(?:\s+(?:text|data|content)\s+from|\s+from|\s+content\s+from)?|extract\s+(?:text|data|content)\s+from)\s+(https?:\/\/[^\s]+)(?:\s+(?:using|selector)\s+([^\s]+))?$/i
   );
   if (puppeteerScrapeMatch && puppeteerScrapeMatch[1]) {
@@ -541,7 +545,7 @@ export function matchInstantAction(prompt: string): InstantActionMatch | null {
   }
 
   // Pattern D: PDF Generation (e.g. "save page https://example.com as pdf example.pdf")
-  const puppeteerPdfMatch = trimmed.match(
+  const puppeteerPdfMatch = target.match(
     /^(?:puppeteer\s+)?(?:save\s+page\s+|print\s+)?(https?:\/\/[^\s]+)\s+(?:as|to)\s+pdf\s+([^\s]+)$/i
   );
   if (puppeteerPdfMatch && puppeteerPdfMatch[1] && puppeteerPdfMatch[2]) {
@@ -563,7 +567,7 @@ export function matchInstantAction(prompt: string): InstantActionMatch | null {
   }
 
   // 17. Window Management Controls
-  if (/^(?:maximize|fullscreen)(?:\s+(?:the\s+|active\s+)?window)?$/i.test(trimmed)) {
+  if (/^(?:maximize|fullscreen)(?:\s+(?:the\s+|active\s+)?window)?$/i.test(target)) {
     return {
       toolName: 'manage_window',
       args: { action: 'maximize' },
@@ -574,7 +578,7 @@ export function matchInstantAction(prompt: string): InstantActionMatch | null {
     };
   }
 
-  if (/^(?:minimize)(?:\s+(?:the\s+|active\s+)?window)?$/i.test(trimmed)) {
+  if (/^(?:minimize)(?:\s+(?:the\s+|active\s+)?window)?$/i.test(target)) {
     return {
       toolName: 'manage_window',
       args: { action: 'minimize' },
@@ -585,7 +589,7 @@ export function matchInstantAction(prompt: string): InstantActionMatch | null {
     };
   }
 
-  const tileMatch = trimmed.match(/^(?:tile|snap)(?:\s+(?:the\s+|active\s+)?window)?\s+(?:to\s+(?:the\s+)?)?(left|right)$/i);
+  const tileMatch = target.match(/^(?:tile|snap)(?:\s+(?:the\s+|active\s+)?window)?\s+(?:to\s+(?:the\s+)?)?(left|right)$/i);
   if (tileMatch) {
     const dir = tileMatch[1].toLowerCase() as 'left' | 'right';
     return {
@@ -598,7 +602,7 @@ export function matchInstantAction(prompt: string): InstantActionMatch | null {
     };
   }
 
-  if (/^(?:center)(?:\s+(?:the\s+|active\s+)?window)?$/i.test(trimmed)) {
+  if (/^(?:center)(?:\s+(?:the\s+|active\s+)?window)?$/i.test(target)) {
     return {
       toolName: 'manage_window',
       args: { action: 'center' },
@@ -610,7 +614,7 @@ export function matchInstantAction(prompt: string): InstantActionMatch | null {
   }
 
   // 18. Local File Search via OS Indexer (Spotlight mdfind / Windows Search)
-  const fileSearchMatch = trimmed.match(/^(?:find\s+file|locate\s+file|search\s+(?:local\s+)?files?\s+(?:for|named)?)\s+([^\s]+)$/i);
+  const fileSearchMatch = target.match(/^(?:find\s+file|locate\s+file|search\s+(?:local\s+)?files?(?:\s+(?:for|named))?)\s+([^\s]+)$/i);
   if (fileSearchMatch && fileSearchMatch[1]) {
     const query = fileSearchMatch[1].trim();
     return {
@@ -624,7 +628,7 @@ export function matchInstantAction(prompt: string): InstantActionMatch | null {
   }
 
   // 19. System Power and Battery Status Query
-  if (/^(?:(?:check|get|what(?:'s|\s+is))\s+(?:my\s+|the\s+)?(?:battery(?:\s+level|\s+percentage|\s+status)?|power)|battery(?:\s+status|\s+percentage|\s+level)?)$/i.test(trimmed)) {
+  if (/^(?:(?:check|get|what(?:'s|\s+is))\s+(?:my\s+|the\s+)?(?:battery(?:\s+level|\s+percentage|\s+status)?|power(?:\s+status|\s+level)?)|(?:battery|power)(?:\s+status|\s+percentage|\s+level)?)$/i.test(target)) {
     return {
       toolName: 'get_power_status',
       args: {},
@@ -636,7 +640,7 @@ export function matchInstantAction(prompt: string): InstantActionMatch | null {
   }
 
   // 20. Explicit System Volume Percentage
-  const volPctMatch = trimmed.match(/^(?:set\s+)?(?:system\s+)?volume\s+(?:to\s+)?(\d{1,3})%?$/i);
+  const volPctMatch = target.match(/^(?:set\s+)?(?:system\s+)?volume\s+(?:to\s+)?(\d{1,3})%?$/i);
   if (volPctMatch && volPctMatch[1]) {
     const level = Math.min(100, Math.max(0, parseInt(volPctMatch[1], 10)));
     return {
@@ -650,7 +654,7 @@ export function matchInstantAction(prompt: string): InstantActionMatch | null {
   }
 
   // 21. Active App & Window Context Query
-  if (/^(?:what\s+app\s+am\s+i\s+using|what(?:'s|\s+is)\s+(?:the\s+)?(?:active|current|frontmost)\s+(?:app|application|window)|active\s+(?:window|app)|current\s+(?:app|window)|inspect\s+(?:active\s+|current\s+)?(?:app|window))$/i.test(trimmed)) {
+  if (/^(?:what\s+app\s+am\s+i\s+using|what(?:'s|\s+is)\s+(?:the\s+)?(?:active|current|frontmost)\s+(?:app|application|window)|active\s+(?:window|app)|current\s+(?:app|window)|inspect\s+(?:active\s+|current\s+)?(?:app|window))$/i.test(target)) {
     return {
       toolName: 'get_active_window_context',
       args: {},
@@ -662,7 +666,7 @@ export function matchInstantAction(prompt: string): InstantActionMatch | null {
   }
 
   // 22. Hardware Telemetry & Performance Query
-  if (/^(?:(?:check|get|what(?:'s|\s+is))\s+(?:my\s+|the\s+)?(?:system\s+(?:performance|telemetry|status|health)|hardware\s+(?:stats|telemetry|status)|cpu(?:\s+usage|\s+load)?|ram(?:\s+usage)?|memory\s+usage)|(?:system\s+(?:performance|telemetry|status|health)|hardware\s+stats|cpu\s+usage|ram\s+usage|memory\s+usage|disk\s+space|top\s+processes))$/i.test(trimmed)) {
+  if (/^(?:(?:check|get|what(?:'s|\s+is))\s+(?:my\s+|the\s+)?(?:system\s+(?:performance|telemetry|status|health)|hardware\s+(?:stats|telemetry|status)|cpu(?:\s+usage|\s+load)?|ram(?:\s+usage)?|memory\s+usage)|(?:system\s+(?:performance|telemetry|status|health)|hardware\s+stats|cpu\s+usage|ram\s+usage|memory\s+usage|disk\s+space|top\s+processes))$/i.test(target)) {
     return {
       toolName: 'get_hardware_telemetry',
       args: {},
@@ -674,7 +678,7 @@ export function matchInstantAction(prompt: string): InstantActionMatch | null {
   }
 
   // 23. Global Keyboard Shortcuts Info
-  if (/^(?:(?:show|list|what\s+are)\s+(?:the\s+)?(?:keyboard\s+)?(?:shortcuts|hotkeys)|keyboard\s+shortcuts|hotkeys)$/i.test(trimmed)) {
+  if (/^(?:(?:show|list|what\s+are)\s+(?:the\s+)?(?:keyboard\s+)?(?:shortcuts|hotkeys)|keyboard\s+shortcuts|hotkeys)$/i.test(target)) {
     return {
       toolName: 'get_global_shortcuts',
       args: {},

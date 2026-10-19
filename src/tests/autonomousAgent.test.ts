@@ -60,6 +60,7 @@ describe('AutonomousTaskRunner Loop', () => {
   beforeEach(() => {
     runner = new AutonomousTaskRunner();
     vi.clearAllMocks();
+    vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('Hosted agent offline in test'));
   });
 
   it('completes task when model outputs finish tool call', async () => {
