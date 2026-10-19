@@ -1,7 +1,8 @@
 import { ActionIntent } from '../types/actionIntent';
 import { requireActionApproval } from './approvalGate';
-const isTauri = (): boolean =>
-  typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
+const isTauri = (): boolean => {
+  return typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
+};
 
 export type ComputerAction =
   | { actionType: 'click'; x: number; y: number; button?: 'left' | 'right' | 'middle'; double?: boolean }
@@ -27,12 +28,29 @@ export interface ActionResult {
 }
 
 /**
- * Directly invokes the Rust in-process native input simulator via Tauri IPC.
+ * Directly invokes the Rust in-process native input simulator via Tauri IPC,
+ * or forwards to the local dev server bridge when running in development.
  */
 export async function executeComputerAction(
   request: SimulatedActionRequest
 ): Promise<ActionResult> {
   if (!isTauri()) {
+    const g = globalThis as unknown as { process?: { env?: Record<string, string | undefined> } };
+    const isVitest = Boolean(g?.process?.env?.VITEST);
+    if (!isVitest && typeof window !== 'undefined' && typeof fetch !== 'undefined') {
+      try {
+        const resp = await fetch('/api/system-action', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ cmd: 'execute_computer_action', args: { request } }),
+        });
+        if (resp.ok) {
+          return await resp.json();
+        }
+      } catch (err) {
+        console.warn('[InputDriver] /api/system-action request failed:', err);
+      }
+    }
     return {
       status: 'REFUSED_SECURITY_POLICY',
       message: 'Native input driver requires Tauri runtime environment.',
@@ -50,6 +68,21 @@ export async function executeComputerAction(
  */
 export async function captureScreen(outputPath: string): Promise<string> {
   if (!isTauri()) {
+    const g = globalThis as unknown as { process?: { env?: Record<string, string | undefined> } };
+    const isVitest = Boolean(g?.process?.env?.VITEST);
+    if (!isVitest && typeof window !== 'undefined' && typeof fetch !== 'undefined') {
+      try {
+        const resp = await fetch('/api/system-action', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ cmd: 'capture_screen', args: { outputPath } }),
+        });
+        if (resp.ok) {
+          const data = await resp.json();
+          return data.filePath || outputPath;
+        }
+      } catch {}
+    }
     throw new Error('Screen capture requires Tauri runtime environment.');
   }
 

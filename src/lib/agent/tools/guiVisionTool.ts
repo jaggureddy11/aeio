@@ -177,6 +177,47 @@ export async function guiClick(options: GuiClickOptions): Promise<GuiToolResult>
   };
 }
 
+export interface GuiMoveOptions {
+  x: number;
+  y: number;
+  app?: string;
+}
+
+/**
+ * Moves mouse cursor to explicit screen coordinates.
+ */
+export async function guiMove(options: GuiMoveOptions): Promise<GuiToolResult> {
+  await ensureAppFocus(options.app);
+
+  const bundleId = options.app || 'com.apple.finder';
+  const intent: ActionIntent = {
+    naturalLanguageIntent: `Move cursor to (${options.x}, ${options.y})`,
+    targetAppBundleId: bundleId,
+    targetElementDescription: `Coordinate (${options.x}, ${options.y})`,
+    intendedStateChange: 'Navigate',
+  };
+
+  const actionRes = await executeGuardedStep({
+    intent,
+    action: {
+      actionType: 'move',
+      x: options.x,
+      y: options.y,
+    },
+    stepNumber: 1,
+    totalSteps: 1,
+    targetAppName: options.app,
+  });
+
+  return {
+    success: actionRes.status === 'SUCCESS',
+    message: actionRes.status === 'SUCCESS' ? `Moved cursor to (${options.x}, ${options.y})` : actionRes.message,
+    coordinate: { x: options.x, y: options.y },
+    targetApp: options.app,
+    raw: actionRes,
+  };
+}
+
 /**
  * Types text into the active focused GUI element.
  */

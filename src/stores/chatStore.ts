@@ -53,6 +53,7 @@ import {
   cleanDisplayContent,
 } from '../lib/agent/plan';
 import { rerankMemoriesSystemOne } from '../lib/systemOne/memoryRerank';
+import { matchInstantAction } from '../lib/systemOne/instantActions';
 import { isHaltActive } from '../lib/safety/killSwitch';
 import { isHardBlocked } from '../lib/safety/allowlist';
 import { requireActionApproval } from '../lib/safety/approvalGate';
@@ -61,6 +62,7 @@ import { executeActionWithVisualAudit } from '../lib/safety/auditLog';
 import { ComputerAction, SimulatedActionRequest } from '../lib/safety/inputDriver';
 import { ActionIntent } from '../lib/types/actionIntent';
 import { resolveGroundingTarget } from '../lib/safety/groundingClient';
+import { searchSearxng } from '../lib/agent/tools/searxngSearch';
 
 export interface RecalledMemory {
   id: string;
@@ -1031,10 +1033,33 @@ export const useChatStore = create<ChatState>((set, get) => ({
           result = await mediaControl(action);
           break;
         }
+        case 'searxng_search': {
+          const query = execution.args.query || execution.args.search || '';
+          const searchRes = await searchSearxng(query);
+          if (!searchRes.success || !searchRes.context) {
+            result = searchRes.message || 'No reliable information was found.';
+          } else {
+            result = `Web Search Context:\n${searchRes.context}\n\nSources:\n` +
+              searchRes.results.map((r, i) => `${i + 1}. [${r.title}](${r.url})`).join('\n');
+          }
+          break;
+        }
         case 'search_web': {
           const query = execution.args.query || execution.args.search || '';
-          const platform = execution.args.platform || 'google';
-          result = await searchWebPlatform(query, platform);
+          const platform = execution.args.platform;
+          if (platform === 'searxng') {
+            const searchRes = await searchSearxng(query);
+            if (!searchRes.success || !searchRes.context) {
+              result = searchRes.message || 'No reliable information was found.';
+            } else {
+              result = `Web Search Context:\n${searchRes.context}\n\nSources:\n` +
+                searchRes.results.map((r, i) => `${i + 1}. [${r.title}](${r.url})`).join('\n');
+            }
+          } else {
+            result = execution.args.app
+              ? await searchWebPlatform(query, platform || 'google', execution.args.app)
+              : await searchWebPlatform(query, platform || 'google');
+          }
           break;
         }
         case 'lock_screen': {
@@ -1554,10 +1579,33 @@ export const useChatStore = create<ChatState>((set, get) => ({
             stepResult = await mediaControl(action);
             break;
           }
+          case 'searxng_search': {
+            const query = step.args.query || step.args.search || '';
+            const searchRes = await searchSearxng(query);
+            if (!searchRes.success || !searchRes.context) {
+              stepResult = searchRes.message || 'No reliable information was found.';
+            } else {
+              stepResult = `Web Search Context:\n${searchRes.context}\n\nSources:\n` +
+                searchRes.results.map((r, i) => `${i + 1}. [${r.title}](${r.url})`).join('\n');
+            }
+            break;
+          }
           case 'search_web': {
             const query = step.args.query || step.args.search || '';
-            const platform = step.args.platform || 'google';
-            stepResult = await searchWebPlatform(query, platform);
+            const platform = step.args.platform;
+            if (platform === 'searxng') {
+              const searchRes = await searchSearxng(query);
+              if (!searchRes.success || !searchRes.context) {
+                stepResult = searchRes.message || 'No reliable information was found.';
+              } else {
+                stepResult = `Web Search Context:\n${searchRes.context}\n\nSources:\n` +
+                  searchRes.results.map((r, i) => `${i + 1}. [${r.title}](${r.url})`).join('\n');
+              }
+            } else {
+              stepResult = step.args.app
+                ? await searchWebPlatform(query, platform || 'google', step.args.app)
+                : await searchWebPlatform(query, platform || 'google');
+            }
             break;
           }
           case 'lock_screen': {
@@ -1851,6 +1899,162 @@ export const useChatStore = create<ChatState>((set, get) => ({
       // Non-blocking fallback for browser/test environments
     }
 
+    // 1.6 Instant System One Fast-Path Action Execution (< 30ms dispatch)
+    const instantAction = matchInstantAction(trimmed);
+    if (instantAction && !options?.isAgenticContinuation) {
+      const isManualApprovalRequired = options?.autoApproveSafeTools === false;
+      const initialStatus = isManualApprovalRequired ? 'pending_approval' : 'running';
+
+      const assistantId = get().addMessage({
+        role: 'assistant',
+        content: instantAction.statusText,
+        isStreaming: false,
+        workspaceId: wsId,
+        providerInfo: {
+          providerId: 'aeio-fast-engine',
+          modelName: 'System One Instant Action',
+          isLocal: true,
+        },
+        toolExecutions: [
+          {
+            id: crypto.randomUUID(),
+            toolName: instantAction.toolName,
+            args: instantAction.args,
+            status: initialStatus,
+            isDestructive: instantAction.isDestructive,
+            riskTier: instantAction.riskTier,
+          },
+        ],
+      });
+
+      if (isManualApprovalRequired) {
+        set({ isLoading: false });
+        return;
+      }
+
+      set({ isLoading: true });
+
+      try {
+        let result: any = null;
+        switch (instantAction.toolName) {
+          case 'open_app': {
+            result = await openApp(instantAction.args.name);
+            break;
+          }
+          case 'set_system_volume': {
+            result = await setSystemVolume(instantAction.args.level);
+            break;
+          }
+          case 'set_system_mute': {
+            result = await setSystemMute(instantAction.args.mute);
+            break;
+          }
+          case 'media_control': {
+            result = await mediaControl(instantAction.args.action);
+            break;
+          }
+          case 'play_spotify': {
+            result = await playSpotify(instantAction.args.query);
+            break;
+          }
+          case 'search_web': {
+            result = instantAction.args.app
+              ? await searchWebPlatform(instantAction.args.query, instantAction.args.platform, instantAction.args.app)
+              : await searchWebPlatform(instantAction.args.query, instantAction.args.platform);
+            break;
+          }
+          case 'lock_screen': {
+            result = await lockScreen();
+            break;
+          }
+          case 'math_evaluate': {
+            const mathRes = evaluateMath(instantAction.args.expression);
+            result = mathRes.text || String(mathRes.value);
+            break;
+          }
+          case 'open_target': {
+            result = await openTarget(instantAction.args.target);
+            break;
+          }
+          case 'read_clipboard': {
+            result = await readClipboard();
+            break;
+          }
+          case 'get_system_volume': {
+            result = await getSystemVolume();
+            break;
+          }
+          case 'simulate_key_press': {
+            result = await simulateKeyPress(instantAction.args.key);
+            break;
+          }
+          case 'simulate_scroll': {
+            result = await simulateScroll(instantAction.args.direction, instantAction.args.amount);
+            break;
+          }
+          default: {
+            result = await executeAgentTool(instantAction.toolName, instantAction.args);
+            break;
+          }
+        }
+
+        const msg = get().messages.find((m) => m.id === assistantId);
+        if (msg && msg.toolExecutions) {
+          const updatedTools = [...msg.toolExecutions];
+          updatedTools[0] = {
+            ...updatedTools[0],
+            status: 'approved',
+            result,
+          };
+
+          let finalMsg = instantAction.completedMessage;
+          if (instantAction.toolName === 'math_evaluate' && result !== null && result !== undefined) {
+            finalMsg = `${instantAction.args.expression} = ${result}`;
+          } else if (instantAction.toolName === 'read_clipboard') {
+            finalMsg = result ? `Clipboard content:\n\`\`\`\n${result}\n\`\`\`` : 'Clipboard is empty.';
+          } else if (instantAction.toolName === 'get_system_volume') {
+            const vol = typeof result === 'object' && result !== null ? (result.level ?? result.volume ?? JSON.stringify(result)) : result;
+            finalMsg = `Current system volume is ${vol}%.`;
+          }
+
+          get().updateMessageContent(
+            assistantId,
+            finalMsg,
+            false,
+            undefined,
+            undefined,
+            updatedTools,
+            msg.providerInfo
+          );
+        }
+
+        set({ isLoading: false, lastFailedPrompt: null });
+        return;
+      } catch (actionErr: any) {
+        const errorMsg = actionErr?.message || String(actionErr);
+        const msg = get().messages.find((m) => m.id === assistantId);
+        if (msg && msg.toolExecutions) {
+          const updatedTools = [...msg.toolExecutions];
+          updatedTools[0] = {
+            ...updatedTools[0],
+            status: 'error',
+            result: errorMsg,
+          };
+          get().updateMessageContent(
+            assistantId,
+            `Failed to execute ${instantAction.toolName}: ${errorMsg}`,
+            false,
+            undefined,
+            undefined,
+            updatedTools,
+            msg.providerInfo
+          );
+        }
+        set({ isLoading: false, error: errorMsg });
+        return;
+      }
+    }
+
     // Direct OS control / quick action check: bypass heavy vector reranking to achieve sub-second execution!
     const isDirectOsCommand =
       taskIntent?.primary_intent === 'os_control' ||
@@ -1954,7 +2158,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
       '4. You have access to local host tools. ONLY output a tool call when the user explicitly requests a concrete host action or external file/API retrieval. Output tool calls using:\n' +
       '   <tool_call name="tool_name" args=\'{"param":"val"}\'></tool_call>\n' +
       '5. Available host tools:\n' +
-      '   - search_web: Search the web (Google, YouTube, GitHub). To search or play music/videos on YouTube, use: {"query": "...", "platform": "youtube"}\n' +
+      '   - search_web: Search the web via SearXNG for real-time information, or platforms (Google, YouTube, GitHub). Arguments: {"query": "...", "platform": "searxng"|"google"|"youtube"}\n' +
+      '   - searxng_search: Query SearXNG for real-time information, current events, or facts. Arguments: {"query": "..."}\n' +
       '   - run_shell: Execute shell commands. Arguments: {"command": "...", "cwd": "optional_path"}\n' +
       '   - read_file: Read file contents. Arguments: {"path": "..."}\n' +
       '   - write_file: Write or create a file with specified contents. Arguments: {"path": "...", "content": "..."}\n' +
@@ -1977,6 +2182,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
       '   - play_spotify: Play track or artist in Spotify. Arguments: {"query": "..."}\n' +
       '   - media_control: Play/pause/next/previous media playback. Arguments: {"action": "playpause"|"next"|"previous"}\n' +
       '   - lock_screen: Lock desktop screen immediately. Arguments: {}\n' +
+      '   - puppeteer_search_and_navigate: Automate headless browser search (DuckDuckGo), navigate to target destination (e.g. YouTube), and save screenshot. Arguments: {"query": "...", "outputPath": "mrbeast.png", "engine": "duckduckgo", "headless": true}\n' +
+      '   - puppeteer_screenshot: Capture headless or headed screenshot of any webpage. Arguments: {"url": "...", "outputPath": "screenshot.png", "headless": true}\n' +
+      '   - puppeteer_action: Execute programmatic headless browser actions (scrape, screenshot, pdf). Arguments: {"action": "scrape"|"screenshot"|"pdf", "url": "...", "outputPath": "file.png", "headless": true}\n' +
       (useSettingsStore.getState().computerControlEnabled
         ? '   - gui_action: Execute desktop GUI action on allowlisted application. Arguments: {"intent": {"targetAppBundleId": "...", "naturalLanguageIntent": "...", "targetElementDescription": "...", "intendedStateChange": "..."}, "action": {"actionType": "click"|"type"|"keyCombo"|"scroll"|"drag", ...}}\n'
         : '') +
@@ -1989,7 +2197,12 @@ export const useChatStore = create<ChatState>((set, get) => ({
       '     <step number="1" tool="search_web" description="Explanation of step">{"query": "...", "platform": "youtube"}</step>\n' +
       '     <step number="2" tool="run_shell" description="Explanation of step">{"command": "..."}</step>\n' +
       '   </plan>\n' +
-      '8. Direct execution: When the user asks to open an app, website, search, or play media (e.g. "open YouTube and play X"), EXECUTE IT DIRECTLY using host tools or <plan>. Never ask confirmation or clarifying questions like "Do you want to proceed with this plan?" or "Could you confirm the song name?". Take immediate action with sensible defaults.';
+      '8. Direct execution: When the user asks to open an app, website, search, or play media (e.g. "open YouTube and play X"), EXECUTE IT DIRECTLY using host tools or <plan>. Never ask confirmation or clarifying questions like "Do you want to proceed with this plan?" or "Could you confirm the song name?". Take immediate action with sensible defaults.\n' +
+      '9. WEB SEARCH & FACT VERIFICATION: When the user\'s question requires real-time information, current events, or facts you are uncertain about, call the search tool first instead of guessing.\n' +
+      '   Search tool call format: <tool_call name="search_web" args=\'{"query": "...", "platform": "searxng"}\'></tool_call> (or <tool_call name="searxng_search" args=\'{"query": "..."}\'></tool_call>)\n' +
+      '   The search tool queries GET {SEARXNG_URL}/search?q={query}&format=json&language=en, reads the title, url, and content fields from the returned results, filters the 1-3 most relevant results based on content, and returns concatenated content as context.\n' +
+      '   Answer the user\'s question based on the returned search context.\n' +
+      '   If the search results are irrelevant or empty, inform the user that no reliable information was found, and do not fabricate.';
 
     if (activeWs) {
       systemPrompt += `\nCurrent Workspace: "${activeWs.name}". Keep context focused on this workspace.`;
@@ -2028,42 +2241,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
     set({ isLoading: true });
 
     let rawStreamed = '';
-    const streamThrottle = new StreamingThrottle(30);
+    const streamThrottle = new StreamingThrottle(16);
 
     let slowNoticeTimer: ReturnType<typeof setTimeout> | null = null;
     let slowWarnTimer: ReturnType<typeof setTimeout> | null = null;
-
-    if (isLocal) {
-      slowNoticeTimer = setTimeout(() => {
-        if (!rawStreamed && get().isLoading) {
-          get().updateMessageContent(
-            assistantId,
-            'Generating on local CPU... (First token may take longer on constrained hardware)',
-            true,
-            recalled,
-            undefined,
-            undefined,
-            providerInfo,
-            activeWinInfo
-          );
-        }
-      }, 4500);
-
-      slowWarnTimer = setTimeout(() => {
-        if (!rawStreamed && get().isLoading) {
-          get().updateMessageContent(
-            assistantId,
-            'Generating on local CPU... (High compute load / low RAM detected, continuing inference)',
-            true,
-            recalled,
-            undefined,
-            undefined,
-            providerInfo,
-            activeWinInfo
-          );
-        }
-      }, 12000);
-    }
 
     let orchestrationResult = {
       providerId: providerId as string,
@@ -2076,6 +2257,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
     try {
       const result = await orchestrateChat(conversation, {
         systemPrompt,
+        temperature: 0.3,
+        maxTokens: 2048,
         onChunk: (chunk) => {
           if (slowNoticeTimer) {
             clearTimeout(slowNoticeTimer);
@@ -2086,9 +2269,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
             slowWarnTimer = null;
           }
 
+          const isFirstChunk = rawStreamed.length === 0;
           rawStreamed += chunk;
 
-          streamThrottle.schedule(() => {
+          const renderChunk = () => {
             // Check if streaming is currently inside open thinking tags
             let streamReasoning: string | undefined = undefined;
             const openThink = UNCLOSED_THINK_REGEX.exec(rawStreamed);
@@ -2115,7 +2299,13 @@ export const useChatStore = create<ChatState>((set, get) => ({
               activeWinInfo,
               streamReasoning
             );
-          });
+          };
+
+          if (isFirstChunk) {
+            renderChunk();
+          } else {
+            streamThrottle.schedule(renderChunk);
+          }
         },
       });
 
@@ -2326,6 +2516,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
           'list_directory',
           'search_files',
           'search_web',
+          'searxng_search',
           'fetch_url',
           'browse_page',
           'extract_links',
@@ -2387,7 +2578,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
         errorMsg.includes('Failed to fetch') ||
         errorMsg.includes('ECONNREFUSED') ||
         errorMsg.includes('11434') ||
-        errorMsg.includes('Bedrock')
+        errorMsg.includes('NetworkError') ||
+        errorMsg.includes('unreachable')
       ) {
         if (providerInfo.providerId === 'bedrock') {
           actionableError =

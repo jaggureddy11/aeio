@@ -33,6 +33,7 @@ import { evaluateMath, solveEquation, solveSystem } from './tools/mathTool';
 import { browsePage, extractPageLinks } from './tools/browserTool';
 import {
   guiClick,
+  guiMove,
   guiType,
   guiKeyCombo,
   guiScroll,
@@ -46,6 +47,8 @@ import {
   verifyPageState,
 } from './tools/visualBrowserTool';
 import { globalMcpManager } from '../mcp/mcpClient';
+import { searxngSearchService } from './tools/searxngSearch';
+import { executePuppeteerAction } from './tools/puppeteerTool';
 
 export interface AgentToolDefinition {
   name: string;
@@ -65,12 +68,23 @@ export function getAvailableAgentTools(): AgentToolDefinition[] {
 export const AVAILABLE_AGENT_TOOLS: AgentToolDefinition[] = [
   {
     name: 'search_web',
-    description: 'Searches the web (Google, YouTube, GitHub, DuckDuckGo) for real-time information or URLs.',
+    description: 'Searches the web via SearXNG for real-time information or via desktop browser platforms (Google, YouTube, GitHub, DuckDuckGo). For factual/current questions, returns title, url, and concatenated content of top 1-3 results as context.',
     parameters: {
       type: 'object',
       properties: {
         query: { type: 'string', description: 'The search query string' },
-        platform: { type: 'string', enum: ['google', 'youtube', 'github', 'duckduckgo'], description: 'Search platform' },
+        platform: { type: 'string', enum: ['searxng', 'google', 'youtube', 'github', 'duckduckgo'], description: 'Search platform (defaults to searxng for real-time fact retrieval)' },
+      },
+      required: ['query'],
+    },
+  },
+  {
+    name: 'searxng_search',
+    description: 'Queries SearXNG (GET {SEARXNG_URL}/search?q={query}&format=json&language=en) for real-time information, current events, or uncertain facts. Returns title, url, and concatenated content of 1-3 most relevant results as context. If no reliable information is found, returns an empty result message.',
+    parameters: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: 'The search query for real-time information, current events, or uncertain facts' },
       },
       required: ['query'],
     },
@@ -436,6 +450,19 @@ export const AVAILABLE_AGENT_TOOLS: AgentToolDefinition[] = [
     },
   },
   {
+    name: 'gui_move',
+    description: 'Moves the mouse cursor to explicit (x, y) screen coordinates without clicking.',
+    parameters: {
+      type: 'object',
+      properties: {
+        x: { type: 'number', description: 'Explicit X pixel coordinate' },
+        y: { type: 'number', description: 'Explicit Y pixel coordinate' },
+        app: { type: 'string', description: 'Optional target application to bring to focus first' },
+      },
+      required: ['x', 'y'],
+    },
+  },
+  {
     name: 'gui_type',
     description: 'Types text into the active focused on-screen field, with optional Enter submission.',
     parameters: {
@@ -549,6 +576,66 @@ export const AVAILABLE_AGENT_TOOLS: AgentToolDefinition[] = [
     },
   },
   {
+    name: 'puppeteer_action',
+    description: 'Automates Chrome/Chromium via Puppeteer in headless mode. Supports navigating pages, searching and navigating channels/results (e.g. DuckDuckGo, YouTube, Google), capturing screenshots to file (e.g. mrbeast.png), scraping dynamic SPAs, clicking elements, filling forms, and generating PDFs.',
+    parameters: {
+      type: 'object',
+      properties: {
+        action: {
+          type: 'string',
+          enum: ['search_and_navigate', 'workflow', 'navigate', 'search', 'screenshot', 'scrape', 'click', 'fill', 'pdf'],
+          description: 'The automation action to perform',
+        },
+        url: { type: 'string', description: 'Web page URL to navigate, screenshot, scrape, or automate' },
+        query: { type: 'string', description: 'Search query string for automated search flow' },
+        engine: { type: 'string', enum: ['duckduckgo', 'youtube', 'google'], description: 'Search engine for search action (defaults to duckduckgo)' },
+        targetMatch: { type: 'string', description: 'Domain or keyword filter for target destination (e.g. "youtube.com")' },
+        outputPath: { type: 'string', description: 'Destination file path for screenshots or PDFs (e.g. "mrbeast.png" or "/tmp/page.pdf")' },
+        selector: { type: 'string', description: 'Target CSS selector to wait for, click, fill, or screenshot' },
+        text: { type: 'string', description: 'Text value to type into an input field or search query' },
+        steps: {
+          type: 'array',
+          description: 'List of sequential steps when action is "workflow"',
+          items: { type: 'object' },
+        },
+        headless: { type: 'boolean', description: 'Whether to run browser in headless mode (defaults to true)' },
+        fullPage: { type: 'boolean', description: 'Whether to capture full-page screenshot (defaults to false)' },
+      },
+      required: ['action'],
+    },
+  },
+  {
+    name: 'puppeteer_workflow',
+    description: 'Executes a sequential multi-step browser automation workflow (navigate, fill, click, click_match, wait, screenshot, scrape) within a single headless Chrome session.',
+    parameters: {
+      type: 'object',
+      properties: {
+        steps: {
+          type: 'array',
+          description: 'Ordered array of workflow steps to execute sequentially',
+          items: {
+            type: 'object',
+            properties: {
+              type: { type: 'string', enum: ['navigate', 'fill', 'click', 'click_match', 'wait', 'wait_for_selector', 'screenshot', 'scrape'] },
+              url: { type: 'string' },
+              selector: { type: 'string' },
+              text: { type: 'string' },
+              press: { type: 'string' },
+              matchText: { type: 'string' },
+              timeout: { type: 'number' },
+              outputPath: { type: 'string' },
+              fullPage: { type: 'boolean' },
+            },
+            required: ['type'],
+          },
+        },
+        headless: { type: 'boolean', description: 'Run headless (defaults to true)' },
+        timeout: { type: 'number', description: 'Total workflow timeout in ms' },
+      },
+      required: ['steps'],
+    },
+  },
+  {
     name: 'finish',
     description: 'Call this tool when the overall goal has been completely achieved, providing a concise final summary.',
     parameters: {
@@ -565,13 +652,26 @@ export async function executeAgentTool(toolName: string, args: Record<string, an
   const cleanName = normalizeToolName(toolName);
 
   switch (cleanName) {
+    case 'searxng_search': {
+      const query = args.query || args.search || args.q || '';
+      const searchVm = await searxngSearchService.search(query);
+      return searchVm.toToolOutput();
+    }
+
     case 'search_web': {
       const query = args.query || args.search || args.q || args.song || args.track || '';
-      let platform = args.platform || 'google';
-      if (!args.platform && (args.youtube || String(query).toLowerCase().includes('youtube'))) {
+      let platform = args.platform;
+      if (!platform && (args.youtube || String(query).toLowerCase().includes('youtube'))) {
         platform = 'youtube';
       }
-      return await searchWebPlatform(query, platform);
+      if (platform === 'searxng') {
+        const searchVm = await searxngSearchService.search(query);
+        return searchVm.toToolOutput();
+      }
+      const targetApp = args.app || args.appName;
+      return targetApp
+        ? await searchWebPlatform(query, platform || 'google', targetApp)
+        : await searchWebPlatform(query, platform || 'google');
     }
 
     case 'fetch_url': {
@@ -760,6 +860,54 @@ export async function executeAgentTool(toolName: string, args: Record<string, an
       });
     }
 
+    case 'gui_move':
+    case 'mouse_move': {
+      return await guiMove({
+        x: Number(args.x ?? 0),
+        y: Number(args.y ?? 0),
+        app: args.app || args.appName,
+      });
+    }
+
+    case 'execute_computer_action':
+    case 'computer_action': {
+      const action = args.action || args;
+      const aType = action.actionType || action.type;
+      if (aType === 'move') {
+        return await guiMove({ x: Number(action.x ?? 0), y: Number(action.y ?? 0), app: args.app });
+      }
+      if (aType === 'click') {
+        return await guiClick({
+          x: action.x !== undefined ? Number(action.x) : undefined,
+          y: action.y !== undefined ? Number(action.y) : undefined,
+          element: action.element || action.target,
+          button: action.button,
+          double: Boolean(action.double),
+          app: args.app,
+        });
+      }
+      if (aType === 'drag') {
+        return await guiDrag({
+          startX: Number(action.startX ?? action.start_x ?? 0),
+          startY: Number(action.startY ?? action.start_y ?? 0),
+          endX: Number(action.endX ?? action.end_x ?? 0),
+          endY: Number(action.endY ?? action.end_y ?? 0),
+          app: args.app,
+        });
+      }
+      if (aType === 'type') {
+        return await guiType({ text: String(action.text ?? ''), app: args.app });
+      }
+      if (aType === 'keyCombo') {
+        const keys = Array.isArray(action.keys) ? action.keys : [action.key || 'enter'];
+        return await guiKeyCombo({ keys, app: args.app });
+      }
+      if (aType === 'scroll') {
+        return await guiScroll({ dx: Number(action.dx ?? 0), dy: Number(action.dy ?? 0), direction: action.direction });
+      }
+      return { success: false, message: `Unknown computer action: ${JSON.stringify(action)}` };
+    }
+
     case 'gui_type': {
       const text = args.text || args.content || '';
       return await guiType({
@@ -826,6 +974,81 @@ export async function executeAgentTool(toolName: string, args: Record<string, an
       const expected = args.expected ?? args.expectedSubstring ?? '';
       const content = args.content ?? args.html ?? '';
       return verifyPageState(expected, content);
+    }
+
+    case 'puppeteer_action': {
+      return await executePuppeteerAction({
+        action: args.action || 'navigate',
+        url: args.url || args.link || '',
+        query: args.query || args.search || args.q,
+        engine: args.engine,
+        targetMatch: args.targetMatch || args.target,
+        outputPath: args.outputPath || args.output || args.path || args.file,
+        selector: args.selector || args.target,
+        text: args.text || args.value,
+        steps: args.steps,
+        headless: args.headless !== false,
+        fullPage: Boolean(args.fullPage || args.full_page),
+        timeout: args.timeout,
+      });
+    }
+
+    case 'puppeteer_workflow': {
+      return await executePuppeteerAction({
+        action: 'workflow',
+        steps: args.steps || [],
+        outputPath: args.outputPath || args.output || args.path || args.file,
+        headless: args.headless !== false,
+        timeout: args.timeout,
+      });
+    }
+
+    case 'puppeteer_search_and_navigate': {
+      return await executePuppeteerAction({
+        action: 'search_and_navigate',
+        query: args.query || args.search || args.q || '',
+        engine: args.engine || 'duckduckgo',
+        targetMatch: args.targetMatch || args.target,
+        outputPath: args.outputPath || args.output || args.path || args.file || 'mrbeast.png',
+        headless: args.headless !== false,
+        fullPage: Boolean(args.fullPage || args.full_page),
+        timeout: args.timeout,
+      });
+    }
+
+    case 'puppeteer_screenshot': {
+      return await executePuppeteerAction({
+        action: 'screenshot',
+        url: args.url || args.link || '',
+        outputPath: args.outputPath || args.output || args.path || args.file || 'screenshot.png',
+        selector: args.selector,
+        headless: args.headless !== false,
+        fullPage: Boolean(args.fullPage || args.full_page),
+        timeout: args.timeout,
+      });
+    }
+
+    case 'puppeteer_search': {
+      return await executePuppeteerAction({
+        action: 'search',
+        query: args.query || args.search || args.q || '',
+        engine: args.engine || 'duckduckgo',
+        outputPath: args.outputPath || args.output || args.path || args.file,
+        headless: args.headless !== false,
+        timeout: args.timeout,
+      });
+    }
+
+    case 'puppeteer_action': {
+      return await executePuppeteerAction({
+        action: args.action || 'screenshot',
+        url: args.url || args.link,
+        query: args.query || args.search,
+        selector: args.selector,
+        outputPath: args.outputPath || args.output || args.path || args.file,
+        headless: args.headless !== false,
+        timeout: args.timeout,
+      });
     }
 
     case 'finish': {

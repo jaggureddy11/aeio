@@ -181,6 +181,7 @@ export function normalizeToolName(name: string): string {
   if (lower === 'toggle_dark_mode' || lower === 'dark_mode' || lower === 'toggle_theme' || lower === 'toggle_appearance') return 'toggle_dark_mode';
   if (lower === 'take_screenshot' || lower === 'capture_screen' || lower === 'screenshot' || lower === 'screen_capture') return 'take_screenshot';
   if (lower === 'gui_click' || lower === 'click' || lower === 'mouse_click') return 'gui_click';
+  if (lower === 'gui_move' || lower === 'move' || lower === 'mouse_move' || lower === 'move_cursor' || lower === 'move_mouse') return 'gui_move';
   if (lower === 'gui_type' || lower === 'type' || lower === 'type_text') return 'gui_type';
   if (lower === 'gui_key_combo' || lower === 'key_combo' || lower === 'press_key' || lower === 'hotkey') return 'gui_key_combo';
   if (lower === 'gui_scroll' || lower === 'scroll' || lower === 'mouse_scroll') return 'gui_scroll';

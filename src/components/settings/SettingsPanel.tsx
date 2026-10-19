@@ -76,6 +76,8 @@ export const SettingsPanel: React.FC<Props> = ({ isOpen, onClose, onOpenOnboardi
     groundingModelType,
     setGroundingEndpointUrl,
     setGroundingModelType,
+    searxngUrl,
+    setSearxngUrl,
   } = useSettingsStore();
 
   const [activeSection, setActiveSection] = useState<'providers' | 'voice' | 'memory' | 'privacy' | 'shortcuts' | 'computerControl' | 'mcp'>('providers');
@@ -87,6 +89,7 @@ export const SettingsPanel: React.FC<Props> = ({ isOpen, onClose, onOpenOnboardi
   const [hotkeySaved, setHotkeySaved] = useState(false);
   const [copiedInstallId, setCopiedInstallId] = useState(false);
   const [proxyUrlInput, setProxyUrlInput] = useState(hostedProxyUrl);
+  const [searxngUrlInput, setSearxngUrlInput] = useState(searxngUrl);
 
   const [claudeInput, setClaudeInput] = useState('');
   const [openaiInput, setOpenaiInput] = useState('');
@@ -1217,6 +1220,38 @@ export const SettingsPanel: React.FC<Props> = ({ isOpen, onClose, onOpenOnboardi
                       }}
                       disabled={!proxyUrlInput.trim()}
                       aria-label="Save Proxy URL"
+                    >
+                      Save URL
+                    </button>
+                  </div>
+                </div>
+
+                <div className="settings-row">
+                  <div className="settings-row-info">
+                    <div className="settings-row-title">SearXNG Web Search URL</div>
+                    <div className="settings-row-desc">
+                      Base URL for real-time web search capability (format: GET {'{SEARXNG_URL}'}/search?q=...&format=json&language=en).
+                    </div>
+                  </div>
+                  <div className="settings-row-control">
+                    <input
+                      type="text"
+                      className="settings-text-input mono"
+                      style={{ width: '240px' }}
+                      value={searxngUrlInput}
+                      onChange={(e) => setSearxngUrlInput(e.target.value)}
+                      placeholder="http://localhost:8080"
+                      aria-label="SearXNG Search URL"
+                    />
+                    <button
+                      type="button"
+                      className="btn-secondary"
+                      onClick={() => {
+                        setSearxngUrl(searxngUrlInput.trim());
+                        showSuccess('SearXNG URL updated');
+                      }}
+                      disabled={!searxngUrlInput.trim()}
+                      aria-label="Save SearXNG URL"
                     >
                       Save URL
                     </button>

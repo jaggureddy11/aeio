@@ -17,8 +17,15 @@ import {
   Folder,
   Globe,
   Brain,
+  Info,
+  Camera,
+  FileCheck,
+  Image as ImageIcon,
 } from 'lucide-react';
 import { ToolExecution } from '../../stores/chatStore';
+import { openTarget } from '../../lib/ipc';
+import { SearchResultViewModel } from '../../lib/agent/tools/searxngSearch';
+import { PuppeteerArtifactViewModel } from '../../lib/agent/tools/puppeteerTool';
 
 interface Props {
   execution: ToolExecution;
@@ -39,6 +46,26 @@ export const ToolApprovalCard: React.FC<Props> = ({
     execution.result?.exit_code !== undefined && execution.result.exit_code !== 0;
   const [alwaysAllow, setAlwaysAllow] = useState(false);
   const [isOutputExpanded, setIsOutputExpanded] = useState(hasExitError);
+
+  const isSearchTool =
+    execution.toolName === 'searxng_search' || execution.toolName === 'search_web';
+  const searchVm =
+    isSearchTool && execution.result
+      ? SearchResultViewModel.fromAny(
+          execution.result,
+          execution.args?.query || execution.args?.search || ''
+        )
+      : null;
+
+  const isPuppeteerTool =
+    execution.toolName === 'puppeteer_screenshot' ||
+    execution.toolName === 'puppeteer_search_and_navigate' ||
+    execution.toolName === 'puppeteer_workflow' ||
+    execution.toolName === 'puppeteer_action';
+  const puppeteerVm =
+    isPuppeteerTool && execution.result
+      ? PuppeteerArtifactViewModel.fromAny(execution.result)
+      : null;
 
   const getToolIcon = () => {
     switch (execution.toolName) {
@@ -61,6 +88,11 @@ export const ToolApprovalCard: React.FC<Props> = ({
         return <Clipboard size={13} />;
       case 'open_target':
         return <ExternalLink size={13} />;
+      case 'puppeteer_screenshot':
+      case 'puppeteer_search_and_navigate':
+      case 'puppeteer_workflow':
+      case 'puppeteer_action':
+        return <Camera size={13} />;
       default:
         return <Play size={13} />;
     }
@@ -88,6 +120,14 @@ export const ToolApprovalCard: React.FC<Props> = ({
         return 'Write to Clipboard';
       case 'open_target':
         return 'Launch Application / File / URL';
+      case 'puppeteer_search_and_navigate':
+        return 'Browser Search & Navigate';
+      case 'puppeteer_screenshot':
+        return 'Browser Screenshot';
+      case 'puppeteer_workflow':
+        return 'Browser Workflow';
+      case 'puppeteer_action':
+        return 'Puppeteer Browser Automation';
       default:
         return execution.toolName;
     }
@@ -257,6 +297,22 @@ export const ToolApprovalCard: React.FC<Props> = ({
           </div>
         )}
 
+        {(execution.toolName === 'puppeteer_screenshot' ||
+          execution.toolName === 'puppeteer_search_and_navigate' ||
+          execution.toolName === 'puppeteer_workflow' ||
+          execution.toolName === 'puppeteer_action') && (
+          <div className="code-command-snippet">
+            <span className="arg-label">Browser Automation:</span>
+            <code>
+              {execution.args.query
+                ? `Query: "${execution.args.query}" -> ${execution.args.outputPath || 'screenshot.png'}`
+                : execution.args.url
+                ? `${execution.args.url} (${execution.args.action || 'view'})`
+                : JSON.stringify(execution.args)}
+            </code>
+          </div>
+        )}
+
         {![
           'run_shell',
           'read_file',
@@ -272,6 +328,10 @@ export const ToolApprovalCard: React.FC<Props> = ({
           'media_control',
           'play_spotify',
           'read_clipboard',
+          'puppeteer_screenshot',
+          'puppeteer_search_and_navigate',
+          'puppeteer_workflow',
+          'puppeteer_action',
         ].includes(execution.toolName) && (
           <div className="code-command-snippet">
             <code>{JSON.stringify(execution.args)}</code>
@@ -336,6 +396,114 @@ export const ToolApprovalCard: React.FC<Props> = ({
 
       {execution.status === 'completed' && (
         <div className="tool-completed-section">
+          {/* Essential Data View: Web Search Results */}
+          {isSearchTool && searchVm && (
+            <div className="essential-data-container">
+              {searchVm.hasResults ? (
+                <div className="essential-search-card">
+                  <div className="essential-search-header">
+                    <span className="essential-header-badge">
+                      <Globe size={11} className="essential-icon" />
+                      <span>{searchVm.summary}</span>
+                    </span>
+                  </div>
+                  <div className="essential-sources-list">
+                    {searchVm.essentialSources.map((source, sIdx) => (
+                      <a
+                        key={sIdx}
+                        href={source.url}
+                        className="essential-source-item"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          openTarget(source.url).catch(() => window.open(source.url, '_blank'));
+                        }}
+                        title={source.url}
+                      >
+                        <div className="essential-source-top">
+                          <span className="essential-source-domain">{source.domain}</span>
+                          <ExternalLink size={10} className="essential-ext-icon" />
+                        </div>
+                        <div className="essential-source-title">{source.title}</div>
+                        {source.snippet && (
+                          <div className="essential-source-snippet">{source.snippet}</div>
+                        )}
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div className="essential-search-empty">
+                  <Info size={12} className="empty-info-icon" />
+                  <span>No reliable information was found.</span>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Essential Data View: Puppeteer Browser Automation Artifacts */}
+          {isPuppeteerTool && puppeteerVm && (
+            <div className="essential-data-container puppeteer-artifact-container">
+              <div className="essential-artifact-card">
+                <div className="artifact-card-header">
+                  <div className="artifact-title-row">
+                    {puppeteerVm.screenshotPath ? (
+                      <ImageIcon size={13} className="artifact-icon" />
+                    ) : (
+                      <Camera size={13} className="artifact-icon" />
+                    )}
+                    <span className="artifact-title">{puppeteerVm.displayTitle}</span>
+                  </div>
+                  {puppeteerVm.isHeadless && (
+                    <span className="artifact-headless-badge">Headless</span>
+                  )}
+                </div>
+
+                <p className="artifact-summary-text">{puppeteerVm.summary}</p>
+
+                {puppeteerVm.hasArtifact && (
+                  <div className="artifact-media-preview">
+                    {puppeteerVm.screenshotPath && (
+                      <div className="artifact-file-pill">
+                        <span className="file-pill-label">Screenshot:</span>
+                        <code className="file-pill-path">{puppeteerVm.screenshotPath}</code>
+                        <button
+                          type="button"
+                          className="artifact-open-btn"
+                          onClick={() => {
+                            if (puppeteerVm.screenshotPath) {
+                              openTarget(puppeteerVm.screenshotPath).catch(() => {});
+                            }
+                          }}
+                        >
+                          <ExternalLink size={11} />
+                          <span>Open Image</span>
+                        </button>
+                      </div>
+                    )}
+                    {puppeteerVm.pdfPath && (
+                      <div className="artifact-file-pill">
+                        <span className="file-pill-label">PDF Document:</span>
+                        <code className="file-pill-path">{puppeteerVm.pdfPath}</code>
+                        <button
+                          type="button"
+                          className="artifact-open-btn"
+                          onClick={() => {
+                            if (puppeteerVm.pdfPath) {
+                              openTarget(puppeteerVm.pdfPath).catch(() => {});
+                            }
+                          }}
+                        >
+                          <FileCheck size={11} />
+                          <span>Open PDF</span>
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
           <div className="receipt-header">
             {execution.result?.exit_code !== undefined && execution.result.exit_code !== 0 ? (
               <span className="error-tag exit-error">
@@ -346,7 +514,13 @@ export const ToolApprovalCard: React.FC<Props> = ({
               <span className="success-tag">
                 <Check size={11} />
                 <span>
-                  Executed successfully
+                  {isSearchTool && searchVm?.hasResults
+                    ? 'Search completed'
+                    : execution.toolName === 'read_file'
+                    ? 'File read completed'
+                    : execution.toolName === 'write_file'
+                    ? 'File written successfully'
+                    : 'Executed successfully'}
                   {execution.result?.exit_code !== undefined &&
                     ` (exit ${execution.result.exit_code})`}
                 </span>
@@ -357,9 +531,17 @@ export const ToolApprovalCard: React.FC<Props> = ({
               className="output-toggle-btn"
               onClick={() => setIsOutputExpanded(!isOutputExpanded)}
               aria-expanded={isOutputExpanded}
-              aria-label={isOutputExpanded ? 'Hide command output console' : 'View command output console'}
+              aria-label={
+                isOutputExpanded
+                  ? isSearchTool ? 'Hide raw context payload' : 'Hide command output console'
+                  : isSearchTool ? 'View raw context payload' : 'View command output console'
+              }
             >
-              <span>{isOutputExpanded ? 'Hide output' : 'View output'}</span>
+              <span>
+                {isOutputExpanded
+                  ? isSearchTool ? 'Hide raw payload' : 'Hide output'
+                  : isSearchTool ? 'View raw payload' : 'View output'}
+              </span>
               {isOutputExpanded ? <ChevronUp size={11} aria-hidden="true" /> : <ChevronDown size={11} aria-hidden="true" />}
             </button>
           </div>

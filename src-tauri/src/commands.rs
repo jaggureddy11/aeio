@@ -471,8 +471,8 @@ pub fn media_control(action: String) -> Result<crate::tools::AutomationResult, S
 }
 
 #[tauri::command]
-pub fn search_web_platform(query: String, platform: String) -> Result<crate::tools::AutomationResult, String> {
-    crate::tools::search_web_platform(&query, &platform)
+pub fn search_web_platform(query: String, platform: String, app: Option<String>) -> Result<crate::tools::AutomationResult, String> {
+    crate::tools::search_web_platform(&query, &platform, app.as_deref())
 }
 
 #[tauri::command]

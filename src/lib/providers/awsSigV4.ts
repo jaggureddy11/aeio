@@ -105,7 +105,13 @@ export async function signAwsRequest(
 
   const parsedUrl = new URL(options.url);
   const host = parsedUrl.host;
-  const canonicalUri = parsedUrl.pathname || '/';
+  // RFC 3986 URI-encode each path segment for AWS SigV4 canonical URI
+  const rawPath = parsedUrl.pathname || '/';
+  const canonicalUri =
+    rawPath
+      .split('/')
+      .map((segment) => encodeURIComponent(decodeURIComponent(segment)))
+      .join('/') || '/';
 
   // Sort and encode query parameters
   const queryParams: [string, string][] = [];

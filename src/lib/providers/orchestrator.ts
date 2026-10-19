@@ -47,12 +47,11 @@ export async function classifyUserTaskSystemOne(prompt: string): Promise<TaskCla
     const verdict = await ipcClassifyUserTask(prompt);
     if (verdict && verdict.primary_intent) {
       const taskType = verdict.primary_intent as TaskType;
-      const recommendedRoute = (verdict.recommended_route as ModelRouteTier) ||
-        (taskType === 'code' || taskType === 'planning' ? 'cloud_boost' : 'local_first');
+      const recommendedRoute: ModelRouteTier = 'cloud_boost';
       return {
         taskType,
         recommendedRoute,
-        suggestedProvider: verdict.suggested_provider || (recommendedRoute === 'cloud_boost' ? 'claude' : 'ollama'),
+        suggestedProvider: verdict.suggested_provider || 'bedrock',
         confidence: verdict.confidence,
       };
     }
@@ -64,11 +63,10 @@ export async function classifyUserTaskSystemOne(prompt: string): Promise<TaskCla
   try {
     const verdict = await routeUserIntent(prompt);
     const taskType = verdict.taskType;
-    const isCloudBoost = taskType === 'code' || taskType === 'planning';
     return {
       taskType,
-      recommendedRoute: isCloudBoost ? 'cloud_boost' : 'local_first',
-      suggestedProvider: isCloudBoost ? 'claude' : 'ollama',
+      recommendedRoute: 'cloud_boost',
+      suggestedProvider: 'bedrock',
       confidence: verdict.confidence,
     };
   } catch {
@@ -77,11 +75,10 @@ export async function classifyUserTaskSystemOne(prompt: string): Promise<TaskCla
 
   // 3. Deterministic regex / keyword baseline
   const fallbackType = classifyUserTask(prompt);
-  const isCloudBoost = fallbackType === 'code' || fallbackType === 'planning';
   return {
     taskType: fallbackType,
-    recommendedRoute: isCloudBoost ? 'cloud_boost' : 'local_first',
-    suggestedProvider: isCloudBoost ? 'claude' : 'ollama',
+    recommendedRoute: 'cloud_boost',
+    suggestedProvider: 'bedrock',
     confidence: 0.85,
   };
 }
@@ -353,7 +350,7 @@ export async function orchestrateChat(
     ? [...cloudCandidates, freeCloudCandidate]
     : [...cloudCandidates];
 
-  // Privacy Protection Mode: strictly local inference only
+  // Privacy Protection Mode: strictly local inference only when explicitly toggled by user
   if (settings.neverSendMemoriesToCloud) {
     candidates.push(...localCandidates);
   } else if (settings.activeProvider === 'bedrock') {
@@ -364,34 +361,28 @@ export async function orchestrateChat(
       model: settings.bedrockModel || 'amazon.nova-lite-v1:0',
       isLocal: false,
     });
-    candidates.push(...cloudFallbackList.filter((c) => c.provider.id !== 'bedrock'), ...localCandidates);
+    candidates.push(...cloudFallbackList.filter((c) => c.provider.id !== 'bedrock'));
   } else if (settings.activeProvider === 'claude' && keys.claudeKey) {
     // Explicit Claude selection
     candidates.push({ provider: claudeProvider, apiKey: keys.claudeKey, model: 'claude-3-5-sonnet-20241022', isLocal: false });
-    candidates.push(...cloudFallbackList, ...localCandidates);
+    candidates.push(...cloudFallbackList.filter((c) => c.provider.id !== 'claude'));
   } else if (settings.activeProvider === 'gemini' && keys.geminiKey) {
     // Explicit Gemini selection
     candidates.push({ provider: geminiProvider, apiKey: keys.geminiKey, model: 'gemini-2.0-flash', isLocal: false });
-    candidates.push(...cloudFallbackList, ...localCandidates);
+    candidates.push(...cloudFallbackList.filter((c) => c.provider.id !== 'gemini'));
   } else if (settings.activeProvider === 'openai' && keys.openAIKey) {
     // Explicit OpenAI selection
     candidates.push({ provider: openAIProvider, apiKey: keys.openAIKey, model: 'gpt-4o', isLocal: false });
-    candidates.push(...cloudFallbackList, ...localCandidates);
+    candidates.push(...cloudFallbackList.filter((c) => c.provider.id !== 'openai'));
   } else if (settings.activeProvider === 'aeio-free') {
     // Explicit Aeio Free hosted selection
-    candidates.push(freeCloudCandidate, ...cloudCandidates, ...localCandidates);
+    candidates.push(freeCloudCandidate, ...cloudCandidates);
   } else if (settings.activeProvider === 'ollama' || settings.activeProvider === 'qwen-coder') {
-    // Production Cloud Priority: Route to Bedrock first, then local fallback
-    candidates.push({
-      provider: bedrockProvider,
-      apiKey: keys.bedrockKey,
-      model: settings.bedrockModel || 'amazon.nova-lite-v1:0',
-      isLocal: false,
-    });
+    // When explicitly selected, use local providers
     candidates.push(...localCandidates);
   } else {
-    // Production Auto Mode: Prioritize AWS Bedrock Cloud Intelligence with automatic failover
-    candidates.push(...cloudFallbackList, ...localCandidates);
+    // Production Cloud Priority (auto, bedrock, claude, gemini, openai, aeio-free): Cloud only, no slow local CPU fallbacks
+    candidates.push(...cloudFallbackList);
   }
 
   let lastError: Error | null = null;

@@ -76,6 +76,8 @@ export interface SettingsState {
   groundingModelType: 'ui-tars' | 'qwen2-vl' | 'custom';
   setGroundingEndpointUrl: (url: string) => void;
   setGroundingModelType: (modelType: 'ui-tars' | 'qwen2-vl' | 'custom') => void;
+  searxngUrl: string;
+  setSearxngUrl: (url: string) => void;
   mcpServers: McpServerConfig[];
   addMcpServer: (server: Omit<McpServerConfig, 'id'>) => McpServerConfig;
   updateMcpServer: (id: string, updates: Partial<McpServerConfig>) => void;
@@ -232,7 +234,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     } catch {}
     set({ hostedProxyUrl: clean });
   },
-  computerControlEnabled: getStoredBool('aeio_computer_control_enabled', false),
+  computerControlEnabled: getStoredBool('aeio_computer_control_enabled', true),
   computerControlAllowlist: getStoredJson<string[]>('aeio_computer_control_allowlist', []),
   setComputerControlEnabled: (enabled) => {
     try {
@@ -322,6 +324,14 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
       localStorage.setItem('aeio_grounding_model_type', modelType);
     } catch {}
     set({ groundingModelType: modelType });
+  },
+  searxngUrl: getStoredString('aeio_searxng_url', 'http://localhost:8080'),
+  setSearxngUrl: (url: string) => {
+    const clean = url.trim().replace(/\/+$/, '') || 'http://localhost:8080';
+    try {
+      localStorage.setItem('aeio_searxng_url', clean);
+    } catch {}
+    set({ searxngUrl: clean });
   },
   mcpServers: getStoredJson<McpServerConfig[]>('aeio_mcp_servers', []),
   addMcpServer: (serverData) => {

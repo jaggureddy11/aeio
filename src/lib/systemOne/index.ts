@@ -4,3 +4,4 @@ export * from './engine';
 export * from './intentRouting';
 export * from './safetyJudgments';
 export * from './memoryRerank';
+export * from './instantActions';

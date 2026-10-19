@@ -13,7 +13,9 @@ export interface ChatOptions {
   topP?: number;
   stop?: string[];
   keepAlive?: string;
+  maxTokens?: number;
   onChunk?: (chunk: string) => void;
+  _isCredentialRetry?: boolean;
 }
 
 export interface ProviderHealth {

@@ -383,22 +383,74 @@ pub fn media_control(action: &str) -> Result<AutomationResult, String> {
 }
 
 /// Instant web or platform search (YouTube, Google, GitHub, Documentation).
-pub fn search_web_platform(query: &str, platform: &str) -> Result<AutomationResult, String> {
+pub fn search_web_platform(query: &str, platform: &str, app: Option<&str>) -> Result<AutomationResult, String> {
     let clean_query = query.trim();
-    if clean_query.is_empty() {
+    if clean_query.is_empty() && app.is_none() {
         return Err("Search query cannot be empty".to_string());
     }
 
     let encoded = url_encode(clean_query);
     let url = match platform.to_lowercase().as_str() {
-        "youtube" | "video" => format!("https://www.youtube.com/results?search_query={}", encoded),
-        "github" | "code" => format!("https://github.com/search?q={}", encoded),
-        "duckduckgo" | "ddg" => format!("https://duckduckgo.com/?q={}", encoded),
-        "chatgpt" => format!("https://chatgpt.com/?q={}", encoded),
-        _ => format!("https://www.google.com/search?q={}", encoded),
+        "youtube" | "video" => {
+            if clean_query.is_empty() {
+                "https://www.youtube.com".to_string()
+            } else {
+                format!("https://www.youtube.com/results?search_query={}", encoded)
+            }
+        }
+        "github" | "code" => {
+            if clean_query.is_empty() {
+                "https://github.com".to_string()
+            } else {
+                format!("https://github.com/search?q={}", encoded)
+            }
+        }
+        "duckduckgo" | "ddg" => {
+            if clean_query.is_empty() {
+                "https://duckduckgo.com".to_string()
+            } else {
+                format!("https://duckduckgo.com/?q={}", encoded)
+            }
+        }
+        "spotify" => {
+            if clean_query.is_empty() {
+                "https://open.spotify.com".to_string()
+            } else {
+                format!("https://open.spotify.com/search/{}", encoded)
+            }
+        }
+        "netflix" => "https://www.netflix.com".to_string(),
+        "chatgpt" => {
+            if clean_query.is_empty() {
+                "https://chatgpt.com".to_string()
+            } else {
+                format!("https://chatgpt.com/?q={}", encoded)
+            }
+        }
+        "twitter" | "x" => "https://x.com".to_string(),
+        "reddit" => "https://www.reddit.com".to_string(),
+        "url" => clean_query.to_string(),
+        _ => {
+            if clean_query.starts_with("http://") || clean_query.starts_with("https://") {
+                clean_query.to_string()
+            } else {
+                format!("https://www.google.com/search?q={}", encoded)
+            }
+        }
     };
 
-    open_target(&url)?;
+    if let Some(target_app) = app {
+        #[cfg(target_os = "macos")]
+        {
+            let _ = Command::new("open").arg("-a").arg(target_app).arg(&url).output();
+        }
+        #[cfg(not(target_os = "macos"))]
+        {
+            let _ = open_target(&url);
+        }
+    } else {
+        open_target(&url)?;
+    }
 
     Ok(AutomationResult {
         success: true,
@@ -701,7 +753,7 @@ pub fn open_app(name: &str) -> Result<AutomationResult, String> {
     }
     if lower.starts_with("youtube ") {
         let query = &clean_name[8..];
-        return search_web_platform(query, "youtube");
+        return search_web_platform(query, "youtube", None);
     }
     if lower == "netflix" || lower == "netflix.com" {
         open_target("https://www.netflix.com")?;

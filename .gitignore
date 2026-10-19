@@ -35,3 +35,6 @@ src-tauri/resources/models/
 
 # Cloned Voicebox service
 voicebox/
+
+# Compiled helper binaries
+scripts/cursor_ctrl

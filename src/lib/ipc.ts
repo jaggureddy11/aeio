@@ -15,7 +15,7 @@ async function invoke<T>(cmd: string, args?: Record<string, unknown>): Promise<T
   return args !== undefined ? tauriInvoke<T>(cmd, args) : tauriInvoke<T>(cmd);
 }
 
-function handleWebFallback<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
+async function handleWebFallback<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
   if (cmd === 'list_workspaces') {
     return Promise.resolve([
       {
@@ -99,11 +99,39 @@ function handleWebFallback<T>(cmd: string, args?: Record<string, unknown>): Prom
   if (cmd === 'get_api_key') {
     try {
       if (typeof localStorage !== 'undefined' && args?.target) {
-        const val =
-          localStorage.getItem(`aeio_key_${args.target}`) ||
-          localStorage.getItem(`aeio_${args.target}`) ||
-          (args.target === 'bedrock' ? localStorage.getItem('aeio_bedrock_credentials') : null);
-        if (val) return Promise.resolve(val as unknown as T);
+        if (args.target === 'bedrock') {
+          const stored = localStorage.getItem('aeio_bedrock_credentials');
+          if (stored) {
+            try {
+              const parsed = JSON.parse(stored);
+              if (parsed.expiration && new Date(parsed.expiration).getTime() <= Date.now()) {
+                localStorage.removeItem('aeio_bedrock_credentials');
+              } else if (parsed.accessKeyId && parsed.secretAccessKey) {
+                return Promise.resolve(stored as unknown as T);
+              }
+            } catch {
+              localStorage.removeItem('aeio_bedrock_credentials');
+            }
+          }
+        } else {
+          const val =
+            localStorage.getItem(`aeio_key_${args.target}`) ||
+            localStorage.getItem(`aeio_${args.target}`);
+          if (val) return Promise.resolve(val as unknown as T);
+        }
+      }
+      if (args?.target === 'bedrock' && typeof window !== 'undefined' && typeof fetch !== 'undefined') {
+        const resp = await fetch('/api/aws-credentials').catch(() => null);
+        if (resp && resp.ok) {
+          const creds = await resp.json().catch(() => null);
+          if (creds && creds.accessKeyId && creds.secretAccessKey) {
+            const str = JSON.stringify(creds);
+            try {
+              localStorage.setItem('aeio_bedrock_credentials', str);
+            } catch {}
+            return str as unknown as T;
+          }
+        }
       }
     } catch {}
     return Promise.resolve('' as unknown as T);
@@ -172,6 +200,48 @@ function handleWebFallback<T>(cmd: string, args?: Record<string, unknown>): Prom
     }
     return Promise.resolve(undefined as unknown as T);
   }
+  const systemCommands = new Set([
+    'open_app',
+    'open_target',
+    'search_web_platform',
+    'inject_text_to_active_app',
+    'simulate_key_press',
+    'simulate_scroll',
+    'set_system_volume',
+    'get_system_volume',
+    'set_system_mute',
+    'play_spotify',
+    'media_control',
+    'lock_screen',
+    'list_running_apps',
+    'focus_app',
+    'toggle_dark_mode',
+    'send_system_notification',
+    'execute_computer_action',
+    'capture_screen',
+    'capture_screen_data',
+    'gui_click',
+    'gui_move',
+    'mouse_click',
+    'mouse_move',
+  ]);
+
+  if (systemCommands.has(cmd) && typeof window !== 'undefined' && typeof fetch !== 'undefined') {
+    try {
+      const resp = await fetch('/api/system-action', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cmd, args: args || {} }),
+      });
+      if (resp.ok) {
+        const data = await resp.json();
+        return data as unknown as T;
+      }
+    } catch (e) {
+      console.warn(`[Aeio IPC] /api/system-action request failed for ${cmd}:`, e);
+    }
+  }
+
   if (
     cmd === 'read_clipboard' ||
     cmd === 'open_target' ||
@@ -593,8 +663,8 @@ export async function mediaControl(action: string): Promise<AutomationResult> {
   return invoke<AutomationResult>('media_control', { action });
 }
 
-export async function searchWebPlatform(query: string, platform: string = 'google'): Promise<AutomationResult> {
-  return invoke<AutomationResult>('search_web_platform', { query, platform });
+export async function searchWebPlatform(query: string, platform: string = 'google', app?: string): Promise<AutomationResult> {
+  return invoke<AutomationResult>('search_web_platform', { query, platform, app });
 }
 
 export async function lockScreen(): Promise<AutomationResult> {

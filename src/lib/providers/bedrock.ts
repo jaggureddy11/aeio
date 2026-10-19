@@ -86,12 +86,14 @@ export async function resolveBedrockCredentials(
     } catch {
       if (options.apiKey.includes(':')) {
         const parts = options.apiKey.split(':');
-        return {
-          accessKeyId: parts[0],
-          secretAccessKey: parts[1],
-          sessionToken: parts[2] || undefined,
-          region: configuredRegion,
-        };
+        if (parts[0] && parts[1]) {
+          return {
+            accessKeyId: parts[0],
+            secretAccessKey: parts[1],
+            sessionToken: parts[2] || undefined,
+            region: configuredRegion,
+          };
+        }
       }
     }
   }
@@ -144,7 +146,9 @@ export async function resolveBedrockCredentials(
         if (stored) {
           try {
             const parsed = JSON.parse(stored);
-            if (parsed.accessKeyId && parsed.secretAccessKey) {
+            if (parsed.expiration && new Date(parsed.expiration).getTime() <= Date.now()) {
+              localStorage.removeItem('aeio_bedrock_credentials');
+            } else if (parsed.accessKeyId && parsed.secretAccessKey) {
               accessKeyId = parsed.accessKeyId;
               secretAccessKey = parsed.secretAccessKey;
               if (parsed.sessionToken) sessionToken = parsed.sessionToken;
@@ -162,22 +166,31 @@ export async function resolveBedrockCredentials(
     } catch {}
   }
 
-  // 4. Local dev server auto-export fallback when running in browser mode
-  if ((!accessKeyId || !secretAccessKey) && typeof window !== 'undefined' && typeof fetch !== 'undefined') {
-    try {
-      const resp = await fetch('/api/aws-credentials');
-      if (resp.ok) {
-        const data = await resp.json();
-        if (data.accessKeyId && data.secretAccessKey) {
-          accessKeyId = data.accessKeyId;
-          secretAccessKey = data.secretAccessKey;
-          if (data.sessionToken) sessionToken = data.sessionToken;
-          if (typeof localStorage !== 'undefined') {
-            localStorage.setItem('aeio_bedrock_credentials', JSON.stringify(data));
+  // 4. Local dev server auto-export fallback when running in browser mode, or process.env when in Node
+  if (!accessKeyId || !secretAccessKey) {
+    if (typeof window !== 'undefined' && typeof fetch !== 'undefined') {
+      try {
+        const resp = await fetch('/api/aws-credentials');
+        if (resp.ok) {
+          const data = await resp.json();
+          if (data.accessKeyId && data.secretAccessKey) {
+            accessKeyId = data.accessKeyId;
+            secretAccessKey = data.secretAccessKey;
+            if (data.sessionToken) sessionToken = data.sessionToken;
+            if (typeof localStorage !== 'undefined') {
+              localStorage.setItem('aeio_bedrock_credentials', JSON.stringify(data));
+            }
           }
         }
+      } catch {}
+    } else {
+      const nodeEnv = (globalThis as any).process?.env;
+      if (nodeEnv?.AWS_ACCESS_KEY_ID && nodeEnv?.AWS_SECRET_ACCESS_KEY) {
+        accessKeyId = nodeEnv.AWS_ACCESS_KEY_ID;
+        secretAccessKey = nodeEnv.AWS_SECRET_ACCESS_KEY;
+        sessionToken = nodeEnv.AWS_SESSION_TOKEN;
       }
-    } catch {}
+    }
   }
 
   return {
@@ -185,6 +198,57 @@ export async function resolveBedrockCredentials(
     secretAccessKey: secretAccessKey.trim(),
     sessionToken: sessionToken?.trim() || undefined,
     region: configuredRegion,
+  };
+}
+
+/**
+ * Decodes AWS Bedrock ConverseStream event stream binary frames.
+ */
+export function parseBedrockEventStreamFrames(
+  buffer: Uint8Array,
+  onChunk?: (text: string) => void
+): { remaining: Uint8Array; textDeltas: string[] } {
+  let offset = 0;
+  const textDeltas: string[] = [];
+  const view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+
+  while (offset + 16 <= buffer.length) {
+    const totalLength = view.getUint32(offset, false);
+    const headersLength = view.getUint32(offset + 4, false);
+
+    // Frame incomplete or invalid
+    if (totalLength < 16 || offset + totalLength > buffer.length) {
+      break;
+    }
+
+    const payloadOffset = offset + 12 + headersLength;
+    const payloadLength = totalLength - 12 - headersLength - 4;
+
+    if (payloadLength > 0 && payloadOffset + payloadLength <= offset + totalLength) {
+      const payloadBytes = buffer.slice(payloadOffset, payloadOffset + payloadLength);
+      try {
+        const text = new TextDecoder('utf-8').decode(payloadBytes);
+        const data = JSON.parse(text);
+        const delta =
+          data.delta?.text ||
+          data.contentBlockDelta?.delta?.text ||
+          data.text ||
+          '';
+        if (delta) {
+          textDeltas.push(delta);
+          onChunk?.(delta);
+        }
+      } catch {
+        // Skip non-JSON or control frames (e.g. metadata, messageStart, messageStop)
+      }
+    }
+
+    offset += totalLength;
+  }
+
+  return {
+    remaining: buffer.slice(offset),
+    textDeltas,
   };
 }
 
@@ -272,24 +336,34 @@ export class BedrockProvider implements LLMProvider {
     const bodyObj: Record<string, any> = {
       messages: formattedMessages,
       inferenceConfig: {
-        maxTokens: 4096,
-        temperature: options?.temperature ?? 0.7,
+        maxTokens: options?.maxTokens ?? 2048,
+        temperature: options?.temperature ?? 0.3,
       },
     };
 
     if (options?.topP !== undefined) {
       bodyObj.inferenceConfig.topP = options.topP;
     }
+    // Prompt Caching (aws-samples/amazon-bedrock-samples)
+    // Caches static system prompt and context to reduce TTFT latency by up to 80% on Claude 3/3.5 models.
+    const supportsPromptCache = modelId.includes('claude-3') || modelId.includes('nova');
+    if (supportsPromptCache && systemPromptBlocks.length > 0) {
+      const lastIdx = systemPromptBlocks.length - 1;
+      (systemPromptBlocks[lastIdx] as any).cachePoint = { type: 'default' };
+    }
+
     if (systemPromptBlocks.length > 0) {
       bodyObj.system = systemPromptBlocks;
     }
 
-    const payloadStr = JSON.stringify(bodyObj);
+    let payloadStr = JSON.stringify(bodyObj);
 
-    // Bedrock Converse API endpoint
-    const url = `https://bedrock-runtime.${region}.amazonaws.com/model/${modelId}/converse`;
+    // Bedrock Converse / ConverseStream API endpoint (aws-samples/sample-bedrock-converse-api)
+    let isStreamingRequested = Boolean(options?.onChunk);
+    let endpoint = isStreamingRequested ? 'converse-stream' : 'converse';
+    let url = `https://bedrock-runtime.${region}.amazonaws.com/model/${modelId}/${endpoint}`;
 
-    const signed = await signAwsRequest(
+    let signed = await signAwsRequest(
       {
         method: 'POST',
         url,
@@ -298,25 +372,114 @@ export class BedrockProvider implements LLMProvider {
         body: payloadStr,
         headers: {
           'content-type': 'application/json',
-          accept: 'application/json',
+          accept: isStreamingRequested
+            ? 'application/vnd.amazon.eventstream, application/json'
+            : 'application/json',
         },
       },
       creds
     );
 
-    const fetchHeaders: Record<string, string> = { ...signed.headers };
-    if (typeof window !== 'undefined') {
+    let fetchHeaders: Record<string, string> = { ...signed.headers };
+    let requestUrl = signed.url;
+
+    // In web browser dev mode, proxy through Vite dev server to bypass browser CORS headers
+    if (typeof window !== 'undefined' && !('__TAURI_INTERNALS__' in window)) {
+      fetchHeaders['x-bedrock-target-url'] = signed.url;
+      delete fetchHeaders['host'];
+      delete fetchHeaders['Host'];
+      requestUrl = '/api/bedrock-proxy';
+    } else if (typeof window !== 'undefined') {
       delete fetchHeaders['host'];
       delete fetchHeaders['Host'];
     }
 
     let response: Response;
     try {
-      response = await fetch(signed.url, {
+      response = await fetch(requestUrl, {
         method: signed.method,
         headers: fetchHeaders,
         body: signed.body,
       });
+
+      // If prompt caching returned a 400 validation error, retry immediately without cachePoint
+      if (!response.ok && response.status === 400 && payloadStr.includes('"cachePoint"')) {
+        for (const block of systemPromptBlocks) {
+          delete (block as any).cachePoint;
+        }
+        bodyObj.system = systemPromptBlocks;
+        payloadStr = JSON.stringify(bodyObj);
+
+        signed = await signAwsRequest(
+          {
+            method: 'POST',
+            url,
+            service: 'bedrock',
+            region,
+            body: payloadStr,
+            headers: {
+              'content-type': 'application/json',
+              accept: isStreamingRequested
+                ? 'application/vnd.amazon.eventstream, application/json'
+                : 'application/json',
+            },
+          },
+          creds
+        );
+        fetchHeaders = { ...signed.headers };
+        requestUrl = signed.url;
+        if (typeof window !== 'undefined' && !('__TAURI_INTERNALS__' in window)) {
+          fetchHeaders['x-bedrock-target-url'] = signed.url;
+          delete fetchHeaders['host'];
+          delete fetchHeaders['Host'];
+          requestUrl = '/api/bedrock-proxy';
+        } else if (typeof window !== 'undefined') {
+          delete fetchHeaders['host'];
+          delete fetchHeaders['Host'];
+        }
+        response = await fetch(requestUrl, {
+          method: signed.method,
+          headers: fetchHeaders,
+          body: signed.body,
+        });
+      }
+
+      // If converse-stream returned 404 or 400, retry once using standard /converse endpoint
+      if (!response.ok && isStreamingRequested && (response.status === 404 || response.status === 400)) {
+        isStreamingRequested = false;
+        endpoint = 'converse';
+        url = `https://bedrock-runtime.${region}.amazonaws.com/model/${modelId}/${endpoint}`;
+        signed = await signAwsRequest(
+          {
+            method: 'POST',
+            url,
+            service: 'bedrock',
+            region,
+            body: payloadStr,
+            headers: {
+              'content-type': 'application/json',
+              accept: 'application/json',
+            },
+          },
+          creds
+        );
+        fetchHeaders = { ...signed.headers };
+        requestUrl = signed.url;
+        if (typeof window !== 'undefined' && !('__TAURI_INTERNALS__' in window)) {
+          fetchHeaders['x-bedrock-target-url'] = signed.url;
+          delete fetchHeaders['host'];
+          delete fetchHeaders['Host'];
+          requestUrl = '/api/bedrock-proxy';
+        } else if (typeof window !== 'undefined') {
+          delete fetchHeaders['host'];
+          delete fetchHeaders['Host'];
+        }
+        response = await fetch(requestUrl, {
+          method: signed.method,
+          headers: fetchHeaders,
+          body: signed.body,
+        });
+      }
     } catch (netErr: unknown) {
       const msg = netErr instanceof Error ? netErr.message : String(netErr);
       if (
@@ -341,6 +504,33 @@ export class BedrockProvider implements LLMProvider {
       } catch {}
 
       if (response.status === 401 || response.status === 403) {
+        const isExpired =
+          parsedMessage.toLowerCase().includes('expired') ||
+          errText.toLowerCase().includes('expired') ||
+          parsedMessage.toLowerCase().includes('security token');
+
+        if (isExpired && typeof window !== 'undefined' && typeof fetch !== 'undefined' && !options?._isCredentialRetry) {
+          try {
+            if (typeof localStorage !== 'undefined') {
+              localStorage.removeItem('aeio_bedrock_credentials');
+            }
+            const refreshResp = await fetch('/api/aws-credentials');
+            if (refreshResp.ok) {
+              const freshCreds = await refreshResp.json();
+              if (freshCreds.accessKeyId && freshCreds.secretAccessKey) {
+                if (typeof localStorage !== 'undefined') {
+                  localStorage.setItem('aeio_bedrock_credentials', JSON.stringify(freshCreds));
+                }
+                return this.chat(messages, {
+                  ...options,
+                  _isCredentialRetry: true,
+                  apiKey: JSON.stringify(freshCreds),
+                });
+              }
+            }
+          } catch {}
+        }
+
         throw new Error(
           `AWS Bedrock authentication error (HTTP ${response.status}): ${parsedMessage || 'Invalid credentials or missing bedrock:InvokeModel IAM permission.'}`
         );
@@ -361,6 +551,28 @@ export class BedrockProvider implements LLMProvider {
       );
     }
 
+    const contentType = response.headers?.get?.('content-type') || '';
+    if (contentType.includes('eventstream') && response.body && typeof (response.body as any).getReader === 'function') {
+      const reader = (response.body as any).getReader();
+      let streamBuffer = new Uint8Array(0);
+      const pieces: string[] = [];
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        if (value && value.length > 0) {
+          const merged = new Uint8Array(streamBuffer.length + value.length);
+          merged.set(streamBuffer);
+          merged.set(value, streamBuffer.length);
+          const parsed = parseBedrockEventStreamFrames(merged, options?.onChunk);
+          streamBuffer = new Uint8Array(parsed.remaining);
+          pieces.push(...parsed.textDeltas);
+        }
+      }
+
+      return pieces.join('');
+    }
+
     const responseJson = await response.json();
     const outputMessage = responseJson.output?.message;
     const textPieces: string[] = [];
@@ -377,7 +589,7 @@ export class BedrockProvider implements LLMProvider {
 
     // If caller requested streaming chunks, simulate progressive chunk delivery
     if (options?.onChunk && fullText) {
-      const chunkSize = 64;
+      const chunkSize = 32;
       for (let i = 0; i < fullText.length; i += chunkSize) {
         options.onChunk(fullText.slice(i, i + chunkSize));
       }

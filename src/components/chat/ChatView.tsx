@@ -12,7 +12,7 @@ import {
   X,
   FileSearch,
   Workflow,
-  Cpu,
+  Activity,
   Brain,
   ArrowRight,
   ArrowDown,
@@ -33,12 +33,11 @@ export const ChatView: React.FC<Props> = ({ onOpenSettings }) => {
     setError,
     sendMessage,
     retryLastMessage,
-    switchToLocalAndRetry,
     clearMessages,
     initChatHistory,
   } = useChatStore();
 
-  const { setActiveTab, activeProvider } = useSettingsStore();
+  const { setActiveTab } = useSettingsStore();
   const activeWorkspace = useWorkspaceStore((s) => s.activeWorkspace);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -217,11 +216,11 @@ export const ChatView: React.FC<Props> = ({ onOpenSettings }) => {
                   onClick={() => handleSend('Check my model provider health and diagnostic status')}
                 >
                   <div className="prompt-card-icon">
-                    <Cpu size={16} />
+                    <Activity size={16} />
                   </div>
                   <div className="prompt-card-content">
                     <span className="prompt-card-title">Provider & System Status</span>
-                    <span className="prompt-card-desc">Verify local Ollama and cloud BYOK keys</span>
+                    <span className="prompt-card-desc">Verify cloud intelligence and API key status</span>
                   </div>
                   <ArrowRight size={14} className="prompt-card-arrow" />
                 </button>
@@ -264,17 +263,6 @@ export const ChatView: React.FC<Props> = ({ onOpenSettings }) => {
                   <RotateCw size={13} />
                   <span>Retry</span>
                 </button>
-
-                {activeProvider !== 'qwen-coder' && activeProvider !== 'ollama' && (
-                  <button
-                    type="button"
-                    className="error-btn fallback"
-                    onClick={switchToLocalAndRetry}
-                  >
-                    <Cpu size={13} />
-                    <span>Switch to Local Qwen</span>
-                  </button>
-                )}
 
                 <button
                   type="button"
